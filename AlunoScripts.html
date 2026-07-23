@@ -1,0 +1,760 @@
+<script>
+// AlunoScripts.html
+// Responsabilidade: toda a logica de frontend do Painel Aluno. Arquivo
+// independente de Scripts.html (pagina separada, estado separado) — nenhuma
+// funcao daqui e compartilhada com o Painel de Thales.
+
+// === TEMA (claro/escuro) — mesmo comportamento do Painel de Thales ===
+function temaPreferidoSistema() {
+  return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+}
+function aplicarTema(tema) {
+  document.documentElement.setAttribute('data-theme', tema);
+  var icone = document.getElementById('iconeTema');
+  if (icone) icone.textContent = tema === 'dark' ? 'light_mode' : 'dark_mode';
+}
+function inicializarTema() {
+  var salvo = null;
+  try { salvo = localStorage.getItem('painelAlunoTema'); } catch (e) {}
+  aplicarTema(salvo || temaPreferidoSistema());
+}
+function alternarTema() {
+  var atual = document.documentElement.getAttribute('data-theme') || 'light';
+  var novo = atual === 'dark' ? 'light' : 'dark';
+  aplicarTema(novo);
+  try { localStorage.setItem('painelAlunoTema', novo); } catch (e) {}
+}
+
+// === HELPERS DE REGRA DE NEGOCIO (mesma logica de Scripts.html) ===
+var STATUS_FINAIS = ['ok', 'protocolado', 'cancelada'];
+var TOAST_ICONES = { sucesso: 'check_circle', erro: 'error', '': 'info' };
+
+function normalizarChave(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function ehAtraso(reg) {
+  return reg.atraso === true || reg.atraso === 'true';
+}
+
+// Registros Cancelados continuam aparecendo nas tabelas (com a badge normal),
+// mas nao entram nas contagens dos cards de resumo (decisao de Thales).
+function naoEhCancelada(reg) {
+  return normalizarChave(reg.status) !== 'cancelada';
+}
+
+function classificarRegistro(reg) {
+  if (ehAtraso(reg)) return 'atraso';
+  var chave = normalizarChave(reg.status);
+  if (chave === 'ok' || chave === 'protocolado') return 'concluido';
+  if (chave === 'encaminhado') return 'encaminhado';
+  if (chave === 'entregue') return 'entregue';
+  if (chave === 'devolvida') return 'devolvida';
+  if (chave === 'cancelada') return 'cancelada';
+  return 'outros';
+}
+
+function normalizarStatusParaUI(status) {
+  var chave = normalizarChave(status);
+  if (!chave) return '';
+  if (chave === 'ok') return 'Ok';
+  if (chave === 'protocolado') return 'Protocolado';
+  if (chave === 'encaminhado') return 'Encaminhado';
+  if (chave === 'devolvida') return 'Devolvida';
+  if (chave === 'entregue') return 'Entregue';
+  if (chave === 'cancelada') return 'Cancelada';
+  return String(status || '').trim();
+}
+
+function badgeStatus(reg) {
+  var cl = classificarRegistro(reg);
+  var badgeBase;
+  if (cl === 'atraso') {
+    badgeBase = '<span class="badge badge-atraso">Em Atraso</span>';
+  } else {
+    var s = normalizarStatusParaUI(reg.status);
+    if (!s) {
+      badgeBase = '<span class="badge badge-vazio">—</span>';
+    } else {
+      var chave = normalizarChave(s);
+      if (chave === 'ok' || chave === 'protocolado') badgeBase = '<span class="badge badge-concluido">' + s + '</span>';
+      else if (chave === 'encaminhado') badgeBase = '<span class="badge badge-encaminhado">Encaminhado</span>';
+      else if (chave === 'entregue') badgeBase = '<span class="badge badge-entregue">Entregue</span>';
+      else if (chave === 'devolvida') badgeBase = '<span class="badge badge-devolvida">Devolvida</span>';
+      else if (chave === 'cancelada') badgeBase = '<span class="badge badge-cancelada">Cancelada</span>';
+      else badgeBase = '<span class="badge badge-vazio">' + s + '</span>';
+    }
+  }
+  return badgeBase + badgeGatilho(reg);
+}
+
+function badgeGatilho(reg) {
+  if (!reg.gatilho) return '';
+  var mapa = {
+    gatilho1: { classe: 'gatilho-amarelo', titulo: 'Vence em 5 dias úteis' },
+    gatilho2: { classe: 'gatilho-laranja', titulo: 'Vence amanhã (dia útil)' },
+    gatilho3: { classe: 'gatilho-vermelho', titulo: 'Vence hoje' }
+  };
+  var info = mapa[reg.gatilho];
+  if (!info) return '';
+  return '<span class="badge-gatilho ' + info.classe + '" title="' + info.titulo + '">' +
+    '<span class="material-symbols-outlined" style="font-size:13px;">schedule</span>' +
+  '</span>';
+}
+
+function popularSelectSimples(select, valores, valorAtual, placeholder) {
+  select.innerHTML = '<option value="">' + placeholder + '</option>';
+  var incluidos = {};
+  (valores || []).forEach(function(v) {
+    var chave = normalizarChave(v);
+    if (!chave || incluidos[chave]) return;
+    incluidos[chave] = true;
+    var opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    if (chave === normalizarChave(valorAtual)) opt.selected = true;
+    select.appendChild(opt);
+  });
+  if (valorAtual && !incluidos[normalizarChave(valorAtual)]) {
+    var optAtual = document.createElement('option');
+    optAtual.value = valorAtual;
+    optAtual.textContent = valorAtual;
+    optAtual.selected = true;
+    select.appendChild(optAtual);
+  }
+}
+
+function obterSemestreAtual() {
+  try {
+    var hoje = new Date();
+    var ano = hoje.getFullYear();
+    var mes = hoje.getMonth() + 1;
+    if (!ano || !mes) return '';
+    return ano + '.' + (mes <= 6 ? '01' : '02');
+  } catch (e) {
+    return '';
+  }
+}
+
+// === LOADING / TOAST ===
+function mostrarLoading(show) {
+  var el = document.getElementById('loadingWrapper');
+  var conteudo = document.getElementById('conteudoPrincipal');
+  if (el) el.style.display = show ? 'block' : 'none';
+  if (conteudo) conteudo.style.display = show ? 'none' : 'block';
+}
+
+function mostrarToast(msg, tipo) {
+  var el = document.getElementById('toast');
+  var icone = TOAST_ICONES[tipo || ''] || 'info';
+  el.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">' + icone + '</span> ' + msg;
+  el.className = 'toast ' + (tipo || '');
+  el.classList.add('visivel');
+  clearTimeout(PA._toastTimer);
+  PA._toastTimer = setTimeout(function() { el.classList.remove('visivel'); }, 3200);
+}
+
+// === ESTADO GLOBAL ===
+var PA = {
+  tipo: '',
+  nomeUsuario: '',
+  emailUsuario: '',
+  dados: {
+    estagiarios: [],
+    diligencias: [],
+    iniciais: [],
+    atendimentos: [],
+    acompanhamentos: [],
+    especiePicklistIniciais: []
+  },
+  semestreFiltro: '',
+  alunoSelecionado: null, // { nome, email } — so usado quando tipo === 'thales'
+  _diligenciasAtuais: [],
+  _iniciaisAtuais: [],
+  _acompanhamentosAtuais: [],
+  _atendimentosAtuais: [],
+  _toastTimer: null
+};
+
+// === INICIALIZACAO ===
+document.addEventListener('DOMContentLoaded', function() {
+  inicializarTema();
+  paAtualizarSaudacaoPrefixo();
+  paConfigurarCopiarProcesso();
+  paConfigurarFechamentoModais();
+  paConfigurarMascaraCpf();
+  paCarregarDados();
+});
+
+function paAtualizarSaudacaoPrefixo() {
+  var el = document.getElementById('saudacaoUsuario');
+  if (!el) return;
+  var hora = new Date().getHours();
+  var saudacao = 'Boa noite';
+  if (hora >= 5 && hora < 12) saudacao = 'Bom dia';
+  else if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
+  var strong = el.querySelector('strong');
+  var nomeHtml = strong ? strong.outerHTML : '';
+  el.innerHTML = saudacao + ', ' + nomeHtml;
+}
+
+// === CARREGAMENTO DE DADOS ===
+function paCarregarDados() {
+  mostrarLoading(true);
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (resultado.erro) {
+        paMostrarErroCarregamento(resultado.erro);
+        return;
+      }
+
+      PA.tipo = resultado.tipo;
+      PA.nomeUsuario = resultado.nome;
+      PA.emailUsuario = resultado.email;
+      PA.dados.estagiarios = resultado.estagiarios || [];
+      PA.dados.diligencias = resultado.diligencias || [];
+      PA.dados.iniciais = resultado.iniciais || [];
+      PA.dados.atendimentos = resultado.atendimentos || [];
+      PA.dados.acompanhamentos = resultado.acompanhamentos || [];
+      PA.dados.especiePicklistIniciais = resultado.especiePicklistIniciais || [];
+
+      mostrarLoading(false);
+      paPopularSeletores();
+      paRenderizarTudo();
+    })
+    .withFailureHandler(function(err) {
+      paMostrarErroCarregamento(err.message);
+    })
+    .carregarDadosPainelAluno();
+}
+
+function paMostrarErroCarregamento(msg) {
+  mostrarLoading(false);
+  document.getElementById('paSeletores').style.display = 'none';
+  document.getElementById('paConteudoAluno').style.display = 'none';
+  var vazio = document.getElementById('paSemAluno');
+  vazio.style.display = 'block';
+  vazio.querySelector('.material-symbols-outlined').textContent = 'error_outline';
+  vazio.querySelector('.estado-vazio-titulo').textContent = 'Não foi possível carregar seus dados';
+  vazio.querySelector('.estado-vazio-desc').textContent = msg || 'Tente recarregar a página.';
+  document.getElementById('btnCriarPeticaoInicial').disabled = true;
+}
+
+// === SELETORES DE SEMESTRE / ALUNO ===
+function paPopularSeletores() {
+  var wrapper = document.getElementById('paSeletores');
+  var estagiarios = PA.dados.estagiarios || [];
+
+  var presentes = {};
+  estagiarios.forEach(function(e) { if (e.semestre) presentes[e.semestre] = true; });
+  var semestres = Object.keys(presentes).sort().reverse();
+
+  if (!semestres.length) {
+    wrapper.style.display = 'none';
+    PA.semestreFiltro = '';
+    return;
+  }
+  wrapper.style.display = 'flex';
+
+  if (semestres.indexOf(PA.semestreFiltro) === -1) {
+    var atual = obterSemestreAtual();
+    PA.semestreFiltro = semestres.indexOf(atual) !== -1 ? atual : semestres[0];
+  }
+
+  var selSem = document.getElementById('paSelectSemestre');
+  selSem.innerHTML = '';
+  semestres.forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    if (s === PA.semestreFiltro) opt.selected = true;
+    selSem.appendChild(opt);
+  });
+
+  var mostrarAluno = (PA.tipo === 'thales');
+  document.getElementById('paSepAluno').style.display = mostrarAluno ? 'inline-block' : 'none';
+  document.getElementById('paIconeAluno').style.display = mostrarAluno ? 'inline' : 'none';
+  document.getElementById('paLabelAluno').style.display = mostrarAluno ? 'inline' : 'none';
+  document.getElementById('paSelectAluno').style.display = mostrarAluno ? 'inline-block' : 'none';
+
+  if (mostrarAluno) paPopularSelectAluno();
+}
+
+function paAlunosDoSemestre() {
+  return (PA.dados.estagiarios || [])
+    .filter(function(e) { return e.semestre === PA.semestreFiltro; })
+    .sort(function(a, b) { return normalizarChave(a.nome) < normalizarChave(b.nome) ? -1 : 1; });
+}
+
+function paPopularSelectAluno() {
+  var select = document.getElementById('paSelectAluno');
+  var alunos = paAlunosDoSemestre();
+  var valorAtual = PA.alunoSelecionado ? PA.alunoSelecionado.email : '';
+
+  select.innerHTML = '<option value="">— Selecione um aluno —</option>';
+  alunos.forEach(function(a) {
+    var opt = document.createElement('option');
+    opt.value = a.email;
+    opt.textContent = a.nome + (a.finalizado ? ' — Finalizado' : '');
+    if (a.finalizado) opt.className = 'opcao-finalizada';
+    if (a.email === valorAtual) opt.selected = true;
+    select.appendChild(opt);
+  });
+
+  var aindaExiste = alunos.some(function(a) { return a.email === valorAtual; });
+  if (valorAtual && !aindaExiste) {
+    PA.alunoSelecionado = null;
+    select.value = '';
+  }
+}
+
+function paMudarSemestre(valor) {
+  PA.semestreFiltro = valor || '';
+  if (PA.tipo === 'thales') {
+    PA.alunoSelecionado = null;
+    paPopularSelectAluno();
+  }
+  paRenderizarTudo();
+}
+
+function paMudarAluno(valor) {
+  if (!valor) {
+    PA.alunoSelecionado = null;
+  } else {
+    var achado = paAlunosDoSemestre().filter(function(a) { return a.email === valor; })[0];
+    PA.alunoSelecionado = achado ? { nome: achado.nome, email: achado.email } : null;
+  }
+  paRenderizarTudo();
+}
+
+// Aluno "em foco" no momento: para tipo 'aluno' e sempre a propria linha do
+// semestre escolhido (nunca ha o que escolher alem do semestre); para tipo
+// 'thales' e o que estiver selecionado no seletor de aluno (pode ser nenhum).
+function paResolverAlunoAtual() {
+  if (PA.tipo === 'thales') return PA.alunoSelecionado;
+  var linha = paAlunosDoSemestre()[0];
+  return linha ? { nome: linha.nome, email: linha.email } : null;
+}
+
+// === CABECALHO (titulo + saudacao dinamicos) ===
+// Usa so o primeiro nome como vocativo, mesmo criterio de primeiroNome()
+// (Mensagens.js): sempre a primeira palavra do nome completo.
+function paPrimeiroNome(nomeCompleto) {
+  var nome = String(nomeCompleto || '').trim();
+  if (!nome) return '';
+  return nome.split(/\s+/)[0];
+}
+
+function paAtualizarCabecalho(alunoAtual) {
+  var nome = alunoAtual ? alunoAtual.nome : (PA.tipo === 'thales' ? 'Aluno' : PA.nomeUsuario);
+  document.getElementById('paHeaderNome').textContent = 'DE ' + paPrimeiroNome(nome).toUpperCase();
+  var strong = document.getElementById('paSaudacaoNome');
+  if (strong) strong.textContent = paPrimeiroNome(alunoAtual ? alunoAtual.nome : PA.nomeUsuario);
+}
+
+// === RENDERIZACAO PRINCIPAL ===
+function paRenderizarTudo() {
+  var alunoAtual = paResolverAlunoAtual();
+  paAtualizarCabecalho(alunoAtual);
+  document.getElementById('btnCriarPeticaoInicial').disabled = !alunoAtual;
+
+  if (!alunoAtual) {
+    document.getElementById('paSemAluno').style.display = 'block';
+    document.getElementById('paConteudoAluno').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('paSemAluno').style.display = 'none';
+  document.getElementById('paConteudoAluno').style.display = 'block';
+
+  paRenderizarCards(alunoAtual);
+  paRenderizarTabelas(alunoAtual);
+}
+
+// --- Filtragem client-side (semestre + o unico aluno em foco) ---
+function paFiltrarPorAluno(lista, alunoAtual, camposNome, camposEmail) {
+  var chaveNome = normalizarChave(alunoAtual.nome);
+  var chaveEmail = normalizarChave(alunoAtual.email);
+  return (lista || []).filter(function(r) {
+    if (r.semestre !== PA.semestreFiltro) return false;
+    var okNome = camposNome.some(function(c) { return normalizarChave(r[c]) === chaveNome; });
+    if (okNome) return true;
+    if (!camposEmail || !camposEmail.length) return false;
+    return camposEmail.some(function(c) { return normalizarChave(r[c]) === chaveEmail; });
+  });
+}
+
+function paDiligenciasFiltradas(alunoAtual) {
+  return paFiltrarPorAluno(PA.dados.diligencias, alunoAtual, ['estagiario'], []);
+}
+function paIniciaisFiltradas(alunoAtual) {
+  return paFiltrarPorAluno(PA.dados.iniciais, alunoAtual, ['estagiario'], ['email']);
+}
+function paAtendimentosFiltrados(alunoAtual) {
+  return paFiltrarPorAluno(PA.dados.atendimentos, alunoAtual, ['estagiario'], []);
+}
+function paAcompanhamentosFiltrados(alunoAtual) {
+  return paFiltrarPorAluno(PA.dados.acompanhamentos, alunoAtual, ['estagiario'], ['email']);
+}
+
+// --- Cards resumo (mesmos 4 do Panorama + Acompanhamentos) ---
+function paRenderizarCards(alunoAtual) {
+  var diligencias = paDiligenciasFiltradas(alunoAtual).filter(naoEhCancelada);
+  var iniciais = paIniciaisFiltradas(alunoAtual).filter(naoEhCancelada);
+  var atendimentos = paAtendimentosFiltrados(alunoAtual);
+  var acompanhamentos = paAcompanhamentosFiltrados(alunoAtual).filter(naoEhCancelada);
+
+  var complexasDiligencias = diligencias.filter(function(r) { return normalizarChave(r.subespecie) === 'complexa'; }).length;
+  var simples = diligencias.filter(function(r) { return normalizarChave(r.subespecie) === 'simples'; }).length;
+  var complexas = complexasDiligencias + iniciais.length;
+  var total = diligencias.length + iniciais.length;
+
+  var cards = [
+    { label: 'TOTAL',          num: total,                   classe: 'card-total',       icone: 'folder_open' },
+    { label: 'COMPLEXAS',      num: complexas,               classe: 'card-entregue',    icone: 'gavel' },
+    { label: 'SIMPLES',        num: simples,                 classe: 'card-encaminhado', icone: 'description' },
+    { label: 'ACOMPANHAMENTOS', num: acompanhamentos.length, classe: 'card-devolvida',   icone: 'timeline' },
+    { label: 'ATENDIMENTOS',   num: atendimentos.length,     classe: 'card-concluido',   icone: 'support_agent' }
+  ];
+
+  var html = '';
+  cards.forEach(function(c) {
+    html += '<div class="card-resumo card-resumo-estatico ' + c.classe + '">' +
+      '<div class="card-icone"><span class="material-symbols-outlined">' + c.icone + '</span></div>' +
+      '<div class="card-info">' +
+        '<div class="card-numero">' + c.num + '</div>' +
+        '<div class="card-label">' + c.label + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  document.getElementById('paCardsGrid').innerHTML = html;
+}
+
+function paCelulaVazia(colspan, titulo) {
+  return '<tr><td colspan="' + colspan + '">' +
+    '<div class="estado-vazio">' +
+      '<span class="material-symbols-outlined">search_off</span>' +
+      '<div class="estado-vazio-titulo">' + titulo + '</div>' +
+    '</div>' +
+  '</td></tr>';
+}
+
+// --- Tabelas (read-only, clique na linha abre o modal correspondente) ---
+function paRenderizarTabelas(alunoAtual) {
+  PA._diligenciasAtuais = paDiligenciasFiltradas(alunoAtual);
+  PA._iniciaisAtuais = paIniciaisFiltradas(alunoAtual);
+  PA._acompanhamentosAtuais = paAcompanhamentosFiltrados(alunoAtual);
+  PA._atendimentosAtuais = paAtendimentosFiltrados(alunoAtual);
+
+  // Diligencias
+  document.getElementById('paCabecalhoDiligencias').innerHTML =
+    '<tr><th>ID</th><th>PROCESSO</th><th>ASSISTIDO(A)</th><th>DI</th><th>PRAZO</th><th>DF</th><th>STATUS</th><th>ESPÉCIE</th><th>SUBESPÉCIE</th></tr>';
+  var corpoD = document.getElementById('paCorpoDiligencias');
+  if (!PA._diligenciasAtuais.length) {
+    corpoD.innerHTML = paCelulaVazia(9, 'Nenhuma diligência encontrada');
+  } else {
+    var htmlD = '';
+    PA._diligenciasAtuais.forEach(function(reg, idx) {
+      htmlD += '<tr class="' + (ehAtraso(reg) ? 'linha-atraso' : '') + '" onclick="paAbrirModalDiligencia(' + idx + ')">' +
+        '<td class="td-numero">' + (reg.id || '') + '</td>' +
+        '<td class="td-processo">' + (reg.processo || '') + '</td>' +
+        '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
+        '<td>' + (reg.di || '') + '</td>' +
+        '<td>' + (reg.prazo || '') + '</td>' +
+        '<td>' + (reg.df || '') + '</td>' +
+        '<td>' + badgeStatus(reg) + '</td>' +
+        '<td>' + (reg.especie || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.subespecie || '<span class="celula-vazio">—</span>') + '</td>' +
+      '</tr>';
+    });
+    corpoD.innerHTML = htmlD;
+  }
+
+  // Iniciais
+  document.getElementById('paCabecalhoIniciais').innerHTML =
+    '<tr><th>ID</th><th>ASSISTIDO(A)</th><th>DATA</th><th>DF</th><th>STATUS</th><th>PROCESSO</th><th>VARA</th></tr>';
+  var corpoI = document.getElementById('paCorpoIniciais');
+  if (!PA._iniciaisAtuais.length) {
+    corpoI.innerHTML = paCelulaVazia(7, 'Nenhum inicial encontrado');
+  } else {
+    var htmlI = '';
+    PA._iniciaisAtuais.forEach(function(reg, idx) {
+      htmlI += '<tr class="' + (ehAtraso(reg) ? 'linha-atraso' : '') + '" onclick="paAbrirModalInicial(' + idx + ')">' +
+        '<td class="td-numero">' + (reg.id || '') + '</td>' +
+        '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
+        '<td>' + (reg.di || '') + '</td>' +
+        '<td>' + (reg.df || '') + '</td>' +
+        '<td>' + badgeStatus(reg) + '</td>' +
+        '<td>' + (reg.processo || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.vara || '<span class="celula-vazio">—</span>') + '</td>' +
+      '</tr>';
+    });
+    corpoI.innerHTML = htmlI;
+  }
+
+  // Acompanhamentos
+  document.getElementById('paCabecalhoAcompanhamentos').innerHTML =
+    '<tr><th>ID</th><th>PROCESSO</th><th>DI</th><th>DF</th><th>STATUS</th></tr>';
+  var corpoAc = document.getElementById('paCorpoAcompanhamentos');
+  if (!PA._acompanhamentosAtuais.length) {
+    corpoAc.innerHTML = paCelulaVazia(5, 'Nenhum acompanhamento encontrado');
+  } else {
+    var htmlAc = '';
+    PA._acompanhamentosAtuais.forEach(function(reg, idx) {
+      htmlAc += '<tr class="' + (ehAtraso(reg) ? 'linha-atraso' : '') + '" onclick="paAbrirModalAcompanhamento(' + idx + ')">' +
+        '<td class="td-numero">' + (reg.id || '') + '</td>' +
+        '<td class="td-processo">' + (reg.processo || '') + '</td>' +
+        '<td>' + (reg.di || '') + '</td>' +
+        '<td>' + (reg.df || '') + '</td>' +
+        '<td>' + badgeStatus(reg) + '</td>' +
+      '</tr>';
+    });
+    corpoAc.innerHTML = htmlAc;
+  }
+
+  // Atendimentos
+  document.getElementById('paCabecalhoAtendimentos').innerHTML =
+    '<tr><th>DATA</th><th>NOME</th><th>CPF</th><th>TELEFONE 1</th><th>TELEFONE 2</th><th>EMPREGO</th><th>RAMO</th></tr>';
+  var corpoAt = document.getElementById('paCorpoAtendimentos');
+  if (!PA._atendimentosAtuais.length) {
+    corpoAt.innerHTML = paCelulaVazia(7, 'Nenhum atendimento encontrado');
+  } else {
+    var htmlAt = '';
+    PA._atendimentosAtuais.forEach(function(reg, idx) {
+      htmlAt += '<tr onclick="paAbrirModalAtendimento(' + idx + ')">' +
+        '<td>' + (reg.data || '') + '</td>' +
+        '<td class="td-assistido">' + (reg.nome || '') + '</td>' +
+        '<td>' + (reg.cpf || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.telefone1 || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.telefone2 || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.emprego || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.ramo || '<span class="celula-vazio">—</span>') + '</td>' +
+      '</tr>';
+    });
+    corpoAt.innerHTML = htmlAt;
+  }
+}
+
+// === MODAIS DE VISUALIZACAO (somente leitura) ===
+function paFecharModal(id) {
+  document.getElementById(id).classList.remove('visivel');
+}
+
+function paConfigurarFechamentoModais() {
+  ['paModalDiligenciaOverlay', 'paModalInicialOverlay', 'paModalAcompanhamentoOverlay', 'paModalAtendimentoOverlay'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', function(e) { if (e.target === this) paFecharModal(id); });
+  });
+  var elPeticao = document.getElementById('paModalPeticaoOverlay');
+  if (elPeticao) elPeticao.addEventListener('click', function(e) { if (e.target === this) paFecharModalPeticao(); });
+}
+
+function paAbrirModalDiligencia(idx) {
+  var reg = PA._diligenciasAtuais[idx];
+  if (!reg) return;
+
+  document.getElementById('pdProcessoLabel').textContent = reg.processo || '';
+  document.getElementById('pdAssistido').textContent = reg.assistido || '';
+  document.getElementById('pdBadges').innerHTML = badgeStatus(reg);
+
+  document.getElementById('pdId').textContent = reg.id || '—';
+  document.getElementById('pdProcesso').textContent = reg.processo || '—';
+  document.getElementById('pdAssistidoValor').textContent = reg.assistido || '—';
+  document.getElementById('pdDiligencia').textContent = reg.diligencia || '—';
+  document.getElementById('pdDi').textContent = reg.di || '—';
+  document.getElementById('pdPrazo').textContent = reg.prazo || '—';
+  document.getElementById('pdDf').textContent = reg.df || '—';
+  document.getElementById('pdVara').textContent = reg.vara || '—';
+  document.getElementById('pdEspecie').textContent = reg.especie || '—';
+  document.getElementById('pdSubespecie').textContent = reg.subespecie || '—';
+  document.getElementById('pdObs').textContent = reg.obs || '—';
+  document.getElementById('pdAlteradoEm').textContent = reg.alteradoEm || '—';
+
+  var linkEl = document.getElementById('pdLink');
+  linkEl.innerHTML = reg.link ? '<a href="' + reg.link + '" target="_blank" rel="noopener">Abrir no Classroom</a>' : '—';
+
+  document.getElementById('paModalDiligenciaOverlay').classList.add('visivel');
+}
+
+function paAbrirModalInicial(idx) {
+  var reg = PA._iniciaisAtuais[idx];
+  if (!reg) return;
+
+  document.getElementById('piViewProcessoLabel').textContent = reg.id || '';
+  document.getElementById('piViewAssistido').textContent = reg.assistido || '';
+  document.getElementById('piViewBadges').innerHTML = badgeStatus(reg);
+
+  document.getElementById('piViewId').textContent = reg.id || '—';
+  document.getElementById('piViewCpf').textContent = reg.cpf || '—';
+  document.getElementById('piViewAssistidoValor').textContent = reg.assistido || '—';
+  document.getElementById('piViewEspecie').textContent = reg.especie || '—';
+  document.getElementById('piViewData').textContent = reg.di || '—';
+  document.getElementById('piViewDf').textContent = reg.df || '—';
+  document.getElementById('piViewProcesso').textContent = reg.processo || '—';
+  document.getElementById('piViewVara').textContent = reg.vara || '—';
+  document.getElementById('piViewObs').textContent = reg.obs || '—';
+  document.getElementById('piViewAlteradoEm').textContent = reg.alteradoEm || '—';
+
+  var linkEl = document.getElementById('piViewLink');
+  linkEl.innerHTML = reg.link ? '<a href="' + reg.link + '" target="_blank" rel="noopener">Abrir no Classroom</a>' : '—';
+
+  document.getElementById('paModalInicialOverlay').classList.add('visivel');
+}
+
+function paAbrirModalAcompanhamento(idx) {
+  var reg = PA._acompanhamentosAtuais[idx];
+  if (!reg) return;
+
+  document.getElementById('acViewProcessoLabel').textContent = reg.id || '';
+  document.getElementById('acViewEstagiario').textContent = reg.processo || '';
+  document.getElementById('acViewBadges').innerHTML = badgeStatus(reg);
+
+  document.getElementById('acViewProcesso').textContent = reg.processo || '—';
+  document.getElementById('acViewDi').textContent = reg.di || '—';
+  document.getElementById('acViewDf').textContent = reg.df || '—';
+
+  var linkEl = document.getElementById('acViewLink');
+  linkEl.innerHTML = reg.link ? '<a href="' + reg.link + '" target="_blank" rel="noopener">Abrir no Classroom</a>' : '—';
+
+  document.getElementById('paModalAcompanhamentoOverlay').classList.add('visivel');
+}
+
+function paAbrirModalAtendimento(idx) {
+  var reg = PA._atendimentosAtuais[idx];
+  if (!reg) return;
+
+  document.getElementById('maViewNome').textContent = reg.nome || '—';
+  document.getElementById('maViewData').textContent = reg.data || '—';
+  document.getElementById('maViewCpf').textContent = reg.cpf || '—';
+  document.getElementById('maViewTelefone1').textContent = reg.telefone1 || '—';
+  document.getElementById('maViewTelefone2').textContent = reg.telefone2 || '—';
+  document.getElementById('maViewEmprego').textContent = reg.emprego || '—';
+  document.getElementById('maViewRamo').textContent = reg.ramo || '—';
+
+  document.getElementById('paModalAtendimentoOverlay').classList.add('visivel');
+}
+
+// --- Copiar processo (icone nos modais) ---
+function paCopiarTexto(spanId) {
+  var el = document.getElementById(spanId);
+  var texto = el ? el.textContent.trim() : '';
+  if (!texto || texto === '—') return;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(function() {
+      mostrarToast('Processo copiado!', 'sucesso');
+    }, function() { paCopiarFallback(texto); });
+  } else {
+    paCopiarFallback(texto);
+  }
+}
+
+function paCopiarFallback(texto) {
+  var input = document.createElement('textarea');
+  input.value = texto;
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  document.body.appendChild(input);
+  input.focus();
+  input.select();
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  document.body.removeChild(input);
+  mostrarToast(ok ? 'Processo copiado!' : 'Não foi possível copiar o processo.', ok ? 'sucesso' : 'erro');
+}
+
+function paConfigurarCopiarProcesso() {
+  var pares = [
+    ['btnCopiarProcessoDiligencia', 'pdProcesso'],
+    ['btnCopiarProcessoInicial', 'piViewProcesso'],
+    ['btnCopiarProcessoAcompanhamento', 'acViewProcesso']
+  ];
+  pares.forEach(function(par) {
+    var btn = document.getElementById(par[0]);
+    if (!btn) return;
+    btn.addEventListener('click', function(e) { e.stopPropagation(); paCopiarTexto(par[1]); });
+    btn.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); paCopiarTexto(par[1]); }
+    });
+  });
+}
+
+// === MODAL: CRIAR PETIÇÃO INICIAL ===
+function paConfigurarMascaraCpf() {
+  var input = document.getElementById('piCpf');
+  if (!input) return;
+  input.addEventListener('input', function() {
+    var v = this.value.replace(/\D/g, '').slice(0, 11);
+    if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+    else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+    else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+    this.value = v;
+  });
+}
+
+function paAbrirModalPeticao() {
+  var alunoAtual = paResolverAlunoAtual();
+  if (!alunoAtual) {
+    mostrarToast('Selecione um aluno antes de criar uma petição inicial.', 'erro');
+    return;
+  }
+  document.getElementById('piCpf').value = '';
+  document.getElementById('piAssistido').value = '';
+  popularSelectSimples(document.getElementById('piEspecie'), PA.dados.especiePicklistIniciais, '', '— Selecione —');
+  document.getElementById('paModalPeticaoOverlay').classList.add('visivel');
+}
+
+function paFecharModalPeticao() {
+  document.getElementById('paModalPeticaoOverlay').classList.remove('visivel');
+}
+
+function paSalvarPeticaoInicial() {
+  var alunoAtual = paResolverAlunoAtual();
+  if (!alunoAtual) {
+    mostrarToast('Selecione um aluno antes de continuar.', 'erro');
+    return;
+  }
+
+  var payload = {
+    cpf: document.getElementById('piCpf').value,
+    assistido: document.getElementById('piAssistido').value,
+    especie: document.getElementById('piEspecie').value,
+    emailAluno: alunoAtual.email
+  };
+
+  var btn = document.getElementById('btnSalvarPeticao');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Salvar';
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao salvar.', 'erro');
+        return;
+      }
+
+      if (res.classroom && res.classroom.sucesso) {
+        mostrarToast('Petição inicial ' + res.id + ' criada (prazo: ' + res.df + ') e enviada ao Classroom!', 'sucesso');
+      } else {
+        var motivo = (res.classroom && res.classroom.erro) || 'não foi possível criar a atividade no Classroom.';
+        mostrarToast('Petição ' + res.id + ' salva (prazo: ' + res.df + '), mas ' + motivo, 'erro');
+      }
+
+      paFecharModalPeticao();
+      paCarregarDados();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Salvar';
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .acaoCriarPedidoInicial(payload);
+}
+</script>

@@ -1,0 +1,4216 @@
+<script>
+// === TEMA (claro/escuro) ===
+function temaPreferidoSistema() {
+  return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+}
+
+function aplicarTema(tema) {
+  document.documentElement.setAttribute('data-theme', tema);
+  var icone = document.getElementById('iconeTema');
+  if (icone) icone.textContent = tema === 'dark' ? 'light_mode' : 'dark_mode';
+}
+
+function inicializarTema() {
+  var salvo = null;
+  try { salvo = localStorage.getItem('painelThalesTema'); } catch (e) {}
+  aplicarTema(salvo || temaPreferidoSistema());
+}
+
+function alternarTema() {
+  var atual = document.documentElement.getAttribute('data-theme') || 'light';
+  var novo = atual === 'dark' ? 'light' : 'dark';
+  aplicarTema(novo);
+  try { localStorage.setItem('painelThalesTema', novo); } catch (e) {}
+}
+
+// === SAUDACAO conforme horario local de acesso ===
+function atualizarSaudacao() {
+  var el = document.getElementById('saudacaoUsuario');
+  if (!el) return;
+  var hora = new Date().getHours();
+  var saudacao = 'Boa noite';
+  if (hora >= 5 && hora < 12) saudacao = 'Bom dia';
+  else if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
+  var strong = el.querySelector('strong');
+  var nome = strong ? strong.outerHTML : '';
+  el.innerHTML = saudacao + ', ' + nome;
+}
+
+// === ABAS (NAVEGACAO) ===
+// Mapeia data-vista -> id da secao correspondente no DOM.
+var SECOES_POR_VISTA = {
+  geral: 'secaoGeral',
+  diligencias: 'secaoDiligencias',
+  distribuicao: 'secaoDistribuicao',
+  iniciais: 'secaoIniciais',
+  acompanhamentos: 'secaoAcompanhamentos',
+  panorama: 'secaoPanorama',
+  graficos: 'secaoGraficos',
+  audiencias: 'secaoAudiencias',
+  utilitarios: 'secaoUtilitarios'
+};
+
+function inicializarTabs() {
+  document.querySelectorAll('.nav-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      trocarVista(this.dataset.vista);
+    });
+  });
+}
+
+function trocarVista(vista) {
+  if (!SECOES_POR_VISTA[vista]) return;
+  APP.vistaAtual = vista;
+
+  if (vista === 'geral') carregarAbaGeral();
+  if (vista === 'distribuicao') carregarAbaDistribuicao();
+  if (vista === 'iniciais') carregarAbaIniciais();
+  if (vista === 'acompanhamentos') carregarAbaAcompanhamentos();
+  if (vista === 'panorama') carregarAbaPanorama();
+  if (vista === 'graficos') carregarAbaGraficos();
+  if (vista === 'audiencias') carregarAbaAudiencias();
+
+  document.querySelectorAll('.nav-tab').forEach(function(t) {
+    t.classList.toggle('ativo', t.dataset.vista === vista);
+  });
+
+  Object.keys(SECOES_POR_VISTA).forEach(function(v) {
+    var el = document.getElementById(SECOES_POR_VISTA[v]);
+    if (el) el.style.display = (v === vista) ? 'block' : 'none';
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// === ESTADO GLOBAL ===
+var APP = {
+  vistaAtual: 'diligencias',
+  filtroCard: 'total',
+  busca: '',
+  dfDe: '',
+  dfAte: '',
+  semestreFiltro: obterSemestreAtual(),
+  ordenacao: { coluna: 'id', direcao: 'asc' },
+  paginaAtual: 1,
+  itensPorPagina: 20,
+  dados: {
+    diligencias: [],
+    estagiarios: [],
+    picklists: { status: [], vara: [], especie: [], complexas: [] },
+    iniciais: [],
+    acompanhamentos: [],
+    distribuicao: [],
+    statusPicklist: [],
+    audiencias: [],
+    graficos: null
+  },
+  registroAtual: null
+};
+
+var APP_AUDIENCIAS = {
+  busca: '',
+  mostrarPassadas: false,
+  registroAtual: null
+};
+
+var CARD_ICONES = {
+  total: 'folder_open',
+  encaminhado: 'send',
+  entregue: 'move_to_inbox',
+  devolvida: 'undo',
+  concluido: 'check_circle',
+  cancelada: 'block',
+  atraso: 'warning',
+  sem_estagiario: 'person_off'
+};
+
+var TOAST_ICONES = { sucesso: 'check_circle', erro: 'error', alerta: 'warning', '': 'info' };
+
+// === INICIALIZACAO ===
+document.addEventListener('DOMContentLoaded', function() {
+  inicializarTema();
+  atualizarSaudacao();
+  inicializarTabs();
+  inicializarFiltros();
+  inicializarFiltrosIniciais();
+  inicializarFiltrosAcompanhamentos();
+  inicializarFiltrosAudiencias();
+  carregarDados();
+});
+
+function inicializarFiltros() {
+  var inputBusca = document.getElementById('inputBusca');
+  var inputDe    = document.getElementById('inputDfDe');
+  var inputAte   = document.getElementById('inputDfAte');
+
+  if (inputBusca) {
+    inputBusca.addEventListener('input', function() {
+      APP.busca = this.value.trim();
+      APP.paginaAtual = 1;
+      renderizarTabela();
+    });
+  }
+
+  if (inputDe && inputAte) {
+    function aplicarDatas() {
+      APP.dfDe = inputDe.value;
+      APP.dfAte = inputAte.value;
+      APP.paginaAtual = 1;
+      var btnLimpar = document.getElementById('btnLimparDatas');
+      if (btnLimpar) btnLimpar.style.display = (APP.dfDe || APP.dfAte) ? 'flex' : 'none';
+      renderizarTabela();
+    }
+    inputDe.addEventListener('change', aplicarDatas);
+    inputAte.addEventListener('change', aplicarDatas);
+  }
+}
+
+// === MENU GERENCIAR (dropdown) ===
+function alternarMenuGerenciar() {
+  var menu = document.getElementById('menuGerenciar');
+  var btn = document.getElementById('btnGerenciar');
+  var abrindo = !menu.classList.contains('visivel');
+  menu.classList.toggle('visivel', abrindo);
+  btn.classList.toggle('aberto', abrindo);
+}
+
+function fecharMenuGerenciar() {
+  document.getElementById('menuGerenciar').classList.remove('visivel');
+  document.getElementById('btnGerenciar').classList.remove('aberto');
+}
+
+document.addEventListener('click', function(e) {
+  var dropdown = document.getElementById('dropdownGerenciar');
+  if (dropdown && !dropdown.contains(e.target)) fecharMenuGerenciar();
+});
+
+function acaoGerenciarEmBreve(nomeAcao) {
+  fecharMenuGerenciar();
+  mostrarToast(nomeAcao + ' — funcionalidade ainda em desenvolvimento.', '');
+}
+
+// === MODAL: NOVO PEDIDO ===
+function abrirModalNovoPedido() {
+  fecharMenuGerenciar();
+
+  document.getElementById('npProcesso').value = '';
+  document.getElementById('npAssistido').value = '';
+  document.getElementById('npPrazo').value = '';
+
+  popularSelectSimples(document.getElementById('npEstagiario'), APP.dados.estagiarios, '', '— Selecione —');
+  popularSelectSimples(document.getElementById('npEspecie'), APP.dados.picklists.especie, '', '— Selecione —');
+
+  document.getElementById('modalNovoPedidoOverlay').classList.add('visivel');
+}
+
+function fecharModalNovoPedido() {
+  document.getElementById('modalNovoPedidoOverlay').classList.remove('visivel');
+}
+
+document.getElementById('modalNovoPedidoOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalNovoPedido();
+});
+
+function salvarNovoPedido() {
+  var payload = {
+    processo: document.getElementById('npProcesso').value.trim(),
+    assistido: document.getElementById('npAssistido').value.trim(),
+    prazo: document.getElementById('npPrazo').value,
+    estagiario: document.getElementById('npEstagiario').value,
+    especie: document.getElementById('npEspecie').value
+  };
+
+  if (!payload.processo || !payload.assistido || !payload.prazo || !payload.estagiario || !payload.especie) {
+    mostrarToast('Preencha todos os campos antes de salvar.', 'erro');
+    return;
+  }
+
+  var btn = document.getElementById('btnSalvarNovoPedido');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao criar pedido.', 'erro');
+        return;
+      }
+
+      mostrarToast('Pedido ' + res.id + ' criado com sucesso! Vencimento: ' + res.df, 'sucesso');
+      fecharModalNovoPedido();
+      recarregarAposEdicao();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      mostrarToast('Erro ao criar pedido: ' + err.message, 'erro');
+    })
+    .acaoCriarPedidoAluno(payload);
+}
+
+// === MODAL: NOVO ACOMPANHAMENTO ===
+function abrirModalNovoAcompanhamento() {
+  fecharMenuGerenciar();
+
+  document.getElementById('naProcesso').value = '';
+  document.getElementById('naPrazo').value = '';
+
+  popularSelectSimples(document.getElementById('naEstagiario'), APP.dados.estagiarios, '', '— Selecione —');
+
+  document.getElementById('modalNovoAcompanhamentoOverlay').classList.add('visivel');
+}
+
+function fecharModalNovoAcompanhamento() {
+  document.getElementById('modalNovoAcompanhamentoOverlay').classList.remove('visivel');
+}
+
+document.getElementById('modalNovoAcompanhamentoOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalNovoAcompanhamento();
+});
+
+function salvarNovoAcompanhamento() {
+  var payload = {
+    processo: document.getElementById('naProcesso').value.trim(),
+    prazo: document.getElementById('naPrazo').value,
+    estagiario: document.getElementById('naEstagiario').value
+  };
+
+  if (!payload.processo || !payload.prazo || !payload.estagiario) {
+    mostrarToast('Preencha todos os campos antes de salvar.', 'erro');
+    return;
+  }
+
+  var btn = document.getElementById('btnSalvarNovoAcompanhamento');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao criar acompanhamento.', 'erro');
+        return;
+      }
+
+      mostrarToast('Acompanhamento ' + res.id + ' criado com sucesso! Entrega: ' + res.dataEntrega, 'sucesso');
+      fecharModalNovoAcompanhamento();
+      if (APP.vistaAtual === 'acompanhamentos') carregarAbaAcompanhamentos();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      mostrarToast('Erro ao criar acompanhamento: ' + err.message, 'erro');
+    })
+    .acaoCriarAcompanhamento(payload);
+}
+
+// === MODAL: TRANSFERIR ATIVIDADE ===
+var APP_TRANSFERIR = { registro: null };
+
+function abrirModalTransferirBusca() {
+  document.getElementById('tfId').value = '';
+  document.getElementById('modalTransferirBuscaOverlay').classList.add('visivel');
+}
+
+function fecharModalTransferirBusca() {
+  document.getElementById('modalTransferirBuscaOverlay').classList.remove('visivel');
+}
+
+document.getElementById('modalTransferirBuscaOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalTransferirBusca();
+});
+
+// Converte "dd/mm/aaaa" (formato usado no restante do painel) para
+// "aaaa-mm-dd" (formato exigido por <input type="date">).
+function _dataBrParaIso(dataBr) {
+  var partes = String(dataBr || '').split('/');
+  if (partes.length !== 3) return '';
+  return partes[2] + '-' + partes[1] + '-' + partes[0];
+}
+
+function buscarDiligenciaTransferencia() {
+  var id = document.getElementById('tfId').value.trim();
+  if (!id) {
+    mostrarToast('Informe o ID da diligência.', 'erro');
+    return;
+  }
+
+  var btn = document.getElementById('btnBuscarTransferir');
+  btn.disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Diligência não encontrada.', 'erro');
+        return;
+      }
+      APP_TRANSFERIR.registro = res.registro;
+      preencherModalTransferirDetalhe(res.registro);
+      fecharModalTransferirBusca();
+      document.getElementById('modalTransferirDetalheOverlay').classList.add('visivel');
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      mostrarToast('Erro ao buscar diligência: ' + err.message, 'erro');
+    })
+    .acaoBuscarDiligenciaParaTransferencia(id);
+}
+
+function preencherModalTransferirDetalhe(reg) {
+  document.getElementById('mtProcesso').textContent = 'ID ' + reg.id;
+  document.getElementById('mtAssistido').textContent = reg.assistido || '—';
+  document.getElementById('mtEspecie').textContent = reg.especie || '—';
+  document.getElementById('mtStatus').textContent = reg.status || '—';
+  document.getElementById('mtEstagiarioAtual').textContent = reg.estagiario || '— Não atribuído —';
+  document.getElementById('tfDf').value = _dataBrParaIso(reg.df);
+
+  var estagiariosDisponiveis = (APP.dados.estagiarios || []).filter(function(nome) {
+    return normalizarChave(nome) !== normalizarChave(reg.estagiario);
+  });
+  popularSelectSimples(document.getElementById('tfNovoEstagiario'), estagiariosDisponiveis, '', '— Selecione —');
+}
+
+function fecharModalTransferirDetalhe() {
+  document.getElementById('modalTransferirDetalheOverlay').classList.remove('visivel');
+  APP_TRANSFERIR.registro = null;
+}
+
+document.getElementById('modalTransferirDetalheOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalTransferirDetalhe();
+});
+
+function confirmarTransferencia() {
+  var reg = APP_TRANSFERIR.registro;
+  if (!reg) return;
+
+  var novoEstagiario = document.getElementById('tfNovoEstagiario').value;
+  var novaDf = document.getElementById('tfDf').value;
+
+  if (!novoEstagiario) {
+    mostrarToast('Selecione o novo estagiário.', 'erro');
+    return;
+  }
+  if (!novaDf) {
+    mostrarToast('Informe a DF.', 'erro');
+    return;
+  }
+
+  var confirmado = window.confirm(
+    'Confirma a transferência da Diligência ID ' + reg.id + ' de ' +
+    (reg.estagiario || '(sem estagiário)') + ' para ' + novoEstagiario + '?'
+  );
+  if (!confirmado) return;
+
+  var btn = document.getElementById('btnConfirmarTransferir');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Transferindo...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = 'Ok';
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao transferir diligência.', 'erro');
+        return;
+      }
+
+      var avisos = [res.classroomAviso, res.driveAviso, res.muralAviso].filter(Boolean);
+      if (avisos.length === 0) {
+        mostrarToast('Diligência ' + reg.id + ' transferida para ' + novoEstagiario + ' com sucesso!', 'sucesso');
+      } else {
+        mostrarToast('Diligência ' + reg.id + ' transferida, mas com avisos: ' + avisos.join(' '), 'erro');
+      }
+
+      fecharModalTransferirDetalhe();
+      recarregarAposEdicao();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = 'Ok';
+      mostrarToast('Erro ao transferir diligência: ' + err.message, 'erro');
+    })
+    .acaoTransferirDiligencia({
+      _linha: reg._linha,
+      novoEstagiario: novoEstagiario,
+      novaDf: novaDf
+    });
+}
+
+function acaoGerenciarVerificarEntregas() {
+  fecharMenuGerenciar();
+
+  var btn = document.getElementById('btnGerenciar');
+  var textoOriginal = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">hourglass_top</span> Verificando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = textoOriginal;
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao verificar entregas.', 'erro');
+        return;
+      }
+
+      var totalAtualizados = (res.atualizados || []).length;
+      var totalErros = (res.erros || []).length;
+
+      if (totalAtualizados === 0 && totalErros === 0) {
+        mostrarToast('Nenhuma atualização de entrega encontrada.', '');
+      } else if (totalErros === 0) {
+        mostrarToast(totalAtualizados + ' registro(s) atualizado(s) com base nas entregas do Classroom.', 'sucesso');
+      } else if (totalAtualizados === 0) {
+        mostrarToast('Falha ao verificar ' + totalErros + ' registro(s). Veja o console.', 'erro');
+        console.error('Erros ao verificar entregas:', res.erros);
+      } else {
+        mostrarToast(totalAtualizados + ' atualizado(s), ' + totalErros + ' com erro. Veja o console.', '');
+        console.error('Erros ao verificar entregas:', res.erros);
+      }
+
+      recarregarAposEdicao();
+      if (APP.vistaAtual === 'acompanhamentos') carregarAbaAcompanhamentos();
+      if (APP.vistaAtual === 'iniciais') carregarAbaIniciais();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = textoOriginal;
+      mostrarToast('Erro ao verificar entregas: ' + err.message, 'erro');
+    })
+    .acaoVerificarEntregas();
+}
+
+function acaoGerenciarEnviarCobrancas() {
+  var card = document.getElementById('cardEnviarCobrancas');
+  if (!card || card.classList.contains('carregando')) return;
+
+  card.classList.add('carregando');
+  var labelEl = card.querySelector('.util-card-label');
+  var labelOriginal = labelEl.textContent;
+  labelEl.textContent = 'Enviando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao enviar cobranças.', 'erro');
+        return;
+      }
+
+      var totalEnviados = (res.enviados || []).length;
+      var totalErros = (res.erros || []).length;
+
+      if (totalEnviados === 0 && totalErros === 0) {
+        mostrarToast('Nenhuma cobrança pendente encontrada.', '');
+      } else if (totalErros === 0) {
+        mostrarToast(totalEnviados + ' cobrança(s) enviada(s).', 'sucesso');
+      } else if (totalEnviados === 0) {
+        mostrarToast('Falha ao enviar ' + totalErros + ' cobrança(s). Veja o console.', 'erro');
+        console.error('Erros ao enviar cobranças:', res.erros);
+      } else {
+        mostrarToast(totalEnviados + ' enviada(s), ' + totalErros + ' com erro. Veja o console.', '');
+        console.error('Erros ao enviar cobranças:', res.erros);
+      }
+    })
+    .withFailureHandler(function(err) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      mostrarToast('Erro ao enviar cobranças: ' + err.message, 'erro');
+    })
+    .acaoEnviarCobrancas();
+}
+
+function acaoGerenciarEnviarClassroom() {
+  fecharMenuGerenciar();
+
+  var btn = document.getElementById('btnGerenciar');
+  var textoOriginal = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">hourglass_top</span> Enviando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = textoOriginal;
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao enviar ao Classroom.', 'erro');
+        return;
+      }
+
+      var totalEnviados = (res.enviados || []).length;
+      var totalErros = (res.erros || []).length;
+
+      if (totalEnviados === 0 && totalErros === 0) {
+        mostrarToast(res.mensagem || 'Nenhuma diligência ou acompanhamento pendente de envio.', '');
+      } else if (totalErros === 0) {
+        mostrarToast(totalEnviados + ' atividade(s) enviada(s) ao Classroom com sucesso!', 'sucesso');
+      } else if (totalEnviados === 0) {
+        mostrarToast('Falha ao enviar ' + totalErros + ' registro(s). Veja o console para detalhes.', 'erro');
+        console.error('Erros ao enviar ao Classroom:', res.erros);
+      } else {
+        mostrarToast(totalEnviados + ' enviada(s), ' + totalErros + ' com erro. Veja o console.', '');
+        console.error('Erros ao enviar ao Classroom:', res.erros);
+      }
+
+      recarregarAposEdicao();
+      if (APP.vistaAtual === 'acompanhamentos') carregarAbaAcompanhamentos();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = textoOriginal;
+      mostrarToast('Erro ao enviar ao Classroom: ' + err.message, 'erro');
+    })
+    .acaoEnviarAoClassroom();
+}
+
+// === CARGA DE DADOS ===
+function carregarDados() {
+  mostrarLoading(true);
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        mostrarLoading(false);
+        return;
+      }
+      APP.dados = resultado;
+      popularSelectSemestre();
+      mostrarLoading(false);
+      renderizarCards();
+      renderizarTabela();
+    })
+    .withFailureHandler(function(err) {
+      mostrarToast('Erro ao carregar dados: ' + err.message, 'erro');
+      mostrarLoading(false);
+    })
+    .carregarDadosIniciais();
+}
+
+function recarregarAposEdicao() {
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (resultado.erro) return;
+      APP.dados.diligencias = resultado.diligencias;
+      popularSelectSemestre();
+      renderizarCards();
+      renderizarTabela();
+    })
+    .withFailureHandler(function() {})
+    .recarregarDiligencias();
+}
+
+// === LOGICA DE CLASSIFICACAO ===
+var STATUS_FINAIS = ['ok', 'protocolado', 'cancelada'];
+
+function normalizarChave(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function ehAtraso(reg) {
+  return reg.atraso === true || reg.atraso === 'true';
+}
+
+// "Atraso exibivel": usado apenas para a decisao visual do BADGE da coluna
+// STATUS na tabela — nao para contagem/filtro dos cards de resumo, que usam
+// classificarRegistroChaves()/ehAtraso() com sua propria regra: um registro
+// "Entregue" com atraso=true aparece tanto no card "Em Atraso" quanto no
+// card "Entregues" (decisao de Thales, 14/07/2026).
+//
+// Regra do badge: o badge "Em Atraso" na tabela so deve aparecer quando o
+// Status Real ainda for "Encaminhado" ou "Devolvida". Se o Status Real ja
+// for "Entregue" (registro atrasado no prazo mas ja entregue no Classroom),
+// o badge mostra o status real ("Entregue").
+//
+// A borda vermelha da linha (classe "linha-atraso"), porem, usa ehAtraso()
+// diretamente — nao ehAtrasoExibivel() — em TODAS as tabelas (Diligencias,
+// Iniciais, Acompanhamentos e as 3 sub-tabelas do Panorama). Ou seja, mesmo
+// quando o badge mostra "Entregue", a linha continua com a borda esquerda
+// vermelha se o registro estiver atrasado, sinalizando visualmente que a
+// entrega ocorreu fora do prazo (decisao de Thales, 13/07/2026).
+function ehAtrasoExibivel(reg) {
+  if (!ehAtraso(reg)) return false;
+  var chave = normalizarChave(reg.status);
+  return chave === 'encaminhado' || chave === 'devolvida';
+}
+
+function ehSemEstagiario(reg) {
+  var semEst = !String(reg.estagiario || '').trim();
+  var chave = normalizarChave(reg.status);
+  return semEst && STATUS_FINAIS.indexOf(chave) === -1;
+}
+
+// Registros Cancelados continuam aparecendo nas tabelas (com a badge normal),
+// mas nao entram nas contagens dos cards do Panorama (decisao de Thales).
+function naoEhCancelada(reg) {
+  return normalizarChave(reg.status) !== 'cancelada';
+}
+
+// Retorna a chave de classificacao: atraso | encaminhado | entregue | devolvida | concluido | cancelada | outros
+function classificarRegistro(reg) {
+  if (ehAtraso(reg)) return 'atraso';
+  var chave = normalizarChave(reg.status);
+  if (chave === 'ok' || chave === 'protocolado') return 'concluido';
+  if (chave === 'encaminhado') return 'encaminhado';
+  if (chave === 'entregue') return 'entregue';
+  if (chave === 'devolvida') return 'devolvida';
+  if (chave === 'cancelada') return 'cancelada';
+  return 'outros';
+}
+
+// Retorna todas as chaves de classificacao aplicaveis a um registro (usada na
+// contagem/filtro dos cards de resumo). Normalmente e uma unica chave, igual a
+// classificarRegistro(). Excecao: um registro com Status "Entregue" que foi
+// entregue apos o prazo (atraso=true) deve aparecer tanto no card "Em Atraso"
+// quanto no card "Entregues", entao retorna as duas chaves nesse caso.
+function classificarRegistroChaves(reg) {
+  var chave = normalizarChave(reg.status);
+  if (ehAtraso(reg) && chave === 'entregue') return ['atraso', 'entregue'];
+  return [classificarRegistro(reg)];
+}
+
+function normalizarStatusParaUI(status) {
+  var chave = normalizarChave(status);
+  if (!chave) return '';
+  if (chave === 'ok') return 'Ok';
+  if (chave === 'protocolado') return 'Protocolado';
+  if (chave === 'encaminhado') return 'Encaminhado';
+  if (chave === 'devolvida') return 'Devolvida';
+  if (chave === 'entregue') return 'Entregue';
+  if (chave === 'cancelada') return 'Cancelada';
+  return String(status || '').trim();
+}
+
+function getRegistrosFiltrados() {
+  var lista = APP.dados.diligencias || [];
+
+  if (APP.filtroCard !== 'total') {
+    lista = lista.filter(function(r) {
+      if (APP.filtroCard === 'sem_estagiario') return ehSemEstagiario(r);
+      return classificarRegistroChaves(r).indexOf(APP.filtroCard) !== -1;
+    });
+  }
+
+  if (APP.busca) {
+    var b = normalizar(APP.busca);
+    lista = lista.filter(function(r) {
+      return (
+        normalizar(r.processo).includes(b) ||
+        normalizar(r.assistido).includes(b) ||
+        normalizar(r.diligencia).includes(b) ||
+        normalizar(r.estagiario).includes(b) ||
+        normalizar(r.vara).includes(b)
+      );
+    });
+  }
+
+  if (APP.dfDe || APP.dfAte) {
+    var tsDe  = APP.dfDe  ? converterInputDataParaTimestamp(APP.dfDe)  : null;
+    var tsAte = APP.dfAte ? converterInputDataParaTimestamp(APP.dfAte) : null;
+    lista = lista.filter(function(r) {
+      var ts = converterDataBRParaTimestamp(r.df);
+      if (ts === null) return false;
+      if (tsDe  !== null && ts < tsDe)  return false;
+      if (tsAte !== null && ts > tsAte) return false;
+      return true;
+    });
+  }
+
+  if (APP.semestreFiltro) {
+    lista = lista.filter(function(r) { return r.semestre === APP.semestreFiltro; });
+  }
+
+  lista = lista.slice().sort(function(a, b) {
+    return compararRegistros(a, b, APP.ordenacao.coluna, APP.ordenacao.direcao);
+  });
+
+  return lista;
+}
+
+function converterInputDataParaTimestamp(isoStr) {
+  if (!isoStr) return null;
+  var p = isoStr.split('-');
+  if (p.length !== 3) return null;
+  var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+  d.setHours(0, 0, 0, 0);
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+function limparFiltroDatas() {
+  APP.dfDe = '';
+  APP.dfAte = '';
+  APP.paginaAtual = 1;
+  var inputDe  = document.getElementById('inputDfDe');
+  var inputAte = document.getElementById('inputDfAte');
+  if (inputDe)  inputDe.value  = '';
+  if (inputAte) inputAte.value = '';
+  var btnLimpar = document.getElementById('btnLimparDatas');
+  if (btnLimpar) btnLimpar.style.display = 'none';
+  renderizarTabela();
+}
+
+function normalizar(str) {
+  return String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function obterSemestreAtual() {
+  try {
+    var hoje = new Date();
+    var ano = hoje.getFullYear();
+    var mes = hoje.getMonth() + 1;
+    if (!ano || !mes) return '';
+    return ano + '.' + (mes <= 6 ? '01' : '02');
+  } catch (e) {
+    return '';
+  }
+}
+
+function popularSelectSemestre() {
+  var select = document.getElementById('selectSemestre');
+  if (!select) return;
+
+  var presentes = {};
+  (APP.dados.diligencias || []).forEach(function(r) {
+    if (r.semestre) presentes[r.semestre] = true;
+  });
+
+  var semestres = Object.keys(presentes).sort().reverse();
+  var valorAtual = APP.semestreFiltro;
+
+  select.innerHTML = '<option value="">— Todos os semestres —</option>';
+  semestres.forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    if (s === valorAtual) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
+function mudarSemestre(valor) {
+  APP.semestreFiltro = valor || '';
+  APP.paginaAtual = 1;
+  renderizarCards();
+  renderizarTabela();
+}
+
+function ordenarPor(coluna) {
+  if (APP.ordenacao.coluna === coluna) {
+    APP.ordenacao.direcao = (APP.ordenacao.direcao === 'asc') ? 'desc' : 'asc';
+  } else {
+    APP.ordenacao.coluna = coluna;
+    APP.ordenacao.direcao = 'asc';
+  }
+  APP.paginaAtual = 1;
+  renderizarTabela();
+}
+
+function compararRegistros(a, b, coluna, direcao) {
+  var mult = (direcao === 'desc') ? -1 : 1;
+
+  if (coluna === 'di' || coluna === 'df') {
+    var tempoA = converterDataBRParaTimestamp(a[coluna]);
+    var tempoB = converterDataBRParaTimestamp(b[coluna]);
+    if (tempoA === null && tempoB === null) return 0;
+    if (tempoA === null) return 1;
+    if (tempoB === null) return -1;
+    return (tempoA - tempoB) * mult;
+  }
+
+  var valorA = String(a[coluna] || '');
+  var valorB = String(b[coluna] || '');
+  return valorA.localeCompare(valorB, 'pt-BR', { numeric: true, sensitivity: 'base' }) * mult;
+}
+
+function thOrdenavel(label, coluna) {
+  var ativo = APP.ordenacao.coluna === coluna;
+  var seta = '';
+  if (ativo) {
+    var simbolo = (APP.ordenacao.direcao === 'asc') ? '▲' : '▼';
+    seta = '<span class="th-seta">' + simbolo + '</span>';
+  }
+  return '<th class="th-ordenavel" onclick="ordenarPor(\'' + coluna + '\')">' + label + seta + '</th>';
+}
+
+function converterDataBRParaTimestamp(valor) {
+  if (valor === null || valor === undefined || valor === '') return null;
+
+  if (valor instanceof Date) {
+    if (isNaN(valor.getTime())) return null;
+    var dataObj = new Date(valor.getTime());
+    dataObj.setHours(0, 0, 0, 0);
+    return dataObj.getTime();
+  }
+
+  if (typeof valor === 'number') {
+    var dataNum = new Date(valor);
+    if (isNaN(dataNum.getTime())) return null;
+    dataNum.setHours(0, 0, 0, 0);
+    return dataNum.getTime();
+  }
+
+  var texto = String(valor || '').trim();
+  if (!texto) return null;
+
+  // Remove horario quando houver (ex.: "20/06/2026 14:12:14").
+  texto = texto.split(' ')[0].trim();
+
+  // dd/mm/aaaa, dd-mm-aaaa ou dd.mm.aaaa
+  var mBr = texto.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (mBr) {
+    var dia = parseInt(mBr[1], 10);
+    var mes = parseInt(mBr[2], 10) - 1;
+    var ano = parseInt(mBr[3], 10);
+    var dataBr = new Date(ano, mes, dia);
+    if (isNaN(dataBr.getTime())) return null;
+    // Valida rollover (31/02 nao pode virar 02/03).
+    if (dataBr.getFullYear() !== ano || dataBr.getMonth() !== mes || dataBr.getDate() !== dia) return null;
+    dataBr.setHours(0, 0, 0, 0);
+    return dataBr.getTime();
+  }
+
+  // yyyy-mm-dd ou yyyy/mm/dd
+  var mIso = texto.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (mIso) {
+    var anoIso = parseInt(mIso[1], 10);
+    var mesIso = parseInt(mIso[2], 10) - 1;
+    var diaIso = parseInt(mIso[3], 10);
+    var dataIso = new Date(anoIso, mesIso, diaIso);
+    if (isNaN(dataIso.getTime())) return null;
+    if (dataIso.getFullYear() !== anoIso || dataIso.getMonth() !== mesIso || dataIso.getDate() !== diaIso) return null;
+    dataIso.setHours(0, 0, 0, 0);
+    return dataIso.getTime();
+  }
+
+  return null;
+}
+
+function contarPorClassificacao(lista) {
+  var c = { total: 0, encaminhado: 0, entregue: 0, devolvida: 0, concluido: 0, cancelada: 0, atraso: 0, sem_estagiario: 0 };
+  lista.forEach(function(r) {
+    c.total++;
+    if (ehSemEstagiario(r)) c.sem_estagiario++;
+    classificarRegistroChaves(r).forEach(function(cl) {
+      if (c[cl] !== undefined) c[cl]++;
+    });
+  });
+  return c;
+}
+
+// === RENDERIZACAO: CARDS ===
+function renderizarCards() {
+  var lista = APP.dados.diligencias || [];
+  if (APP.semestreFiltro) {
+    lista = lista.filter(function(r) { return r.semestre === APP.semestreFiltro; });
+  }
+  var c = contarPorClassificacao(lista);
+
+  var cards = [
+    { id: 'total',          label: 'TOTAL',            num: c.total,          classe: 'card-total' },
+    { id: 'encaminhado',    label: 'ENCAMINHADOS',    num: c.encaminhado,    classe: 'card-encaminhado' },
+    { id: 'entregue',       label: 'ENTREGUES',        num: c.entregue,       classe: 'card-entregue' },
+    { id: 'devolvida',      label: 'DEVOLVIDAS',      num: c.devolvida,      classe: 'card-devolvida' },
+    { id: 'concluido',      label: 'OK / PROTOCOLADO', num: c.concluido,      classe: 'card-concluido' },
+    { id: 'cancelada',      label: 'CANCELADAS',      num: c.cancelada,      classe: 'card-cancelada' },
+    { id: 'atraso',         label: 'EM ATRASO',        num: c.atraso,         classe: 'card-atraso' },
+    { id: 'sem_estagiario', label: 'SEM ESTAGIÁRIO',  num: c.sem_estagiario, classe: 'card-sem-estagiario' }
+  ];
+
+  var html = '';
+  cards.forEach(function(card) {
+    var ativo = APP.filtroCard === card.id ? ' ativo' : '';
+    var icone = CARD_ICONES[card.id] || 'folder';
+    html += '<div class="card-resumo ' + card.classe + ativo + '" onclick="filtrarCard(\'' + card.id + '\')">' +
+      '<div class="card-icone"><span class="material-symbols-outlined">' + icone + '</span></div>' +
+      '<div class="card-info">' +
+        '<div class="card-numero">' + card.num + '</div>' +
+        '<div class="card-label">' + card.label + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  document.getElementById('cardsGrid').innerHTML = html;
+}
+
+function filtrarCard(id) {
+  APP.filtroCard = id;
+  APP.paginaAtual = 1;
+  renderizarCards();
+  renderizarTabela();
+}
+
+function renderizarCelulaEstagiario(reg) {
+  var est = String(reg.estagiario || '').trim();
+  if (est) return est;
+  if (ehSemEstagiario(reg)) {
+    return '<span class="estagiario-celula-vazio"><span class="material-symbols-outlined sem-estagiario-indicador">person_off</span></span>';
+  }
+  return '<span class="celula-vazio">—</span>';
+}
+
+function badgeStatus(reg) {
+  var badgeBase;
+  if (ehAtrasoExibivel(reg)) {
+    badgeBase = '<span class="badge badge-atraso">Em Atraso</span>';
+  } else {
+    var s = normalizarStatusParaUI(reg.status);
+    if (!s) {
+      badgeBase = '<span class="badge badge-vazio">—</span>';
+    } else {
+      var chave = normalizarChave(s);
+      if (chave === 'ok' || chave === 'protocolado') badgeBase = '<span class="badge badge-concluido">' + s + '</span>';
+      else if (chave === 'encaminhado') badgeBase = '<span class="badge badge-encaminhado">Encaminhado</span>';
+      else if (chave === 'entregue') badgeBase = '<span class="badge badge-entregue">Entregue</span>';
+      else if (chave === 'devolvida') badgeBase = '<span class="badge badge-devolvida">Devolvida</span>';
+      else if (chave === 'cancelada') badgeBase = '<span class="badge badge-cancelada">Cancelada</span>';
+      else badgeBase = '<span class="badge badge-vazio">' + s + '</span>';
+    }
+  }
+  return badgeBase + badgeGatilho(reg);
+}
+
+// Indicador visual (somente cor/icone, sem e-mail) de proximidade de prazo.
+// gatilho1 = 5 dias uteis antes da DF, gatilho2 = vespera, gatilho3 = dia da DF.
+function badgeGatilho(reg) {
+  if (!reg.gatilho) return '';
+  var mapa = {
+    gatilho1: { classe: 'gatilho-amarelo', titulo: 'Vence em 5 dias úteis' },
+    gatilho2: { classe: 'gatilho-laranja', titulo: 'Vence amanhã (dia útil)' },
+    gatilho3: { classe: 'gatilho-vermelho', titulo: 'Vence hoje' }
+  };
+  var info = mapa[reg.gatilho];
+  if (!info) return '';
+  return '<span class="badge-gatilho ' + info.classe + '" title="' + info.titulo + '">' +
+    '<span class="material-symbols-outlined" style="font-size:13px;">schedule</span>' +
+  '</span>';
+}
+
+function descricaoFiltro() {
+  var mapa = {
+    total: 'Todos os registros', encaminhado: 'Status: Encaminhado', entregue: 'Status: Entregue',
+    devolvida: 'Status: Devolvida', concluido: 'Status: Ok / Protocolado', cancelada: 'Status: Cancelada',
+    atraso: 'Em Atraso', sem_estagiario: 'Sem Estagiário'
+  };
+  return mapa[APP.filtroCard] || '';
+}
+
+// === RENDERIZACAO: TABELA ===
+function renderizarTabela() {
+  var lista = getRegistrosFiltrados();
+  var total = lista.length;
+  var totalPags = Math.max(1, Math.ceil(total / APP.itensPorPagina));
+  if (APP.paginaAtual > totalPags) APP.paginaAtual = totalPags;
+
+  var inicio = (APP.paginaAtual - 1) * APP.itensPorPagina;
+  var fim = Math.min(inicio + APP.itensPorPagina, total);
+  var pagina = lista.slice(inicio, fim);
+
+  document.getElementById('tabelaInfo').innerHTML =
+    '<strong>' + total + '</strong> registro(s) — ' + descricaoFiltro();
+
+  document.getElementById('tabelaCabecalho').innerHTML =
+    '<tr>' +
+      thOrdenavel('ID', 'id') +
+      thOrdenavel('PROCESSO', 'processo') +
+      thOrdenavel('ASSISTIDO(A)', 'assistido') +
+      thOrdenavel('DI', 'di') +
+      thOrdenavel('PRAZO', 'prazo') +
+      thOrdenavel('DF', 'df') +
+      thOrdenavel('ESTAGIÁRIO(A)', 'estagiario') +
+      thOrdenavel('STATUS', 'status') +
+      thOrdenavel('ESPÉCIE', 'especie') +
+      thOrdenavel('SUBESPÉCIE', 'subespecie') +
+    '</tr>';
+
+  if (pagina.length === 0) {
+    document.getElementById('tabelaCorpo').innerHTML =
+      '<tr><td colspan="10">' +
+        '<div class="estado-vazio">' +
+          '<span class="material-symbols-outlined">search_off</span>' +
+          '<div class="estado-vazio-titulo">Nenhum registro encontrado</div>' +
+          '<div class="estado-vazio-desc">Tente ajustar o filtro ou a busca.</div>' +
+        '</div>' +
+      '</td></tr>';
+  } else {
+    var html = '';
+    pagina.forEach(function(reg, idx) {
+      var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
+      html += '<tr class="' + classeAtraso + '" onclick="abrirModal(this)" data-idx="' + (inicio + idx) + '">' +
+        '<td class="td-numero">' + (reg.id || '') + '</td>' +
+        '<td class="td-processo">' + (reg.processo || '') + '</td>' +
+        '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
+        '<td>' + (reg.di || '') + '</td>' +
+        '<td>' + (reg.prazo || '') + '</td>' +
+        '<td>' + (reg.df || '') + '</td>' +
+        '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
+        '<td>' + badgeStatus(reg) + '</td>' +
+        '<td>' + (reg.especie || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.subespecie || '<span class="celula-vazio">—</span>') + '</td>' +
+      '</tr>';
+    });
+    document.getElementById('tabelaCorpo').innerHTML = html;
+  }
+
+  renderizarPaginacao(total, totalPags);
+}
+
+// === PAGINACAO ===
+function renderizarPaginacao(total, totalPags) {
+  var p = APP.paginaAtual;
+  var inicio = (p - 1) * APP.itensPorPagina + 1;
+  var fim = Math.min(p * APP.itensPorPagina, total);
+
+  var html = '';
+  if (total > 0) html += '<span class="pag-info">' + inicio + '–' + fim + ' de ' + total + '</span>';
+
+  html += '<button class="btn-pag" onclick="irPagina(' + (p - 1) + ')" ' + (p <= 1 ? 'disabled' : '') + '>' +
+    '<span class="material-symbols-outlined">chevron_left</span> Ant.' +
+  '</button>';
+
+  var range = pagRange(p, totalPags);
+  range.forEach(function(n) {
+    if (n === '...') {
+      html += '<span class="pag-info">…</span>';
+    } else {
+      html += '<button class="btn-pag' + (n === p ? ' pag-ativo' : '') + '" onclick="irPagina(' + n + ')">' + n + '</button>';
+    }
+  });
+
+  html += '<button class="btn-pag" onclick="irPagina(' + (p + 1) + ')" ' + (p >= totalPags ? 'disabled' : '') + '>' +
+    'Próx. <span class="material-symbols-outlined">chevron_right</span>' +
+  '</button>';
+
+  document.getElementById('paginacao').innerHTML = html;
+}
+
+function pagRange(atual, total) {
+  if (total <= 7) {
+    var r = [];
+    for (var i = 1; i <= total; i++) r.push(i);
+    return r;
+  }
+  var pages = [1];
+  if (atual > 3) pages.push('...');
+  for (var j = Math.max(2, atual - 1); j <= Math.min(total - 1, atual + 1); j++) pages.push(j);
+  if (atual < total - 2) pages.push('...');
+  pages.push(total);
+  return pages;
+}
+
+function irPagina(n) {
+  var lista = getRegistrosFiltrados();
+  var totalPags = Math.max(1, Math.ceil(lista.length / APP.itensPorPagina));
+  if (n < 1 || n > totalPags) return;
+  APP.paginaAtual = n;
+  renderizarTabela();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// === MODAL ===
+function abrirModal(tr) {
+  var idx = parseInt(tr.dataset.idx);
+  var lista = getRegistrosFiltrados();
+  var reg = lista[idx];
+  if (!reg) return;
+  preencherModalDiligencia(reg);
+}
+
+// Preenche e abre o modal de Diligencia a partir de um registro ja resolvido.
+// Reaproveitado pela aba Diligencias (abrirModal) e pela aba Panorama
+// (abrirModalPanoramaDiligencia) — mesma UI, mesma regra de edicao/salvamento.
+function preencherModalDiligencia(reg) {
+  APP.registroAtual = reg;
+
+  document.getElementById('modalProcesso').textContent = reg.processo || '';
+  document.getElementById('modalAssistido').textContent = reg.assistido || '';
+
+  document.getElementById('modalBadges').innerHTML = badgeStatus(reg);
+
+  // O aviso de atraso no modal usa a flag "crua" (ehAtraso), nao a versao
+  // restrita da tabela (ehAtrasoExibivel): mesmo com Status Real "Entregue",
+  // se o prazo (DF) ja passou, o aviso continua aparecendo aqui.
+  var alertaEl = document.getElementById('modalAlertaAtraso');
+  alertaEl.style.display = ehAtraso(reg) ? 'flex' : 'none';
+
+  document.getElementById('mId').textContent = reg.id || '—';
+  document.getElementById('mProcesso').textContent = reg.processo || '—';
+  document.getElementById('mAssistido').textContent = reg.assistido || '—';
+  document.getElementById('mDiligencia').textContent = reg.diligencia || '—';
+  document.getElementById('mDi').textContent = reg.di || '—';
+  document.getElementById('mPrazo').textContent = reg.prazo || '—';
+  document.getElementById('mDf').textContent = reg.df || '—';
+  document.getElementById('mAlteradoEm').textContent = reg.alteradoEm || '—';
+
+  var linkEl = document.getElementById('mLink');
+  if (reg.link) {
+    linkEl.innerHTML = '<a href="' + reg.link + '" target="_blank" rel="noopener">Abrir no Classroom</a>';
+  } else {
+    linkEl.textContent = '—';
+  }
+  document.getElementById('mDiClass').textContent = reg.diClass || '—';
+  document.getElementById('mDfClass').textContent = reg.dfClass || '—';
+
+  preencherEdicaoModal(reg);
+
+  document.getElementById('modalOverlay').classList.add('visivel');
+}
+
+// Abre o modal de Diligencia a partir da tabela da aba Panorama.
+function abrirModalPanoramaDiligencia(idx) {
+  var lista = getDiligenciasPanoramaFiltradas();
+  var reg = lista[idx];
+  if (!reg) return;
+  preencherModalDiligencia(reg);
+}
+
+function popularSelectSimples(select, valores, valorAtual, placeholder) {
+  select.innerHTML = '<option value="">' + placeholder + '</option>';
+  var incluidos = {};
+  (valores || []).forEach(function(v) {
+    var chave = normalizarChave(v);
+    if (!chave || incluidos[chave]) return;
+    incluidos[chave] = true;
+    var opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    if (chave === normalizarChave(valorAtual)) opt.selected = true;
+    select.appendChild(opt);
+  });
+  if (valorAtual && !incluidos[normalizarChave(valorAtual)]) {
+    var optAtual = document.createElement('option');
+    optAtual.value = valorAtual;
+    optAtual.textContent = valorAtual;
+    optAtual.selected = true;
+    select.appendChild(optAtual);
+  }
+}
+
+// SUBESPECIE (Peça Simples/Complexa) nunca e escolhida manualmente: e sempre
+// derivada de ESPECIE. Este calculo espelha calcularSubespecie() no backend
+// (Data.js) apenas para dar uma previa instantanea no modal; o valor gravado
+// de fato e sempre recalculado no servidor ao salvar.
+function calcularSubespeciePreview(especie) {
+  var chave = normalizarChave(especie);
+  if (!chave) return '';
+  var complexas = APP.dados.picklists.complexas || [];
+  for (var i = 0; i < complexas.length; i++) {
+    if (normalizarChave(complexas[i]) === chave) return 'Complexa';
+  }
+  return 'Simples';
+}
+
+function atualizarDisplaySubespecie() {
+  var especieAtual = document.getElementById('editEspecie').value;
+  var valor = calcularSubespeciePreview(especieAtual);
+  document.getElementById('displaySubespecie').textContent = valor || '—';
+}
+
+function preencherEdicaoModal(reg) {
+  popularSelectSimples(document.getElementById('editEstagiario'), APP.dados.estagiarios, reg.estagiario, '— Não atribuído —');
+  popularSelectSimples(document.getElementById('editVara'), APP.dados.picklists.vara, reg.vara, '— Não informado —');
+  popularSelectSimples(document.getElementById('editEspecie'), APP.dados.picklists.especie, reg.especie, '— Não informado —');
+
+  var selectStatus = document.getElementById('editStatus');
+  var statusAtualUI = normalizarStatusParaUI(reg.status);
+  popularSelectSimples(selectStatus, APP.dados.picklists.status.map(normalizarStatusParaUI), statusAtualUI, '— Sem status —');
+
+  document.getElementById('editObs').value = reg.obs || '';
+  document.getElementById('displaySubespecie').textContent = reg.subespecie || calcularSubespeciePreview(reg.especie) || '—';
+
+  var selectEspecie = document.getElementById('editEspecie');
+  selectEspecie.onchange = atualizarDisplaySubespecie;
+
+  // Ao escolher um estagiario, status muda automaticamente para "Encaminhado"
+  // — mas somente se o STATUS estiver vazio no momento da escolha. Se ja
+  // houver um status definido (Encaminhado, Entregue, Ok, etc.), a escolha
+  // do estagiario nao altera o status.
+  var selectEstagiario = document.getElementById('editEstagiario');
+  selectEstagiario.onchange = function() {
+    if (this.value && !selectStatus.value) {
+      selectStatus.value = 'Encaminhado';
+    }
+  };
+}
+
+function fecharModal() {
+  document.getElementById('modalOverlay').classList.remove('visivel');
+  APP.registroAtual = null;
+}
+
+document.getElementById('modalOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModal();
+});
+
+function copiarProcesso() {
+  var reg = APP.registroAtual;
+  var processo = reg ? String(reg.processo || '') : '';
+  if (!processo) return;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(processo).then(function() {
+      mostrarToast('Processo copiado!', 'sucesso');
+    }, function() { copiarProcessoFallback(processo); });
+  } else {
+    copiarProcessoFallback(processo);
+  }
+}
+
+function copiarProcessoFallback(texto) {
+  var input = document.createElement('textarea');
+  input.value = texto;
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  document.body.appendChild(input);
+  input.focus();
+  input.select();
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  document.body.removeChild(input);
+  mostrarToast(ok ? 'Processo copiado!' : 'Não foi possível copiar o processo.', ok ? 'sucesso' : 'erro');
+}
+
+var btnCopiarProcesso = document.getElementById('btnCopiarProcesso');
+btnCopiarProcesso.addEventListener('click', function(e) { e.stopPropagation(); copiarProcesso(); });
+btnCopiarProcesso.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copiarProcesso(); }
+});
+
+function salvarModal() {
+  var reg = APP.registroAtual;
+  if (!reg) return;
+
+  // subespecie nao entra no payload: e sempre calculada e gravada pelo
+  // servidor a partir de especie (ver calcularSubespecie em Data.js).
+  var payload = {
+    _linha: reg._linha,
+    estagiario: document.getElementById('editEstagiario').value,
+    status: normalizarStatusParaUI(document.getElementById('editStatus').value),
+    obs: document.getElementById('editObs').value,
+    especie: document.getElementById('editEspecie').value,
+    vara: document.getElementById('editVara').value
+  };
+
+  var btnSalvar = document.getElementById('btnSalvar');
+  btnSalvar.disabled = true;
+  btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btnSalvar.disabled = false;
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao salvar.', 'erro');
+        return;
+      }
+      if (res.geral && res.geral.sucesso === false) {
+        mostrarToast('Registro salvo, mas falhou o envio para GERAL: ' + res.geral.erro, 'alerta');
+      } else if (res.secretaria && res.secretaria.quantidade > 0) {
+        mostrarToast('Registro salvo e enviado para a secretaria.', 'sucesso');
+      } else if (normalizarChave(payload.status) === 'protocolado' && res.secretaria) {
+        mostrarToast('Registro salvo, mas não enviado para a secretaria. Verifique processo preenchido e se a coluna U ja esta marcada.', 'alerta');
+      } else {
+        mostrarToast('Registro salvo com sucesso!', 'sucesso');
+      }
+      var linhaReg = reg._linha;
+      APP.dados.diligencias.forEach(function(r) {
+        if (r._linha === linhaReg) {
+          r.estagiario = payload.estagiario;
+          r.status     = payload.status;
+          r.especie    = payload.especie;
+          r.subespecie = res.subespecie;
+          r.vara       = payload.vara;
+          r.obs        = payload.obs;
+          r.alteradoEm = res.alteradoEm;
+        }
+      });
+      fecharModal();
+      renderizarCards();
+      renderizarTabela();
+      recarregarAposEdicao();
+      if (APP.vistaAtual === 'panorama') carregarAbaPanorama();
+      if (APP.vistaAtual === 'geral') carregarAbaGeral();
+    })
+    .withFailureHandler(function(err) {
+      btnSalvar.disabled = false;
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .salvarRegistro(payload);
+}
+
+// === LOADING ===
+function mostrarLoading(show) {
+  var el = document.getElementById('loadingWrapper');
+  var conteudo = document.getElementById('conteudoPrincipal');
+  if (el) el.style.display = show ? 'block' : 'none';
+  if (conteudo) conteudo.style.display = show ? 'none' : 'block';
+}
+
+// === TOAST ===
+function mostrarToast(msg, tipo) {
+  var el = document.getElementById('toast');
+  var icone = TOAST_ICONES[tipo || ''] || 'info';
+  el.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">' + icone + '</span> ' + msg;
+  el.className = 'toast ' + (tipo || '');
+  el.classList.add('visivel');
+  clearTimeout(APP._toastTimer);
+  APP._toastTimer = setTimeout(function() { el.classList.remove('visivel'); }, 3200);
+}
+
+// === ABA: DISTRIBUIÇÃO ===
+// Fila de diligencias sem estagiario distribuido (ver getRegistrosParaDistribuir
+// em Distribuicao.js). A lista de estagiarios usada nos selects inline e a
+// mesma ja carregada em APP.dados.estagiarios (carregarDados) — nao ha
+// necessidade de outra chamada ao servidor so para isso.
+
+// Chamada toda vez que a aba "Distribuição" e aberta — sempre busca dados
+// novos do servidor, pois o objetivo e sempre mostrar a fila atualizada.
+function carregarAbaDistribuicao() {
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+      APP.dados.distribuicao = resultado.registros || [];
+      renderizarTabelaDistribuicao();
+      // Mesmo grafico "Complexas, simples e acompanhamentos por estagiário" da
+      // aba Gráficos (ver renderizarGraficoPorEstagiario mais abaixo) — dados
+      // reaproveitados de getDadosGraficos() (Graficos.js) via
+      // getDadosAbaDistribuicao() (Distribuicao.js).
+      renderizarGraficoPorEstagiario(
+        'distribuicaoLegendaPecas', 'distribuicaoEixoPecas', 'distribuicaoPlotPecas',
+        categoriasGraficosPorChaves(['complexas', 'simples', 'acompanhamentos']),
+        resultado.producaoPorEstagiario || []
+      );
+    })
+    .withFailureHandler(function(err) {
+      mostrarToast('Erro ao carregar Distribuição: ' + err.message, 'erro');
+    })
+    .carregarDadosAbaDistribuicao();
+}
+
+function getRegistrosFiltradosDistribuicao() {
+  return APP.dados.distribuicao || [];
+}
+
+function renderizarTabelaDistribuicao() {
+  var lista = getRegistrosFiltradosDistribuicao();
+
+  document.getElementById('tabelaInfoDistribuicao').innerHTML =
+    '<strong>' + lista.length + '</strong> registro(s) pendente(s) de distribuição';
+
+  document.getElementById('tabelaCabecalhoDistribuicao').innerHTML =
+    '<tr>' +
+      '<th>ID</th>' +
+      '<th>PROCESSO</th>' +
+      '<th>ASSISTIDO(A)</th>' +
+      '<th>DILIGÊNCIA</th>' +
+      '<th>ESPÉCIE</th>' +
+      '<th>SUBESPÉCIE</th>' +
+      '<th>VARA</th>' +
+      '<th>DF REAL</th>' +
+      '<th>DF</th>' +
+      '<th>ESTAGIÁRIO(A)</th>' +
+    '</tr>';
+
+  var corpo = document.getElementById('tabelaCorpoDistribuicao');
+
+  if (lista.length === 0) {
+    corpo.innerHTML =
+      '<tr><td colspan="10">' +
+        '<div class="estado-vazio">' +
+          '<span class="material-symbols-outlined">task_alt</span>' +
+          '<div class="estado-vazio-titulo">Nenhum registro pendente</div>' +
+          '<div class="estado-vazio-desc">Todas as diligências já foram distribuídas ou enviadas ao Classroom.</div>' +
+        '</div>' +
+      '</td></tr>';
+    atualizarContagemDistribuicao();
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg) {
+    var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
+    html += '<tr class="' + classeAtraso + '" data-linha="' + reg._linha + '">' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td class="td-processo">' + (reg.processo || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
+      '<td>' + (reg.diligencia || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.especie || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.subespecie || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.vara || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.dfReal || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.df || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' +
+        '<select class="select-inline-tabela" id="distEst_' + reg._linha + '" onchange="atualizarContagemDistribuicao()" onclick="event.stopPropagation()">' +
+          '<option value="">— Selecionar —</option>' +
+        '</select>' +
+      '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+
+  // Selects preenchidos apos a insercao no DOM (popularSelectSimples opera
+  // sobre o elemento ja existente) — reaproveita a mesma lista de
+  // estagiarios ativos usada em todos os outros selects do painel.
+  lista.forEach(function(reg) {
+    var select = document.getElementById('distEst_' + reg._linha);
+    if (select) popularSelectSimples(select, APP.dados.estagiarios, '', '— Selecionar —');
+  });
+
+  atualizarContagemDistribuicao();
+}
+
+// Habilita/desabilita os botoes de rodape e mostra quantos registros ja tem
+// um estagiario escolhido na tela (ainda nao salvo).
+function atualizarContagemDistribuicao() {
+  var selecionados = coletarSelecionadosDistribuicao().length;
+
+  var elContagem = document.getElementById('distribuicaoContagemSelecionados');
+  if (elContagem) {
+    elContagem.textContent = selecionados > 0
+      ? selecionados + ' registro(s) com estagiário selecionado'
+      : '';
+  }
+
+  var btnSalvar = document.getElementById('btnSalvarDistribuicao');
+  var btnEnviar = document.getElementById('btnSalvarEnviarDistribuicao');
+  if (btnSalvar) btnSalvar.disabled = selecionados === 0;
+  if (btnEnviar) btnEnviar.disabled = selecionados === 0;
+}
+
+// Varre a tabela renderizada e devolve so as linhas com um estagiario
+// escolhido no select inline — sao essas que vao para o payload do "Salvar".
+function coletarSelecionadosDistribuicao() {
+  var lista = getRegistrosFiltradosDistribuicao();
+  var selecionados = [];
+  lista.forEach(function(reg) {
+    var select = document.getElementById('distEst_' + reg._linha);
+    var valor = select ? select.value : '';
+    if (valor) selecionados.push({ _linha: reg._linha, id: reg.id, estagiario: valor });
+  });
+  return selecionados;
+}
+
+// enviar = false -> botao "Salvar" (so grava o estagiario e muda o status).
+// enviar = true  -> botao "Salvar e Enviar" (grava e cria a atividade no
+// Classroom so para os registros distribuidos nesta acao — ver
+// salvarDistribuicao em Distribuicao.js).
+function acaoSalvarDistribuicaoClique(enviar) {
+  var selecionados = coletarSelecionadosDistribuicao();
+  if (selecionados.length === 0) {
+    mostrarToast('Selecione ao menos um estagiário antes de salvar.', 'alerta');
+    return;
+  }
+
+  var btnSalvar = document.getElementById('btnSalvarDistribuicao');
+  var btnEnviar = document.getElementById('btnSalvarEnviarDistribuicao');
+  var textoOriginalSalvar = btnSalvar.innerHTML;
+  var textoOriginalEnviar = btnEnviar.innerHTML;
+
+  btnSalvar.disabled = true;
+  btnEnviar.disabled = true;
+  if (enviar) {
+    btnEnviar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">hourglass_top</span> Enviando...';
+  } else {
+    btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">hourglass_top</span> Salvando...';
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btnSalvar.disabled = false;
+      btnEnviar.disabled = false;
+      btnSalvar.innerHTML = textoOriginalSalvar;
+      btnEnviar.innerHTML = textoOriginalEnviar;
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao salvar distribuição.', 'erro');
+        return;
+      }
+
+      var totalSalvos = (res.salvos || []).length;
+      var totalEnviados = (res.enviados || []).length;
+      var totalErros = (res.erros || []).length;
+
+      if (enviar) {
+        if (totalErros === 0) {
+          mostrarToast(totalSalvos + ' registro(s) distribuído(s) e ' + totalEnviados + ' enviado(s) ao Classroom!', 'sucesso');
+        } else {
+          mostrarToast(totalSalvos + ' distribuído(s), ' + totalEnviados + ' enviado(s) ao Classroom, ' + totalErros + ' com erro. Veja o console.', 'alerta');
+          console.error('Erros na distribuição:', res.erros);
+        }
+      } else {
+        if (totalErros === 0) {
+          mostrarToast(totalSalvos + ' registro(s) distribuído(s) com sucesso!', 'sucesso');
+        } else {
+          mostrarToast(totalSalvos + ' distribuído(s), ' + totalErros + ' com erro. Veja o console.', 'alerta');
+          console.error('Erros na distribuição:', res.erros);
+        }
+      }
+
+      // Os registros salvos (com ou sem falha no envio ao Classroom) ja
+      // deixam de pertencer a fila "sem estagiario" — removidos localmente
+      // para nao esperar um novo carregamento completo da aba.
+      var linhasSalvas = {};
+      (res.salvos || []).forEach(function(s) { linhasSalvas[s._linha] = true; });
+      APP.dados.distribuicao = (APP.dados.distribuicao || []).filter(function(r) {
+        return !linhasSalvas[r._linha];
+      });
+
+      renderizarTabelaDistribuicao();
+      // A aba Diligencias (e o Panorama/Geral, se abertos) precisam refletir o
+      // novo estagiario/status assim que possivel.
+      recarregarAposEdicao();
+      if (APP.vistaAtual === 'panorama') carregarAbaPanorama();
+      if (APP.vistaAtual === 'geral') carregarAbaGeral();
+    })
+    .withFailureHandler(function(err) {
+      btnSalvar.disabled = false;
+      btnEnviar.disabled = false;
+      btnSalvar.innerHTML = textoOriginalSalvar;
+      btnEnviar.innerHTML = textoOriginalEnviar;
+      mostrarToast('Erro ao salvar distribuição: ' + err.message, 'erro');
+    })
+    .acaoSalvarDistribuicao({ registros: selecionados, enviarClassroom: !!enviar });
+}
+
+// === ABA: INICIAIS ===
+// Estado especifico da aba Iniciais (independente do estado de Diligencias)
+var APP_INICIAIS = {
+  filtroCard: 'total',
+  busca: '',
+  dfDe: '',
+  dfAte: '',
+  semestreFiltro: obterSemestreAtual(),
+  ordenacao: { coluna: 'id', direcao: 'asc' },
+  paginaAtual: 1,
+  itensPorPagina: 20,
+  registroAtual: null
+};
+
+// Chamada toda vez que a aba "Iniciais" e aberta — sempre busca dados novos
+// do servidor, pois o cruzamento com a aba protocolos (ver Iniciais.js) e
+// refeito a cada chamada.
+function carregarAbaIniciais() {
+  var wrapper = document.getElementById('secaoIniciais');
+  if (wrapper) wrapper.style.opacity = '0.5';
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (wrapper) wrapper.style.opacity = '1';
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+      APP.dados.iniciais = resultado.iniciais || [];
+      APP.dados.statusPicklist = resultado.statusPicklist || [];
+      popularSelectSemestreIniciais();
+      renderizarCardsIniciais();
+      renderizarTabelaIniciais();
+    })
+    .withFailureHandler(function(err) {
+      if (wrapper) wrapper.style.opacity = '1';
+      mostrarToast('Erro ao carregar Iniciais: ' + err.message, 'erro');
+    })
+    .carregarDadosAbaIniciais();
+}
+
+function getRegistrosFiltradosIniciais() {
+  var lista = APP.dados.iniciais || [];
+
+  if (APP_INICIAIS.filtroCard !== 'total') {
+    lista = lista.filter(function(r) {
+      if (APP_INICIAIS.filtroCard === 'sem_estagiario') return ehSemEstagiario(r);
+      return classificarRegistroChaves(r).indexOf(APP_INICIAIS.filtroCard) !== -1;
+    });
+  }
+
+  if (APP_INICIAIS.busca) {
+    var b = normalizar(APP_INICIAIS.busca);
+    lista = lista.filter(function(r) {
+      return normalizar(r.assistido).includes(b) || normalizar(r.estagiario).includes(b);
+    });
+  }
+
+  if (APP_INICIAIS.dfDe || APP_INICIAIS.dfAte) {
+    var tsDe  = APP_INICIAIS.dfDe  ? converterInputDataParaTimestamp(APP_INICIAIS.dfDe)  : null;
+    var tsAte = APP_INICIAIS.dfAte ? converterInputDataParaTimestamp(APP_INICIAIS.dfAte) : null;
+    lista = lista.filter(function(r) {
+      var ts = converterDataBRParaTimestamp(r.df);
+      if (ts === null) return false;
+      if (tsDe  !== null && ts < tsDe)  return false;
+      if (tsAte !== null && ts > tsAte) return false;
+      return true;
+    });
+  }
+
+  if (APP_INICIAIS.semestreFiltro) {
+    lista = lista.filter(function(r) { return r.semestre === APP_INICIAIS.semestreFiltro; });
+  }
+
+  lista = lista.slice().sort(function(a, b) {
+    return compararRegistros(a, b, APP_INICIAIS.ordenacao.coluna, APP_INICIAIS.ordenacao.direcao);
+  });
+
+  return lista;
+}
+
+function renderizarCardsIniciais() {
+  var lista = APP.dados.iniciais || [];
+  if (APP_INICIAIS.semestreFiltro) {
+    lista = lista.filter(function(r) { return r.semestre === APP_INICIAIS.semestreFiltro; });
+  }
+  var c = contarPorClassificacao(lista);
+
+  var cards = [
+    { id: 'total',          label: 'TOTAL',            num: c.total,          classe: 'card-total' },
+    { id: 'encaminhado',    label: 'ENCAMINHADOS',    num: c.encaminhado,    classe: 'card-encaminhado' },
+    { id: 'entregue',       label: 'ENTREGUES',        num: c.entregue,       classe: 'card-entregue' },
+    { id: 'devolvida',      label: 'DEVOLVIDAS',      num: c.devolvida,      classe: 'card-devolvida' },
+    { id: 'concluido',      label: 'OK / PROTOCOLADO', num: c.concluido,      classe: 'card-concluido' },
+    { id: 'cancelada',      label: 'CANCELADAS',      num: c.cancelada,      classe: 'card-cancelada' },
+    { id: 'atraso',         label: 'EM ATRASO',        num: c.atraso,         classe: 'card-atraso' },
+    { id: 'sem_estagiario', label: 'SEM ESTAGIÁRIO',  num: c.sem_estagiario, classe: 'card-sem-estagiario' }
+  ];
+
+  var html = '';
+  cards.forEach(function(card) {
+    var ativo = APP_INICIAIS.filtroCard === card.id ? ' ativo' : '';
+    var icone = CARD_ICONES[card.id] || 'folder';
+    html += '<div class="card-resumo ' + card.classe + ativo + '" onclick="filtrarCardIniciais(\'' + card.id + '\')">' +
+      '<div class="card-icone"><span class="material-symbols-outlined">' + icone + '</span></div>' +
+      '<div class="card-info">' +
+        '<div class="card-numero">' + card.num + '</div>' +
+        '<div class="card-label">' + card.label + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  document.getElementById('cardsGridIniciais').innerHTML = html;
+}
+
+function filtrarCardIniciais(id) {
+  APP_INICIAIS.filtroCard = id;
+  APP_INICIAIS.paginaAtual = 1;
+  renderizarCardsIniciais();
+  renderizarTabelaIniciais();
+}
+
+function descricaoFiltroIniciais() {
+  var mapa = {
+    total: 'Todos os registros', encaminhado: 'Status: Encaminhado', entregue: 'Status: Entregue',
+    devolvida: 'Status: Devolvida', concluido: 'Status: Ok / Protocolado', cancelada: 'Status: Cancelada',
+    atraso: 'Em Atraso', sem_estagiario: 'Sem Estagiário'
+  };
+  return mapa[APP_INICIAIS.filtroCard] || '';
+}
+
+function thOrdenavelIniciais(label, coluna) {
+  var ativo = APP_INICIAIS.ordenacao.coluna === coluna;
+  var seta = '';
+  if (ativo) {
+    var simbolo = (APP_INICIAIS.ordenacao.direcao === 'asc') ? '▲' : '▼';
+    seta = '<span class="th-seta">' + simbolo + '</span>';
+  }
+  return '<th class="th-ordenavel" onclick="ordenarPorIniciais(\'' + coluna + '\')">' + label + seta + '</th>';
+}
+
+function ordenarPorIniciais(coluna) {
+  if (APP_INICIAIS.ordenacao.coluna === coluna) {
+    APP_INICIAIS.ordenacao.direcao = (APP_INICIAIS.ordenacao.direcao === 'asc') ? 'desc' : 'asc';
+  } else {
+    APP_INICIAIS.ordenacao.coluna = coluna;
+    APP_INICIAIS.ordenacao.direcao = 'asc';
+  }
+  APP_INICIAIS.paginaAtual = 1;
+  renderizarTabelaIniciais();
+}
+
+function renderizarTabelaIniciais() {
+  var lista = getRegistrosFiltradosIniciais();
+  var total = lista.length;
+  var totalPags = Math.max(1, Math.ceil(total / APP_INICIAIS.itensPorPagina));
+  if (APP_INICIAIS.paginaAtual > totalPags) APP_INICIAIS.paginaAtual = totalPags;
+
+  var inicio = (APP_INICIAIS.paginaAtual - 1) * APP_INICIAIS.itensPorPagina;
+  var fim = Math.min(inicio + APP_INICIAIS.itensPorPagina, total);
+  var pagina = lista.slice(inicio, fim);
+
+  document.getElementById('tabelaInfoIniciais').innerHTML =
+    '<strong>' + total + '</strong> registro(s) — ' + descricaoFiltroIniciais();
+
+  document.getElementById('tabelaCabecalhoIniciais').innerHTML =
+    '<tr>' +
+      thOrdenavelIniciais('ID', 'id') +
+      thOrdenavelIniciais('ASSISTIDO(A)', 'assistido') +
+      thOrdenavelIniciais('ESTAGIÁRIO(A)', 'estagiario') +
+      thOrdenavelIniciais('DATA', 'di') +
+      thOrdenavelIniciais('DF', 'df') +
+      thOrdenavelIniciais('STATUS', 'status') +
+      thOrdenavelIniciais('PROCESSO', 'processo') +
+      thOrdenavelIniciais('VARA', 'vara') +
+    '</tr>';
+
+  if (pagina.length === 0) {
+    document.getElementById('tabelaCorpoIniciais').innerHTML =
+      '<tr><td colspan="8">' +
+        '<div class="estado-vazio">' +
+          '<span class="material-symbols-outlined">search_off</span>' +
+          '<div class="estado-vazio-titulo">Nenhum registro encontrado</div>' +
+          '<div class="estado-vazio-desc">Tente ajustar o filtro ou a busca.</div>' +
+        '</div>' +
+      '</td></tr>';
+  } else {
+    var html = '';
+    pagina.forEach(function(reg, idx) {
+      var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
+      html += '<tr class="' + classeAtraso + '" onclick="abrirModalIniciais(this)" data-idx="' + (inicio + idx) + '">' +
+        '<td class="td-numero">' + (reg.id || '') + '</td>' +
+        '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
+        '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
+        '<td>' + (reg.di || '') + '</td>' +
+        '<td>' + (reg.df || '') + '</td>' +
+        '<td>' + badgeStatus(reg) + '</td>' +
+        '<td>' + (reg.processo || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.vara || '<span class="celula-vazio">—</span>') + '</td>' +
+      '</tr>';
+    });
+    document.getElementById('tabelaCorpoIniciais').innerHTML = html;
+  }
+
+  renderizarPaginacaoIniciais(total, totalPags);
+}
+
+function renderizarPaginacaoIniciais(total, totalPags) {
+  var p = APP_INICIAIS.paginaAtual;
+  var inicio = (p - 1) * APP_INICIAIS.itensPorPagina + 1;
+  var fim = Math.min(p * APP_INICIAIS.itensPorPagina, total);
+
+  var html = '';
+  if (total > 0) html += '<span class="pag-info">' + inicio + '–' + fim + ' de ' + total + '</span>';
+
+  html += '<button class="btn-pag" onclick="irPaginaIniciais(' + (p - 1) + ')" ' + (p <= 1 ? 'disabled' : '') + '>' +
+    '<span class="material-symbols-outlined">chevron_left</span> Ant.' +
+  '</button>';
+
+  var range = pagRange(p, totalPags);
+  range.forEach(function(n) {
+    if (n === '...') {
+      html += '<span class="pag-info">…</span>';
+    } else {
+      html += '<button class="btn-pag' + (n === p ? ' pag-ativo' : '') + '" onclick="irPaginaIniciais(' + n + ')">' + n + '</button>';
+    }
+  });
+
+  html += '<button class="btn-pag" onclick="irPaginaIniciais(' + (p + 1) + ')" ' + (p >= totalPags ? 'disabled' : '') + '>' +
+    'Próx. <span class="material-symbols-outlined">chevron_right</span>' +
+  '</button>';
+
+  document.getElementById('paginacaoIniciais').innerHTML = html;
+}
+
+function irPaginaIniciais(n) {
+  var lista = getRegistrosFiltradosIniciais();
+  var totalPags = Math.max(1, Math.ceil(lista.length / APP_INICIAIS.itensPorPagina));
+  if (n < 1 || n > totalPags) return;
+  APP_INICIAIS.paginaAtual = n;
+  renderizarTabelaIniciais();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function popularSelectSemestreIniciais() {
+  var select = document.getElementById('selectSemestreIniciais');
+  if (!select) return;
+
+  var presentes = {};
+  (APP.dados.iniciais || []).forEach(function(r) {
+    if (r.semestre) presentes[r.semestre] = true;
+  });
+
+  var semestres = Object.keys(presentes).sort().reverse();
+  var valorAtual = APP_INICIAIS.semestreFiltro;
+
+  select.innerHTML = '<option value="">— Todos os semestres —</option>';
+  semestres.forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    if (s === valorAtual) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
+function mudarSemestreIniciais(valor) {
+  APP_INICIAIS.semestreFiltro = valor || '';
+  APP_INICIAIS.paginaAtual = 1;
+  renderizarCardsIniciais();
+  renderizarTabelaIniciais();
+}
+
+function limparFiltroDatasIniciais() {
+  APP_INICIAIS.dfDe = '';
+  APP_INICIAIS.dfAte = '';
+  APP_INICIAIS.paginaAtual = 1;
+  var inputDe  = document.getElementById('inputDfDeIniciais');
+  var inputAte = document.getElementById('inputDfAteIniciais');
+  if (inputDe)  inputDe.value  = '';
+  if (inputAte) inputAte.value = '';
+  var btnLimpar = document.getElementById('btnLimparDatasIniciais');
+  if (btnLimpar) btnLimpar.style.display = 'none';
+  renderizarTabelaIniciais();
+}
+
+function inicializarFiltrosIniciais() {
+  var inputBusca = document.getElementById('inputBuscaIniciais');
+  var inputDe    = document.getElementById('inputDfDeIniciais');
+  var inputAte   = document.getElementById('inputDfAteIniciais');
+
+  if (inputBusca) {
+    inputBusca.addEventListener('input', function() {
+      APP_INICIAIS.busca = this.value.trim();
+      APP_INICIAIS.paginaAtual = 1;
+      renderizarTabelaIniciais();
+    });
+  }
+
+  if (inputDe && inputAte) {
+    function aplicarDatas() {
+      APP_INICIAIS.dfDe = inputDe.value;
+      APP_INICIAIS.dfAte = inputAte.value;
+      APP_INICIAIS.paginaAtual = 1;
+      var btnLimpar = document.getElementById('btnLimparDatasIniciais');
+      if (btnLimpar) btnLimpar.style.display = (APP_INICIAIS.dfDe || APP_INICIAIS.dfAte) ? 'flex' : 'none';
+      renderizarTabelaIniciais();
+    }
+    inputDe.addEventListener('change', aplicarDatas);
+    inputAte.addEventListener('change', aplicarDatas);
+  }
+}
+
+// === MODAL: INICIAIS ===
+function abrirModalIniciais(tr) {
+  var idx = parseInt(tr.dataset.idx);
+  var lista = getRegistrosFiltradosIniciais();
+  var reg = lista[idx];
+  if (!reg) return;
+  preencherModalInicial(reg);
+}
+
+// Preenche e abre o modal de Inicial a partir de um registro ja resolvido.
+// Reaproveitado pela aba Iniciais (abrirModalIniciais) e pela aba Panorama
+// (abrirModalPanoramaInicial) — mesma UI, mesma regra de edicao/salvamento.
+function preencherModalInicial(reg) {
+  APP_INICIAIS.registroAtual = reg;
+
+  document.getElementById('miProcessoLabel').textContent = reg.processo ? ('Processo ' + reg.processo) : 'Pedido Inicial';
+  document.getElementById('miAssistido').textContent = reg.assistido || '';
+  document.getElementById('miBadges').innerHTML = badgeStatus(reg);
+
+  // Mesma logica do modal de Diligencia: aviso usa a flag crua (ehAtraso),
+  // continua aparecendo mesmo se o Status Real ja for "Entregue".
+  document.getElementById('miAlertaAtraso').style.display = ehAtraso(reg) ? 'flex' : 'none';
+
+  document.getElementById('miId').textContent = reg.id || '—';
+  document.getElementById('miCpf').textContent = reg.cpf || '—';
+  document.getElementById('miAssistidoValor').textContent = reg.assistido || '—';
+  document.getElementById('miEspecie').textContent = reg.especie || '—';
+  document.getElementById('miEstagiario').textContent = reg.estagiario || '—';
+  document.getElementById('miData').textContent = reg.di || '—';
+  document.getElementById('miDf').textContent = reg.df || '—';
+  document.getElementById('miProcesso').textContent = reg.processo || '—';
+  document.getElementById('miVara').textContent = reg.vara || '—';
+  document.getElementById('miAlteradoEm').textContent = reg.alteradoEm || '—';
+  document.getElementById('miObs').textContent = reg.obs || '—';
+
+  var linkEl = document.getElementById('miLink');
+  if (reg.link) {
+    linkEl.innerHTML = '<a href="' + reg.link + '" target="_blank" rel="noopener">Abrir no Classroom</a>';
+  } else {
+    linkEl.textContent = '—';
+  }
+  document.getElementById('miDiClass').textContent = reg.diClass || '—';
+  document.getElementById('miDfClass').textContent = reg.dfClass || '—';
+
+  var selectStatus = document.getElementById('miEditStatus');
+  var statusAtualUI = normalizarStatusParaUI(reg.status);
+  popularSelectSimples(selectStatus, APP.dados.statusPicklist.map(normalizarStatusParaUI), statusAtualUI, '— Sem status —');
+  selectStatus.disabled = false;
+
+  document.getElementById('modalIniciaisOverlay').classList.add('visivel');
+}
+
+// Abre o modal de Inicial a partir da tabela da aba Panorama.
+function abrirModalPanoramaInicial(idx) {
+  var lista = getIniciaisPanoramaFiltradas();
+  var reg = lista[idx];
+  if (!reg) return;
+  preencherModalInicial(reg);
+}
+
+function fecharModalIniciais() {
+  document.getElementById('modalIniciaisOverlay').classList.remove('visivel');
+  APP_INICIAIS.registroAtual = null;
+}
+
+document.getElementById('modalIniciaisOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalIniciais();
+});
+
+function copiarProcessoIniciais() {
+  var reg = APP_INICIAIS.registroAtual;
+  var processo = reg ? String(reg.processo || '') : '';
+  if (!processo) return;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(processo).then(function() {
+      mostrarToast('Processo copiado!', 'sucesso');
+    }, function() { copiarProcessoFallback(processo); });
+  } else {
+    copiarProcessoFallback(processo);
+  }
+}
+
+var btnCopiarProcessoIniciais = document.getElementById('btnCopiarProcessoIniciais');
+if (btnCopiarProcessoIniciais) {
+  btnCopiarProcessoIniciais.addEventListener('click', function(e) { e.stopPropagation(); copiarProcessoIniciais(); });
+  btnCopiarProcessoIniciais.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copiarProcessoIniciais(); }
+  });
+}
+
+function salvarModalIniciais() {
+  var reg = APP_INICIAIS.registroAtual;
+  if (!reg) return;
+
+  var payload = {
+    _linha: reg._linha,
+    status: normalizarStatusParaUI(document.getElementById('miEditStatus').value)
+  };
+
+  var btnSalvar = document.getElementById('btnSalvarIniciais');
+  btnSalvar.disabled = true;
+  btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btnSalvar.disabled = false;
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao salvar.', 'erro');
+        return;
+      }
+      mostrarToast('Registro salvo com sucesso!', 'sucesso');
+      fecharModalIniciais();
+      carregarAbaIniciais();
+      if (APP.vistaAtual === 'panorama') carregarAbaPanorama();
+      if (APP.vistaAtual === 'geral') carregarAbaGeral();
+    })
+    .withFailureHandler(function(err) {
+      btnSalvar.disabled = false;
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .salvarRegistroInicial(payload);
+}
+
+// === ABA: ACOMPANHAMENTOS ===
+// Estado especifico da aba Acompanhamentos (independente das demais abas).
+// Reaproveita as funcoes genericas ja existentes (classificarRegistro,
+// badgeStatus, renderizarCelulaEstagiario, compararRegistros etc.) porque
+// os objetos vindos do servidor usam os mesmos nomes de campo (estagiario,
+// di, df, status, atraso, gatilho, semestre) — ver Acompanhamentos.js.
+var APP_ACOMPANHAMENTOS = {
+  filtroCard: 'total',
+  busca: '',
+  dfDe: '',
+  dfAte: '',
+  semestreFiltro: obterSemestreAtual(),
+  ordenacao: { coluna: 'id', direcao: 'asc' },
+  paginaAtual: 1,
+  itensPorPagina: 20,
+  registroAtual: null
+};
+
+// Chamada toda vez que a aba "Acompanhamentos" e aberta — sempre busca
+// dados novos do servidor.
+function carregarAbaAcompanhamentos() {
+  var wrapper = document.getElementById('secaoAcompanhamentos');
+  if (wrapper) wrapper.style.opacity = '0.5';
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (wrapper) wrapper.style.opacity = '1';
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+      APP.dados.acompanhamentos = resultado.acompanhamentos || [];
+      APP.dados.statusPicklist = resultado.statusPicklist || [];
+      popularSelectSemestreAcompanhamentos();
+      renderizarCardsAcompanhamentos();
+      renderizarTabelaAcompanhamentos();
+    })
+    .withFailureHandler(function(err) {
+      if (wrapper) wrapper.style.opacity = '1';
+      mostrarToast('Erro ao carregar Acompanhamentos: ' + err.message, 'erro');
+    })
+    .carregarDadosAbaAcompanhamentos();
+}
+
+function getRegistrosFiltradosAcompanhamentos() {
+  var lista = APP.dados.acompanhamentos || [];
+
+  if (APP_ACOMPANHAMENTOS.filtroCard !== 'total') {
+    lista = lista.filter(function(r) {
+      if (APP_ACOMPANHAMENTOS.filtroCard === 'sem_estagiario') return ehSemEstagiario(r);
+      return classificarRegistroChaves(r).indexOf(APP_ACOMPANHAMENTOS.filtroCard) !== -1;
+    });
+  }
+
+  if (APP_ACOMPANHAMENTOS.busca) {
+    var b = normalizar(APP_ACOMPANHAMENTOS.busca);
+    lista = lista.filter(function(r) {
+      return normalizar(r.processo).includes(b) || normalizar(r.estagiario).includes(b);
+    });
+  }
+
+  if (APP_ACOMPANHAMENTOS.dfDe || APP_ACOMPANHAMENTOS.dfAte) {
+    var tsDe  = APP_ACOMPANHAMENTOS.dfDe  ? converterInputDataParaTimestamp(APP_ACOMPANHAMENTOS.dfDe)  : null;
+    var tsAte = APP_ACOMPANHAMENTOS.dfAte ? converterInputDataParaTimestamp(APP_ACOMPANHAMENTOS.dfAte) : null;
+    lista = lista.filter(function(r) {
+      var ts = converterDataBRParaTimestamp(r.df);
+      if (ts === null) return false;
+      if (tsDe  !== null && ts < tsDe)  return false;
+      if (tsAte !== null && ts > tsAte) return false;
+      return true;
+    });
+  }
+
+  if (APP_ACOMPANHAMENTOS.semestreFiltro) {
+    lista = lista.filter(function(r) { return r.semestre === APP_ACOMPANHAMENTOS.semestreFiltro; });
+  }
+
+  lista = lista.slice().sort(function(a, b) {
+    return compararRegistros(a, b, APP_ACOMPANHAMENTOS.ordenacao.coluna, APP_ACOMPANHAMENTOS.ordenacao.direcao);
+  });
+
+  return lista;
+}
+
+function renderizarCardsAcompanhamentos() {
+  var lista = APP.dados.acompanhamentos || [];
+  if (APP_ACOMPANHAMENTOS.semestreFiltro) {
+    lista = lista.filter(function(r) { return r.semestre === APP_ACOMPANHAMENTOS.semestreFiltro; });
+  }
+  var c = contarPorClassificacao(lista);
+
+  // "Protocolado" nunca se aplica a Acompanhamentos, entao o card usa
+  // apenas o rotulo "OK" (em Diligencias/Iniciais o mesmo card mostra "OK / PROTOCOLADO").
+  var cards = [
+    { id: 'total',          label: 'TOTAL',            num: c.total,          classe: 'card-total' },
+    { id: 'encaminhado',    label: 'ENCAMINHADOS',    num: c.encaminhado,    classe: 'card-encaminhado' },
+    { id: 'entregue',       label: 'ENTREGUES',        num: c.entregue,       classe: 'card-entregue' },
+    { id: 'devolvida',      label: 'DEVOLVIDAS',      num: c.devolvida,      classe: 'card-devolvida' },
+    { id: 'concluido',      label: 'OK',               num: c.concluido,      classe: 'card-concluido' },
+    { id: 'cancelada',      label: 'CANCELADAS',      num: c.cancelada,      classe: 'card-cancelada' },
+    { id: 'atraso',         label: 'EM ATRASO',        num: c.atraso,         classe: 'card-atraso' },
+    { id: 'sem_estagiario', label: 'SEM ESTAGIÁRIO',  num: c.sem_estagiario, classe: 'card-sem-estagiario' }
+  ];
+
+  var html = '';
+  cards.forEach(function(card) {
+    var ativo = APP_ACOMPANHAMENTOS.filtroCard === card.id ? ' ativo' : '';
+    var icone = CARD_ICONES[card.id] || 'folder';
+    html += '<div class="card-resumo ' + card.classe + ativo + '" onclick="filtrarCardAcompanhamentos(\'' + card.id + '\')">' +
+      '<div class="card-icone"><span class="material-symbols-outlined">' + icone + '</span></div>' +
+      '<div class="card-info">' +
+        '<div class="card-numero">' + card.num + '</div>' +
+        '<div class="card-label">' + card.label + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  document.getElementById('cardsGridAcompanhamentos').innerHTML = html;
+}
+
+function filtrarCardAcompanhamentos(id) {
+  APP_ACOMPANHAMENTOS.filtroCard = id;
+  APP_ACOMPANHAMENTOS.paginaAtual = 1;
+  renderizarCardsAcompanhamentos();
+  renderizarTabelaAcompanhamentos();
+}
+
+function descricaoFiltroAcompanhamentos() {
+  var mapa = {
+    total: 'Todos os registros', encaminhado: 'Status: Encaminhado', entregue: 'Status: Entregue',
+    devolvida: 'Status: Devolvida', concluido: 'Status: Ok', cancelada: 'Status: Cancelada',
+    atraso: 'Em Atraso', sem_estagiario: 'Sem Estagiário'
+  };
+  return mapa[APP_ACOMPANHAMENTOS.filtroCard] || '';
+}
+
+function thOrdenavelAcompanhamentos(label, coluna) {
+  var ativo = APP_ACOMPANHAMENTOS.ordenacao.coluna === coluna;
+  var seta = '';
+  if (ativo) {
+    var simbolo = (APP_ACOMPANHAMENTOS.ordenacao.direcao === 'asc') ? '▲' : '▼';
+    seta = '<span class="th-seta">' + simbolo + '</span>';
+  }
+  return '<th class="th-ordenavel" onclick="ordenarPorAcompanhamentos(\'' + coluna + '\')">' + label + seta + '</th>';
+}
+
+function ordenarPorAcompanhamentos(coluna) {
+  if (APP_ACOMPANHAMENTOS.ordenacao.coluna === coluna) {
+    APP_ACOMPANHAMENTOS.ordenacao.direcao = (APP_ACOMPANHAMENTOS.ordenacao.direcao === 'asc') ? 'desc' : 'asc';
+  } else {
+    APP_ACOMPANHAMENTOS.ordenacao.coluna = coluna;
+    APP_ACOMPANHAMENTOS.ordenacao.direcao = 'asc';
+  }
+  APP_ACOMPANHAMENTOS.paginaAtual = 1;
+  renderizarTabelaAcompanhamentos();
+}
+
+function renderizarTabelaAcompanhamentos() {
+  var lista = getRegistrosFiltradosAcompanhamentos();
+  var total = lista.length;
+  var totalPags = Math.max(1, Math.ceil(total / APP_ACOMPANHAMENTOS.itensPorPagina));
+  if (APP_ACOMPANHAMENTOS.paginaAtual > totalPags) APP_ACOMPANHAMENTOS.paginaAtual = totalPags;
+
+  var inicio = (APP_ACOMPANHAMENTOS.paginaAtual - 1) * APP_ACOMPANHAMENTOS.itensPorPagina;
+  var fim = Math.min(inicio + APP_ACOMPANHAMENTOS.itensPorPagina, total);
+  var pagina = lista.slice(inicio, fim);
+
+  document.getElementById('tabelaInfoAcompanhamentos').innerHTML =
+    '<strong>' + total + '</strong> registro(s) — ' + descricaoFiltroAcompanhamentos();
+
+  document.getElementById('tabelaCabecalhoAcompanhamentos').innerHTML =
+    '<tr>' +
+      thOrdenavelAcompanhamentos('ID', 'id') +
+      thOrdenavelAcompanhamentos('ESTAGIÁRIO(A)', 'estagiario') +
+      thOrdenavelAcompanhamentos('PROCESSO', 'processo') +
+      thOrdenavelAcompanhamentos('DATA', 'di') +
+      thOrdenavelAcompanhamentos('ENTREGA', 'df') +
+      thOrdenavelAcompanhamentos('STATUS', 'status') +
+    '</tr>';
+
+  if (pagina.length === 0) {
+    document.getElementById('tabelaCorpoAcompanhamentos').innerHTML =
+      '<tr><td colspan="6">' +
+        '<div class="estado-vazio">' +
+          '<span class="material-symbols-outlined">search_off</span>' +
+          '<div class="estado-vazio-titulo">Nenhum registro encontrado</div>' +
+          '<div class="estado-vazio-desc">Tente ajustar o filtro ou a busca.</div>' +
+        '</div>' +
+      '</td></tr>';
+  } else {
+    var html = '';
+    pagina.forEach(function(reg, idx) {
+      var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
+      html += '<tr class="' + classeAtraso + '" onclick="abrirModalAcompanhamento(this)" data-idx="' + (inicio + idx) + '">' +
+        '<td class="td-numero">' + (reg.id || '') + '</td>' +
+        '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
+        '<td class="td-processo">' + (reg.processo || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.di || '') + '</td>' +
+        '<td>' + (reg.df || '') + '</td>' +
+        '<td>' + badgeStatus(reg) + '</td>' +
+      '</tr>';
+    });
+    document.getElementById('tabelaCorpoAcompanhamentos').innerHTML = html;
+  }
+
+  renderizarPaginacaoAcompanhamentos(total, totalPags);
+}
+
+function renderizarPaginacaoAcompanhamentos(total, totalPags) {
+  var p = APP_ACOMPANHAMENTOS.paginaAtual;
+  var inicio = (p - 1) * APP_ACOMPANHAMENTOS.itensPorPagina + 1;
+  var fim = Math.min(p * APP_ACOMPANHAMENTOS.itensPorPagina, total);
+
+  var html = '';
+  if (total > 0) html += '<span class="pag-info">' + inicio + '–' + fim + ' de ' + total + '</span>';
+
+  html += '<button class="btn-pag" onclick="irPaginaAcompanhamentos(' + (p - 1) + ')" ' + (p <= 1 ? 'disabled' : '') + '>' +
+    '<span class="material-symbols-outlined">chevron_left</span> Ant.' +
+  '</button>';
+
+  var range = pagRange(p, totalPags);
+  range.forEach(function(n) {
+    if (n === '...') {
+      html += '<span class="pag-info">…</span>';
+    } else {
+      html += '<button class="btn-pag' + (n === p ? ' pag-ativo' : '') + '" onclick="irPaginaAcompanhamentos(' + n + ')">' + n + '</button>';
+    }
+  });
+
+  html += '<button class="btn-pag" onclick="irPaginaAcompanhamentos(' + (p + 1) + ')" ' + (p >= totalPags ? 'disabled' : '') + '>' +
+    'Próx. <span class="material-symbols-outlined">chevron_right</span>' +
+  '</button>';
+
+  document.getElementById('paginacaoAcompanhamentos').innerHTML = html;
+}
+
+function irPaginaAcompanhamentos(n) {
+  var lista = getRegistrosFiltradosAcompanhamentos();
+  var totalPags = Math.max(1, Math.ceil(lista.length / APP_ACOMPANHAMENTOS.itensPorPagina));
+  if (n < 1 || n > totalPags) return;
+  APP_ACOMPANHAMENTOS.paginaAtual = n;
+  renderizarTabelaAcompanhamentos();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function popularSelectSemestreAcompanhamentos() {
+  var select = document.getElementById('selectSemestreAcompanhamentos');
+  if (!select) return;
+
+  var presentes = {};
+  (APP.dados.acompanhamentos || []).forEach(function(r) {
+    if (r.semestre) presentes[r.semestre] = true;
+  });
+
+  var semestres = Object.keys(presentes).sort().reverse();
+  var valorAtual = APP_ACOMPANHAMENTOS.semestreFiltro;
+
+  select.innerHTML = '<option value="">— Todos os semestres —</option>';
+  semestres.forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    if (s === valorAtual) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
+function mudarSemestreAcompanhamentos(valor) {
+  APP_ACOMPANHAMENTOS.semestreFiltro = valor || '';
+  APP_ACOMPANHAMENTOS.paginaAtual = 1;
+  renderizarCardsAcompanhamentos();
+  renderizarTabelaAcompanhamentos();
+}
+
+function limparFiltroDatasAcompanhamentos() {
+  APP_ACOMPANHAMENTOS.dfDe = '';
+  APP_ACOMPANHAMENTOS.dfAte = '';
+  APP_ACOMPANHAMENTOS.paginaAtual = 1;
+  var inputDe  = document.getElementById('inputDfDeAcompanhamentos');
+  var inputAte = document.getElementById('inputDfAteAcompanhamentos');
+  if (inputDe)  inputDe.value  = '';
+  if (inputAte) inputAte.value = '';
+  var btnLimpar = document.getElementById('btnLimparDatasAcompanhamentos');
+  if (btnLimpar) btnLimpar.style.display = 'none';
+  renderizarTabelaAcompanhamentos();
+}
+
+function inicializarFiltrosAcompanhamentos() {
+  var inputBusca = document.getElementById('inputBuscaAcompanhamentos');
+  var inputDe    = document.getElementById('inputDfDeAcompanhamentos');
+  var inputAte   = document.getElementById('inputDfAteAcompanhamentos');
+
+  if (inputBusca) {
+    inputBusca.addEventListener('input', function() {
+      APP_ACOMPANHAMENTOS.busca = this.value.trim();
+      APP_ACOMPANHAMENTOS.paginaAtual = 1;
+      renderizarTabelaAcompanhamentos();
+    });
+  }
+
+  if (inputDe && inputAte) {
+    function aplicarDatas() {
+      APP_ACOMPANHAMENTOS.dfDe = inputDe.value;
+      APP_ACOMPANHAMENTOS.dfAte = inputAte.value;
+      APP_ACOMPANHAMENTOS.paginaAtual = 1;
+      var btnLimpar = document.getElementById('btnLimparDatasAcompanhamentos');
+      if (btnLimpar) btnLimpar.style.display = (APP_ACOMPANHAMENTOS.dfDe || APP_ACOMPANHAMENTOS.dfAte) ? 'flex' : 'none';
+      renderizarTabelaAcompanhamentos();
+    }
+    inputDe.addEventListener('change', aplicarDatas);
+    inputAte.addEventListener('change', aplicarDatas);
+  }
+}
+
+// === MODAL: ACOMPANHAMENTO ===
+function abrirModalAcompanhamento(tr) {
+  var idx = parseInt(tr.dataset.idx);
+  var lista = getRegistrosFiltradosAcompanhamentos();
+  var reg = lista[idx];
+  if (!reg) return;
+  preencherModalAcompanhamento(reg);
+}
+
+function preencherModalAcompanhamento(reg) {
+  APP_ACOMPANHAMENTOS.registroAtual = reg;
+
+  document.getElementById('acProcessoLabel').textContent = reg.processo ? ('Processo ' + reg.processo) : 'Acompanhamento';
+  document.getElementById('acEstagiarioNome').textContent = reg.estagiario || '';
+  document.getElementById('acBadges').innerHTML = badgeStatus(reg);
+
+  // Mesma logica dos demais modais: aviso usa a flag crua (ehAtraso),
+  // continua aparecendo mesmo se o Status Real ja for "Entregue".
+  document.getElementById('acAlertaAtraso').style.display = ehAtraso(reg) ? 'flex' : 'none';
+
+  document.getElementById('acId').textContent = reg.id || '—';
+  document.getElementById('acEstagiario').textContent = reg.estagiario || '—';
+  document.getElementById('acProcesso').textContent = reg.processo || '—';
+  document.getElementById('acData').textContent = reg.di || '—';
+  document.getElementById('acDataEntrega').textContent = reg.df || '—';
+
+  var linkEl = document.getElementById('acLink');
+  if (reg.link) {
+    linkEl.innerHTML = '<a href="' + reg.link + '" target="_blank" rel="noopener">Abrir no Classroom</a>';
+  } else {
+    linkEl.textContent = '—';
+  }
+  document.getElementById('acDiClass').textContent = reg.diClass || '—';
+  document.getElementById('acDfClass').textContent = reg.dfClass || '—';
+
+  var selectStatus = document.getElementById('acEditStatus');
+  var statusAtualUI = normalizarStatusParaUI(reg.status);
+  popularSelectSimples(selectStatus, APP.dados.statusPicklist.map(normalizarStatusParaUI), statusAtualUI, '— Sem status —');
+
+  document.getElementById('modalAcompanhamentoOverlay').classList.add('visivel');
+}
+
+function fecharModalAcompanhamento() {
+  document.getElementById('modalAcompanhamentoOverlay').classList.remove('visivel');
+  APP_ACOMPANHAMENTOS.registroAtual = null;
+}
+
+document.getElementById('modalAcompanhamentoOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalAcompanhamento();
+});
+
+function copiarProcessoAcompanhamento() {
+  var reg = APP_ACOMPANHAMENTOS.registroAtual;
+  var processo = reg ? String(reg.processo || '') : '';
+  if (!processo) return;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(processo).then(function() {
+      mostrarToast('Processo copiado!', 'sucesso');
+    }, function() { copiarProcessoFallback(processo); });
+  } else {
+    copiarProcessoFallback(processo);
+  }
+}
+
+var btnCopiarProcessoAcompanhamento = document.getElementById('btnCopiarProcessoAcompanhamento');
+if (btnCopiarProcessoAcompanhamento) {
+  btnCopiarProcessoAcompanhamento.addEventListener('click', function(e) { e.stopPropagation(); copiarProcessoAcompanhamento(); });
+  btnCopiarProcessoAcompanhamento.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copiarProcessoAcompanhamento(); }
+  });
+}
+
+function salvarModalAcompanhamento() {
+  var reg = APP_ACOMPANHAMENTOS.registroAtual;
+  if (!reg) return;
+
+  var payload = {
+    _linha: reg._linha,
+    status: normalizarStatusParaUI(document.getElementById('acEditStatus').value)
+  };
+
+  var btnSalvar = document.getElementById('btnSalvarAcompanhamento');
+  btnSalvar.disabled = true;
+  btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btnSalvar.disabled = false;
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao salvar.', 'erro');
+        return;
+      }
+      mostrarToast('Registro salvo com sucesso!', 'sucesso');
+      fecharModalAcompanhamento();
+      carregarAbaAcompanhamentos();
+      if (APP.vistaAtual === 'panorama') carregarAbaPanorama();
+      if (APP.vistaAtual === 'geral') carregarAbaGeral();
+    })
+    .withFailureHandler(function(err) {
+      btnSalvar.disabled = false;
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .salvarRegistroAcompanhamento(payload);
+}
+
+// === ABA: PANORAMA ===
+// Estado especifico da aba Panorama (independente das demais abas).
+// alunoSelecionado = e-mail do estagiario em foco, ou null = semestre inteiro.
+var APP_PANORAMA = {
+  semestreFiltro: obterSemestreAtual(),
+  alunoSelecionado: null,
+  atendimentoAtual: null
+};
+
+// Chamada toda vez que a aba "Panorama" e aberta — sempre busca dados novos
+// do servidor (diligencias, iniciais e atendimentos podem ter mudado nas
+// outras abas, e a aba Iniciais refaz o cruzamento com protocolos a cada
+// carga — ver Iniciais.js).
+function carregarAbaPanorama() {
+  var wrapper = document.getElementById('secaoPanorama');
+  if (wrapper) wrapper.style.opacity = '0.5';
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (wrapper) wrapper.style.opacity = '1';
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+      APP.dados.panoramaEstagiarios = resultado.estagiarios || [];
+      APP.dados.panoramaDiligencias = resultado.diligencias || [];
+      APP.dados.panoramaIniciais = resultado.iniciais || [];
+      APP.dados.panoramaAtendimentos = resultado.atendimentos || [];
+      APP.dados.panoramaAcompanhamentos = resultado.acompanhamentos || [];
+      // O modal de Inicial e reaproveitado tal como esta e depende de
+      // statusPicklist — garante que exista mesmo que a aba Iniciais nunca
+      // tenha sido aberta nesta sessao.
+      if (!APP.dados.statusPicklist || !APP.dados.statusPicklist.length) {
+        APP.dados.statusPicklist = resultado.statusPicklist || [];
+      }
+      popularSelectSemestrePanorama();
+      renderizarPanorama();
+    })
+    .withFailureHandler(function(err) {
+      if (wrapper) wrapper.style.opacity = '1';
+      mostrarToast('Erro ao carregar Panorama: ' + err.message, 'erro');
+    })
+    .carregarDadosPanorama();
+}
+
+// === ABA GRAFICOS ===
+// Producao dos alunos ATIVOS (nao finalizados), cada um contado no seu
+// proprio semestre — ver getDadosGraficos (Graficos.js). Sem filtro de
+// semestre/aluno nesta aba (decisao de Thales): e sempre o total corrente.
+
+var GRAFICOS_CATEGORIAS = [
+  { chave: 'complexas',       label: 'Complexas',       icone: 'gavel',          classe: 'grafico-barra-complexas' },
+  { chave: 'simples',         label: 'Simples',         icone: 'description',    classe: 'grafico-barra-simples' },
+  { chave: 'acompanhamentos', label: 'Acompanhamentos', icone: 'timeline',       classe: 'grafico-barra-acompanhamentos' },
+  { chave: 'atendimentos',    label: 'Atendimentos',    icone: 'support_agent',  classe: 'grafico-barra-atendimentos' },
+  { chave: 'iniciais',        label: 'Iniciais',        icone: 'history_edu',    classe: 'grafico-barra-iniciais' }
+];
+
+function carregarAbaGraficos() {
+  var wrapper = document.getElementById('secaoGraficos');
+  if (wrapper) wrapper.style.opacity = '0.5';
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (wrapper) wrapper.style.opacity = '1';
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+      APP.dados.graficos = resultado;
+      renderizarGraficos();
+    })
+    .withFailureHandler(function(err) {
+      if (wrapper) wrapper.style.opacity = '1';
+      mostrarToast('Erro ao carregar Gráficos: ' + err.message, 'erro');
+    })
+    .carregarDadosAbaGraficos();
+}
+
+function categoriasGraficosPorChaves(chaves) {
+  return GRAFICOS_CATEGORIAS.filter(function(c) { return chaves.indexOf(c.chave) !== -1; });
+}
+
+// Arredonda o topo do eixo Y para um numero "redondo" (1/2/5 x 10^n), a
+// mesma tecnica usada por qualquer biblioteca de graficos para gerar
+// gridlines com valores legiveis (ex.: 20, nunca 17).
+function arredondarMaximoEixoGraficos(valor) {
+  if (valor <= 0) return 1;
+  var expoente = Math.pow(10, Math.floor(Math.log(valor) / Math.LN10));
+  var fracao = valor / expoente;
+  var fracaoArredondada = fracao <= 1 ? 1 : (fracao <= 2 ? 2 : (fracao <= 5 ? 5 : 10));
+  return fracaoArredondada * expoente;
+}
+
+function renderizarGraficos() {
+  var dados = APP.dados.graficos || {};
+  var totais = dados.totais || {};
+  var totalAtivos = dados.totalAlunosAtivos || 0;
+
+  var subtitulo = document.getElementById('graficosSubtitulo');
+  if (subtitulo) {
+    subtitulo.textContent = totalAtivos + (totalAtivos === 1 ? ' aluno(a) ativo(a)' : ' alunos(as) ativos(as)');
+  }
+
+  var container = document.getElementById('graficosConteudo');
+  if (!container) return;
+
+  if (!totalAtivos) {
+    container.innerHTML =
+      '<div class="estado-vazio">' +
+        '<span class="material-symbols-outlined">group_off</span>' +
+        '<div class="estado-vazio-titulo">Nenhum aluno ativo encontrado</div>' +
+        '<div class="estado-vazio-desc">Os totais aparecem aqui assim que houver estagiários não finalizados.</div>' +
+      '</div>';
+    return;
+  }
+
+  var PLOT_HEIGHT = 170;
+  var valorMaximo = 0;
+  GRAFICOS_CATEGORIAS.forEach(function(cat) {
+    valorMaximo = Math.max(valorMaximo, totais[cat.chave] || 0);
+  });
+  var eixoMaximo = arredondarMaximoEixoGraficos(valorMaximo);
+
+  var eixoHtml = '';
+  for (var i = 4; i >= 0; i--) {
+    eixoHtml += '<div class="grafico-linha-eixo"><span>' + Math.round(eixoMaximo * (i / 4)) + '</span></div>';
+  }
+
+  var colunasHtml = '';
+  GRAFICOS_CATEGORIAS.forEach(function(cat) {
+    var valor = totais[cat.chave] || 0;
+    var alturaPx = valor > 0 ? Math.max(3, Math.round((valor / eixoMaximo) * PLOT_HEIGHT)) : 0;
+    colunasHtml +=
+      '<div class="grafico-coluna" title="' + cat.label + ': ' + valor + '">' +
+        '<div class="grafico-valor">' + valor + '</div>' +
+        '<div class="grafico-barra ' + cat.classe + '" style="height:' + alturaPx + 'px"></div>' +
+        '<div class="grafico-rotulo"><span class="material-symbols-outlined">' + cat.icone + '</span>' + cat.label + '</div>' +
+      '</div>';
+  });
+
+  container.innerHTML =
+    '<div class="grafico-area">' +
+      '<div class="grafico-eixo">' + eixoHtml + '</div>' +
+      '<div class="grafico-colunas">' + colunasHtml + '</div>' +
+    '</div>';
+
+  renderizarGraficoPorEstagiario(
+    'graficosLegendaPecas', 'graficosEixoPecas', 'graficosPlotPecas',
+    categoriasGraficosPorChaves(['complexas', 'simples', 'acompanhamentos']),
+    dados.porEstagiario || []
+  );
+  renderizarGraficoPorEstagiario(
+    'graficosLegendaAtendIniciais', 'graficosEixoAtendIniciais', 'graficosPlotAtendIniciais',
+    categoriasGraficosPorChaves(['atendimentos', 'iniciais']),
+    dados.porEstagiario || []
+  );
+}
+
+// Grafico de barras agrupadas por estagiario (eixo Y compartilhado entre as
+// categorias de UM grafico, area rolavel na horizontal para caber qualquer
+// quantidade de alunos ativos — ver .grafico-multi-* em Styles.html).
+function renderizarGraficoPorEstagiario(idLegenda, idEixo, idPlot, categorias, porEstagiario) {
+  var legendaEl = document.getElementById(idLegenda);
+  if (legendaEl) {
+    legendaEl.innerHTML = categorias.map(function(cat) {
+      return '<span class="legenda-item"><span class="legenda-dot ' + cat.classe + '"></span> ' + cat.label + '</span>';
+    }).join('');
+  }
+
+  var eixoEl = document.getElementById(idEixo);
+  var plotEl = document.getElementById(idPlot);
+  if (!eixoEl || !plotEl) return;
+
+  if (!porEstagiario.length) {
+    eixoEl.innerHTML = '';
+    plotEl.innerHTML =
+      '<div class="estado-vazio">' +
+        '<span class="material-symbols-outlined">group_off</span>' +
+        '<div class="estado-vazio-titulo">Nenhum aluno ativo encontrado</div>' +
+      '</div>';
+    return;
+  }
+
+  var PLOT_HEIGHT = 170;
+  var valorMaximo = 0;
+  porEstagiario.forEach(function(a) {
+    categorias.forEach(function(cat) { valorMaximo = Math.max(valorMaximo, a[cat.chave] || 0); });
+  });
+  var eixoMaximo = arredondarMaximoEixoGraficos(valorMaximo);
+
+  var eixoHtml = '';
+  var gridHtml = '';
+  for (var i = 4; i >= 0; i--) {
+    eixoHtml += '<span>' + Math.round(eixoMaximo * (i / 4)) + '</span>';
+    gridHtml += '<div class="grafico-linha-eixo"></div>';
+  }
+  eixoEl.innerHTML = eixoHtml;
+
+  var gruposHtml = '';
+  porEstagiario.forEach(function(a) {
+    var barrasHtml = categorias.map(function(cat) {
+      var valor = a[cat.chave] || 0;
+      var alturaPx = valor > 0 ? Math.max(3, Math.round((valor / eixoMaximo) * PLOT_HEIGHT)) : 0;
+      return '<div class="grafico-mini-barra ' + cat.classe + '" style="height:' + alturaPx + 'px" ' +
+        'data-valor="' + valor + '" title="' + a.nome + ' — ' + cat.label + ': ' + valor + '"></div>';
+    }).join('');
+    gruposHtml +=
+      '<div class="grafico-grupo">' +
+        '<div class="grafico-grupo-barras">' + barrasHtml + '</div>' +
+        '<div class="grafico-grupo-nome" title="' + a.nome + '">' + a.primeiroNome + '</div>' +
+      '</div>';
+  });
+
+  plotEl.innerHTML =
+    '<div class="grafico-multi-gridlines">' + gridHtml + '</div>' +
+    '<div class="grafico-multi-grupos">' + gruposHtml + '</div>';
+
+  // Largura do conteudo (todos os grupos + gaps) medida apos a insercao no
+  // DOM; se for menor que a area visivel, a barra estica para preencher
+  // (mesmo efeito do grafico de cima); se for maior, vira scroll horizontal.
+  var gruposEl = plotEl.querySelector('.grafico-multi-grupos');
+  var larguraConteudo = gruposEl.scrollWidth;
+  var larguraDisponivel = plotEl.parentElement.clientWidth;
+  plotEl.style.width = Math.max(larguraConteudo, larguraDisponivel) + 'px';
+}
+
+function popularSelectSemestrePanorama() {
+  var select = document.getElementById('selectSemestrePanorama');
+  if (!select) return;
+
+  var presentes = {};
+  (APP.dados.panoramaEstagiarios || []).forEach(function(e) {
+    if (e.semestre) presentes[e.semestre] = true;
+  });
+  if (APP_PANORAMA.semestreFiltro) presentes[APP_PANORAMA.semestreFiltro] = true;
+
+  var semestres = Object.keys(presentes).sort().reverse();
+
+  if (semestres.length === 0) {
+    select.innerHTML = '<option value="">— Nenhum semestre encontrado —</option>';
+    return;
+  }
+
+  if (semestres.indexOf(APP_PANORAMA.semestreFiltro) === -1) {
+    APP_PANORAMA.semestreFiltro = semestres[0];
+  }
+
+  select.innerHTML = '';
+  semestres.forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    if (s === APP_PANORAMA.semestreFiltro) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
+function mudarSemestrePanorama(valor) {
+  APP_PANORAMA.semestreFiltro = valor || '';
+  APP_PANORAMA.alunoSelecionado = null;
+  renderizarPanorama();
+}
+
+function renderizarPanorama() {
+  popularSelectAlunoPanorama();
+  renderizarCardsPanorama();
+  renderizarTabelasPanorama();
+}
+
+// --- Alunos do semestre escolhido ---
+
+function getAlunosDoSemestrePanorama() {
+  var sem = APP_PANORAMA.semestreFiltro;
+  return (APP.dados.panoramaEstagiarios || [])
+    .filter(function(e) { return e.semestre === sem; })
+    .sort(function(a, b) { return normalizar(a.nome) < normalizar(b.nome) ? -1 : 1; });
+}
+
+// Conjunto de alunos a considerar nos cards/tabelas: so o selecionado, ou
+// todos os alunos do semestre quando nenhum estiver selecionado.
+function getConjuntoAlunosPanorama() {
+  var alunos = getAlunosDoSemestrePanorama();
+  if (APP_PANORAMA.alunoSelecionado) {
+    alunos = alunos.filter(function(a) { return a.email === APP_PANORAMA.alunoSelecionado; });
+  }
+  return alunos;
+}
+
+function popularSelectAlunoPanorama() {
+  var select = document.getElementById('selectAlunoPanorama');
+  if (!select) return;
+
+  var alunos = getAlunosDoSemestrePanorama();
+  var valorAtual = APP_PANORAMA.alunoSelecionado;
+
+  select.innerHTML = '<option value="">— Todos os alunos —</option>';
+  alunos.forEach(function(a) {
+    var opt = document.createElement('option');
+    opt.value = a.email;
+    opt.textContent = a.nome + (a.finalizado ? ' — Finalizado' : '');
+    if (a.finalizado) opt.className = 'opcao-finalizada';
+    if (a.email === valorAtual) opt.selected = true;
+    select.appendChild(opt);
+  });
+
+  // Se o aluno que estava selecionado nao pertence mais ao semestre atual
+  // (troca de semestre), volta para "Todos os alunos".
+  var aindaExiste = alunos.some(function(a) { return a.email === valorAtual; });
+  if (valorAtual && !aindaExiste) {
+    APP_PANORAMA.alunoSelecionado = null;
+    select.value = '';
+  }
+}
+
+function mudarAlunoPanorama(valor) {
+  APP_PANORAMA.alunoSelecionado = valor || null;
+  renderizarCardsPanorama();
+  renderizarTabelasPanorama();
+}
+
+// --- Registros filtrados (semestre + conjunto de alunos em foco) ---
+// Diligencias sao cruzadas pelo nome em ESTAGIARIO(A); Iniciais pelo E-MAIL —
+// mesmas chaves ja usadas nas abas Diligencias e Iniciais.
+//
+// Semestre: diligencias.semestre, iniciais.semestre e estagiarios.semestre
+// sao todos texto simples (ex. "2026.01"), preenchidos manualmente por
+// Thales — comparados diretamente, sem calcular nada a partir de datas.
+
+function getDiligenciasPanoramaFiltradas() {
+  var sem = APP_PANORAMA.semestreFiltro;
+  var nomes = {};
+  getConjuntoAlunosPanorama().forEach(function(a) { nomes[normalizarChave(a.nome)] = true; });
+  return (APP.dados.panoramaDiligencias || []).filter(function(r) {
+    return r.semestre === sem && nomes[normalizarChave(r.estagiario)];
+  });
+}
+
+function getIniciaisPanoramaFiltradas() {
+  var sem = APP_PANORAMA.semestreFiltro;
+  var emails = {};
+  var nomes = {};
+  getConjuntoAlunosPanorama().forEach(function(a) {
+    if (a.email) emails[normalizarChave(a.email)] = true;
+    if (a.nome) nomes[normalizarChave(a.nome)] = true;
+  });
+  return (APP.dados.panoramaIniciais || []).filter(function(r) {
+    if (r.semestre !== sem) return false;
+    var emailOk = !!emails[normalizarChave(r.email)];
+    var nomeOk = !!nomes[normalizarChave(r.estagiario)];
+    // Mantem o cruzamento principal por e-mail e usa nome como fallback
+    // para registros antigos/inconsistentes em que o e-mail nao casa.
+    return emailOk || nomeOk;
+  });
+}
+
+function getAcompanhamentosPanoramaFiltrados() {
+  var sem = APP_PANORAMA.semestreFiltro;
+  var emails = {};
+  var nomes = {};
+  getConjuntoAlunosPanorama().forEach(function(a) {
+    if (a.email) emails[normalizarChave(a.email)] = true;
+    if (a.nome) nomes[normalizarChave(a.nome)] = true;
+  });
+  return (APP.dados.panoramaAcompanhamentos || []).filter(function(r) {
+    if (r.semestre !== sem) return false;
+    var emailOk = !!emails[normalizarChave(r.email)];
+    var nomeOk = !!nomes[normalizarChave(r.estagiario)];
+    return emailOk || nomeOk;
+  });
+}
+
+function getAtendimentosPanoramaFiltrados() {
+  var sem = APP_PANORAMA.semestreFiltro;
+  var nomes = {};
+  getConjuntoAlunosPanorama().forEach(function(a) { nomes[normalizarChave(a.nome)] = true; });
+  return (APP.dados.panoramaAtendimentos || []).filter(function(r) {
+    return r.semestre === sem && nomes[normalizarChave(r.estagiario)];
+  });
+}
+
+// --- Cards resumo ---
+
+function renderizarCardsPanorama() {
+  var diligencias = getDiligenciasPanoramaFiltradas().filter(naoEhCancelada);
+  var iniciais = getIniciaisPanoramaFiltradas().filter(naoEhCancelada);
+  var atendimentos = getAtendimentosPanoramaFiltrados();
+  var acompanhamentos = getAcompanhamentosPanoramaFiltrados().filter(naoEhCancelada);
+
+  var complexasDiligencias = diligencias.filter(function(r) {
+    return normalizarChave(r.subespecie) === 'complexa';
+  }).length;
+  var simples = diligencias.filter(function(r) {
+    return normalizarChave(r.subespecie) === 'simples';
+  }).length;
+  // Cada inicial conta como uma diligencia complexa.
+  var complexas = complexasDiligencias + iniciais.length;
+  var total = diligencias.length + iniciais.length;
+
+  var cards = [
+    { label: 'TOTAL',          num: total,                   classe: 'card-total',       icone: 'folder_open' },
+    { label: 'COMPLEXAS',      num: complexas,               classe: 'card-entregue',    icone: 'gavel' },
+    { label: 'SIMPLES',        num: simples,                 classe: 'card-encaminhado', icone: 'description' },
+    { label: 'ACOMPANHAMENTOS', num: acompanhamentos.length, classe: 'card-devolvida',   icone: 'timeline' },
+    { label: 'ATENDIMENTOS',   num: atendimentos.length,     classe: 'card-concluido',   icone: 'support_agent' }
+  ];
+
+  var html = '';
+  cards.forEach(function(c) {
+    html += '<div class="card-resumo card-resumo-estatico ' + c.classe + '">' +
+      '<div class="card-icone"><span class="material-symbols-outlined">' + c.icone + '</span></div>' +
+      '<div class="card-info">' +
+        '<div class="card-numero">' + c.num + '</div>' +
+        '<div class="card-label">' + c.label + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  document.getElementById('cardsGridPanorama').innerHTML = html;
+}
+
+// --- Tabelas ---
+
+function renderizarTabelasPanorama() {
+  renderizarTabelaDiligenciasPanorama();
+  renderizarTabelaIniciaisPanorama();
+  renderizarTabelaAcompanhamentosPanorama();
+  renderizarTabelaAtendimentosPanorama();
+}
+
+function celulaVaziaTabela(colspan, titulo) {
+  return '<tr><td colspan="' + colspan + '">' +
+    '<div class="estado-vazio">' +
+      '<span class="material-symbols-outlined">search_off</span>' +
+      '<div class="estado-vazio-titulo">' + titulo + '</div>' +
+    '</div>' +
+  '</td></tr>';
+}
+
+function renderizarTabelaDiligenciasPanorama() {
+  var lista = getDiligenciasPanoramaFiltradas();
+
+  document.getElementById('panoramaCabecalhoDiligencias').innerHTML =
+    '<tr>' +
+      '<th>ID</th><th>PROCESSO</th><th>ASSISTIDO(A)</th><th>DI</th><th>PRAZO</th><th>DF</th>' +
+      '<th>ESTAGIÁRIO(A)</th><th>STATUS</th><th>ESPÉCIE</th><th>SUBESPÉCIE</th>' +
+    '</tr>';
+
+  var corpo = document.getElementById('panoramaCorpoDiligencias');
+  if (lista.length === 0) {
+    corpo.innerHTML = celulaVaziaTabela(10, 'Nenhuma diligência encontrada');
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg, idx) {
+    var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
+    html += '<tr class="' + classeAtraso + '" onclick="abrirModalPanoramaDiligencia(' + idx + ')">' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td class="td-processo">' + (reg.processo || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
+      '<td>' + (reg.di || '') + '</td>' +
+      '<td>' + (reg.prazo || '') + '</td>' +
+      '<td>' + (reg.df || '') + '</td>' +
+      '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
+      '<td>' + badgeStatus(reg) + '</td>' +
+      '<td>' + (reg.especie || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.subespecie || '<span class="celula-vazio">—</span>') + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+function renderizarTabelaIniciaisPanorama() {
+  var lista = getIniciaisPanoramaFiltradas();
+
+  document.getElementById('panoramaCabecalhoIniciais').innerHTML =
+    '<tr>' +
+      '<th>ID</th><th>ASSISTIDO(A)</th><th>ESTAGIÁRIO(A)</th><th>DATA</th><th>DF</th>' +
+      '<th>STATUS</th><th>PROCESSO</th><th>VARA</th>' +
+    '</tr>';
+
+  var corpo = document.getElementById('panoramaCorpoIniciais');
+  if (lista.length === 0) {
+    corpo.innerHTML = celulaVaziaTabela(8, 'Nenhum inicial encontrado');
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg, idx) {
+    var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
+    html += '<tr class="' + classeAtraso + '" onclick="abrirModalPanoramaInicial(' + idx + ')">' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
+      '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
+      '<td>' + (reg.di || '') + '</td>' +
+      '<td>' + (reg.df || '') + '</td>' +
+      '<td>' + badgeStatus(reg) + '</td>' +
+      '<td>' + (reg.processo || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.vara || '<span class="celula-vazio">—</span>') + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+function renderizarTabelaAcompanhamentosPanorama() {
+  var lista = getAcompanhamentosPanoramaFiltrados();
+
+  document.getElementById('panoramaCabecalhoAcompanhamentos').innerHTML =
+    '<tr>' +
+      '<th>ID</th><th>ESTAGIÁRIO(A)</th><th>PROCESSO</th><th>DATA</th><th>ENTREGA</th><th>STATUS</th>' +
+    '</tr>';
+
+  var corpo = document.getElementById('panoramaCorpoAcompanhamentos');
+  if (lista.length === 0) {
+    corpo.innerHTML = celulaVaziaTabela(6, 'Nenhum acompanhamento encontrado');
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg, idx) {
+    var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
+    html += '<tr class="' + classeAtraso + '" onclick="abrirModalPanoramaAcompanhamento(' + idx + ')">' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
+      '<td class="td-processo">' + (reg.processo || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.di || '') + '</td>' +
+      '<td>' + (reg.df || '') + '</td>' +
+      '<td>' + badgeStatus(reg) + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+// Abre o modal de Acompanhamento a partir da tabela da aba Panorama.
+function abrirModalPanoramaAcompanhamento(idx) {
+  var lista = getAcompanhamentosPanoramaFiltrados();
+  var reg = lista[idx];
+  if (!reg) return;
+  preencherModalAcompanhamento(reg);
+}
+
+function renderizarTabelaAtendimentosPanorama() {
+  var lista = getAtendimentosPanoramaFiltrados();
+
+  document.getElementById('panoramaCabecalhoAtendimentos').innerHTML =
+    '<tr>' +
+      '<th>DATA</th><th>NOME</th><th>CPF</th><th>TELEFONE 1</th><th>TELEFONE 2</th>' +
+      '<th>EMPREGO</th><th>RAMO</th><th>ESTAGIÁRIO(A)</th>' +
+    '</tr>';
+
+  var corpo = document.getElementById('panoramaCorpoAtendimentos');
+  if (lista.length === 0) {
+    corpo.innerHTML = celulaVaziaTabela(8, 'Nenhum atendimento encontrado');
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg, idx) {
+    html += '<tr onclick="abrirModalPanoramaAtendimento(' + idx + ')">' +
+      '<td>' + (reg.data || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.nome || '') + '</td>' +
+      '<td>' + (reg.cpf || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.telefone1 || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.telefone2 || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.emprego || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.ramo || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.estagiario || '<span class="celula-vazio">—</span>') + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+// --- Modal de Atendimento (somente leitura) ---
+
+function abrirModalPanoramaAtendimento(idx) {
+  var lista = getAtendimentosPanoramaFiltrados();
+  var reg = lista[idx];
+  if (!reg) return;
+  APP_PANORAMA.atendimentoAtual = reg;
+
+  document.getElementById('maNome').textContent = reg.nome || '—';
+  document.getElementById('maData').textContent = reg.data || '—';
+  document.getElementById('maCpf').textContent = reg.cpf || '—';
+  document.getElementById('maTelefone1').textContent = reg.telefone1 || '—';
+  document.getElementById('maTelefone2').textContent = reg.telefone2 || '—';
+  document.getElementById('maEmprego').textContent = reg.emprego || '—';
+  document.getElementById('maRamo').textContent = reg.ramo || '—';
+  document.getElementById('maEstagiario').textContent = reg.estagiario || '—';
+
+  document.getElementById('modalAtendimentoOverlay').classList.add('visivel');
+}
+
+function fecharModalAtendimento() {
+  document.getElementById('modalAtendimentoOverlay').classList.remove('visivel');
+  APP_PANORAMA.atendimentoAtual = null;
+}
+
+document.getElementById('modalAtendimentoOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalAtendimento();
+});
+
+// === ABA: GERAL (todas as atividades pendentes) ===
+// Mostra diligencias, iniciais e acompanhamentos cujo STATUS nao esta em
+// STATUS_FINAIS (ou seja, tudo != Ok, Protocolado e Cancelada), agrupados por
+// tipo (mesmo padrao de tabelas usado na aba Panorama). Reaproveita a mesma
+// chamada ao servidor do Panorama (carregarDadosPanorama) e os mesmos campos
+// em APP.dados — sem recorte de semestre/aluno, ve tudo de uma vez.
+
+// Cada uma das 3 tabelas (Diligencias/Iniciais/Acompanhamentos) tem sua
+// propria ordenacao independente, igual ao padrao de APP/APP_INICIAIS/
+// APP_ACOMPANHAMENTOS nas demais abas.
+var APP_GERAL = {
+  ordenacao: {
+    diligencias: { coluna: 'id', direcao: 'asc' },
+    iniciais: { coluna: 'id', direcao: 'asc' },
+    acompanhamentos: { coluna: 'id', direcao: 'asc' }
+  }
+};
+
+function ordenarPorGeral(tipo, coluna) {
+  var estado = APP_GERAL.ordenacao[tipo];
+  if (estado.coluna === coluna) {
+    estado.direcao = (estado.direcao === 'asc') ? 'desc' : 'asc';
+  } else {
+    estado.coluna = coluna;
+    estado.direcao = 'asc';
+  }
+  renderizarTabelasGeral();
+}
+
+// Reaproveita compararRegistros() (generico, ja usado por Diligencias/
+// Iniciais/Acompanhamentos) para ordenar qualquer coluna por tipo.
+function thOrdenavelGeral(tipo, label, coluna) {
+  var estado = APP_GERAL.ordenacao[tipo];
+  var ativo = estado.coluna === coluna;
+  var seta = '';
+  if (ativo) {
+    var simbolo = (estado.direcao === 'asc') ? '▲' : '▼';
+    seta = '<span class="th-seta">' + simbolo + '</span>';
+  }
+  return '<th class="th-ordenavel" onclick="ordenarPorGeral(\'' + tipo + '\',\'' + coluna + '\')">' + label + seta + '</th>';
+}
+
+function carregarAbaGeral() {
+  var wrapper = document.getElementById('secaoGeral');
+  if (wrapper) wrapper.style.opacity = '0.5';
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (wrapper) wrapper.style.opacity = '1';
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+      APP.dados.panoramaDiligencias = resultado.diligencias || [];
+      APP.dados.panoramaIniciais = resultado.iniciais || [];
+      APP.dados.panoramaAcompanhamentos = resultado.acompanhamentos || [];
+      // O modal de Inicial depende de statusPicklist — garante que exista
+      // mesmo que a aba Iniciais nunca tenha sido aberta nesta sessao.
+      if (!APP.dados.statusPicklist || !APP.dados.statusPicklist.length) {
+        APP.dados.statusPicklist = resultado.statusPicklist || [];
+      }
+      renderizarGeral();
+    })
+    .withFailureHandler(function(err) {
+      if (wrapper) wrapper.style.opacity = '1';
+      mostrarToast('Erro ao carregar Geral: ' + err.message, 'erro');
+    })
+    .carregarDadosPanorama();
+}
+
+// Reaproveita STATUS_FINAIS (definido em "LOGICA DE CLASSIFICACAO"): um
+// registro e "pendente" quando o status nao e nenhum dos finais.
+function ehPendenteGeral(reg) {
+  return STATUS_FINAIS.indexOf(normalizarChave(reg.status)) === -1;
+}
+
+function getDiligenciasGeralFiltradas() {
+  var lista = (APP.dados.panoramaDiligencias || []).filter(ehPendenteGeral);
+  var est = APP_GERAL.ordenacao.diligencias;
+  return lista.sort(function(a, b) { return compararRegistros(a, b, est.coluna, est.direcao); });
+}
+
+function getIniciaisGeralFiltradas() {
+  var lista = (APP.dados.panoramaIniciais || []).filter(ehPendenteGeral);
+  var est = APP_GERAL.ordenacao.iniciais;
+  return lista.sort(function(a, b) { return compararRegistros(a, b, est.coluna, est.direcao); });
+}
+
+function getAcompanhamentosGeralFiltrados() {
+  var lista = (APP.dados.panoramaAcompanhamentos || []).filter(ehPendenteGeral);
+  var est = APP_GERAL.ordenacao.acompanhamentos;
+  return lista.sort(function(a, b) { return compararRegistros(a, b, est.coluna, est.direcao); });
+}
+
+function renderizarGeral() {
+  renderizarCardsGeral();
+  renderizarTabelasGeral();
+}
+
+function renderizarCardsGeral() {
+  var diligencias = getDiligenciasGeralFiltradas();
+  var iniciais = getIniciaisGeralFiltradas();
+  var acompanhamentos = getAcompanhamentosGeralFiltrados();
+  var total = diligencias.length + iniciais.length + acompanhamentos.length;
+
+  // scrollId = bloco da tabela correspondente na propria aba Geral; null =
+  // rola para o topo da aba (card TOTAL).
+  var cards = [
+    { label: 'TOTAL PENDENTE',   num: total,                   classe: 'card-total',       icone: 'pending_actions', scrollId: null },
+    { label: 'DILIGÊNCIAS',      num: diligencias.length,      classe: 'card-encaminhado', icone: 'assignment',      scrollId: 'blocoGeralDiligencias' },
+    { label: 'INICIAIS',         num: iniciais.length,         classe: 'card-entregue',    icone: 'description',     scrollId: 'blocoGeralIniciais' },
+    { label: 'ACOMPANHAMENTOS',  num: acompanhamentos.length,  classe: 'card-devolvida',   icone: 'timeline',        scrollId: 'blocoGeralAcompanhamentos' }
+  ];
+
+  var html = '';
+  cards.forEach(function(c) {
+    html += '<div class="card-resumo ' + c.classe + '" onclick="rolarParaGeral(' + (c.scrollId ? "'" + c.scrollId + "'" : 'null') + ')">' +
+      '<div class="card-icone"><span class="material-symbols-outlined">' + c.icone + '</span></div>' +
+      '<div class="card-info">' +
+        '<div class="card-numero">' + c.num + '</div>' +
+        '<div class="card-label">' + c.label + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  document.getElementById('cardsGridGeral').innerHTML = html;
+}
+
+// Clique no card rola a pagina ate o bloco da tabela correspondente
+// (ou ate o topo da aba, no caso do card TOTAL).
+function rolarParaGeral(idBloco) {
+  var el = idBloco ? document.getElementById(idBloco) : document.getElementById('secaoGeral');
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderizarTabelasGeral() {
+  renderizarTabelaDiligenciasGeral();
+  renderizarTabelaIniciaisGeral();
+  renderizarTabelaAcompanhamentosGeral();
+}
+
+function renderizarTabelaDiligenciasGeral() {
+  var lista = getDiligenciasGeralFiltradas();
+
+  document.getElementById('geralCabecalhoDiligencias').innerHTML =
+    '<tr>' +
+      thOrdenavelGeral('diligencias', 'ID', 'id') +
+      thOrdenavelGeral('diligencias', 'PROCESSO', 'processo') +
+      thOrdenavelGeral('diligencias', 'ASSISTIDO(A)', 'assistido') +
+      thOrdenavelGeral('diligencias', 'DI', 'di') +
+      thOrdenavelGeral('diligencias', 'PRAZO', 'prazo') +
+      thOrdenavelGeral('diligencias', 'DF', 'df') +
+      thOrdenavelGeral('diligencias', 'ESTAGIÁRIO(A)', 'estagiario') +
+      thOrdenavelGeral('diligencias', 'STATUS', 'status') +
+      thOrdenavelGeral('diligencias', 'ESPÉCIE', 'especie') +
+      thOrdenavelGeral('diligencias', 'SUBESPÉCIE', 'subespecie') +
+    '</tr>';
+
+  var corpo = document.getElementById('geralCorpoDiligencias');
+  if (lista.length === 0) {
+    corpo.innerHTML = celulaVaziaTabela(10, 'Nenhuma diligência pendente');
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg, idx) {
+    var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
+    html += '<tr class="' + classeAtraso + '" onclick="abrirModalGeralDiligencia(' + idx + ')">' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td class="td-processo">' + (reg.processo || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
+      '<td>' + (reg.di || '') + '</td>' +
+      '<td>' + (reg.prazo || '') + '</td>' +
+      '<td>' + (reg.df || '') + '</td>' +
+      '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
+      '<td>' + badgeStatus(reg) + '</td>' +
+      '<td>' + (reg.especie || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.subespecie || '<span class="celula-vazio">—</span>') + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+// Abre o modal de Diligencia a partir da tabela da aba Geral.
+function abrirModalGeralDiligencia(idx) {
+  var lista = getDiligenciasGeralFiltradas();
+  var reg = lista[idx];
+  if (!reg) return;
+  preencherModalDiligencia(reg);
+}
+
+function renderizarTabelaIniciaisGeral() {
+  var lista = getIniciaisGeralFiltradas();
+
+  document.getElementById('geralCabecalhoIniciais').innerHTML =
+    '<tr>' +
+      thOrdenavelGeral('iniciais', 'ID', 'id') +
+      thOrdenavelGeral('iniciais', 'ASSISTIDO(A)', 'assistido') +
+      thOrdenavelGeral('iniciais', 'ESTAGIÁRIO(A)', 'estagiario') +
+      thOrdenavelGeral('iniciais', 'DATA', 'di') +
+      thOrdenavelGeral('iniciais', 'DF', 'df') +
+      thOrdenavelGeral('iniciais', 'STATUS', 'status') +
+      thOrdenavelGeral('iniciais', 'PROCESSO', 'processo') +
+      thOrdenavelGeral('iniciais', 'VARA', 'vara') +
+    '</tr>';
+
+  var corpo = document.getElementById('geralCorpoIniciais');
+  if (lista.length === 0) {
+    corpo.innerHTML = celulaVaziaTabela(8, 'Nenhum inicial pendente');
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg, idx) {
+    var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
+    html += '<tr class="' + classeAtraso + '" onclick="abrirModalGeralInicial(' + idx + ')">' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
+      '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
+      '<td>' + (reg.di || '') + '</td>' +
+      '<td>' + (reg.df || '') + '</td>' +
+      '<td>' + badgeStatus(reg) + '</td>' +
+      '<td>' + (reg.processo || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.vara || '<span class="celula-vazio">—</span>') + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+// Abre o modal de Inicial a partir da tabela da aba Geral.
+function abrirModalGeralInicial(idx) {
+  var lista = getIniciaisGeralFiltradas();
+  var reg = lista[idx];
+  if (!reg) return;
+  preencherModalInicial(reg);
+}
+
+function renderizarTabelaAcompanhamentosGeral() {
+  var lista = getAcompanhamentosGeralFiltrados();
+
+  document.getElementById('geralCabecalhoAcompanhamentos').innerHTML =
+    '<tr>' +
+      thOrdenavelGeral('acompanhamentos', 'ID', 'id') +
+      thOrdenavelGeral('acompanhamentos', 'ESTAGIÁRIO(A)', 'estagiario') +
+      thOrdenavelGeral('acompanhamentos', 'PROCESSO', 'processo') +
+      thOrdenavelGeral('acompanhamentos', 'DATA', 'di') +
+      thOrdenavelGeral('acompanhamentos', 'ENTREGA', 'df') +
+      thOrdenavelGeral('acompanhamentos', 'STATUS', 'status') +
+    '</tr>';
+
+  var corpo = document.getElementById('geralCorpoAcompanhamentos');
+  if (lista.length === 0) {
+    corpo.innerHTML = celulaVaziaTabela(6, 'Nenhum acompanhamento pendente');
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg, idx) {
+    var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
+    html += '<tr class="' + classeAtraso + '" onclick="abrirModalGeralAcompanhamento(' + idx + ')">' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
+      '<td class="td-processo">' + (reg.processo || '<span class="celula-vazio">—</span>') + '</td>' +
+      '<td>' + (reg.di || '') + '</td>' +
+      '<td>' + (reg.df || '') + '</td>' +
+      '<td>' + badgeStatus(reg) + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+// Abre o modal de Acompanhamento a partir da tabela da aba Geral.
+function abrirModalGeralAcompanhamento(idx) {
+  var lista = getAcompanhamentosGeralFiltrados();
+  var reg = lista[idx];
+  if (!reg) return;
+  preencherModalAcompanhamento(reg);
+}
+
+// === UTILITARIOS ===
+
+function acaoPreencherSemestre() {
+  var card = document.getElementById('cardPreencherSemestre');
+  if (!card || card.classList.contains('carregando')) return;
+
+  card.classList.add('carregando');
+  var labelEl = card.querySelector('.util-card-label');
+  var labelOriginal = labelEl.textContent;
+  labelEl.textContent = 'Aguarde...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      if (res && res.erro) {
+        mostrarToast(res.erro, 'erro');
+      } else {
+        mostrarToast(res.mensagem || 'Semestre preenchido com sucesso!', 'sucesso');
+      }
+    })
+    .withFailureHandler(function(err) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      mostrarToast('Erro ao preencher semestre: ' + err.message, 'erro');
+    })
+    .acaoPreencherSemestre();
+}
+
+function acaoPreencherDfFinal() {
+  var card = document.getElementById('cardPreencherDfFinal');
+  if (!card || card.classList.contains('carregando')) return;
+
+  card.classList.add('carregando');
+  var labelEl = card.querySelector('.util-card-label');
+  var labelOriginal = labelEl.textContent;
+  labelEl.textContent = 'Aguarde...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      if (res && res.erro) {
+        mostrarToast(res.erro, 'erro');
+      } else {
+        mostrarToast(res.mensagem || 'DF Final preenchido com sucesso!', 'sucesso');
+      }
+    })
+    .withFailureHandler(function(err) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      mostrarToast('Erro ao preencher DF Final: ' + err.message, 'erro');
+    })
+    .acaoPreencherDfFinal();
+}
+
+// Chamado pelo botao "Verificar Protocolos" na aba "Utilitarios" (Sistema) —
+// roda manualmente o mesmo cruzamento iniciais x protocolos que normalmente
+// so acontece 1x/dia pelo gatilho automatico (ver verificarProtocolosIniciais
+// em Iniciais.js).
+function acaoVerificarProtocolosIniciais() {
+  var card = document.getElementById('cardVerificarProtocolos');
+  if (!card || card.classList.contains('carregando')) return;
+
+  card.classList.add('carregando');
+  var labelEl = card.querySelector('.util-card-label');
+  var labelOriginal = labelEl.textContent;
+  labelEl.textContent = 'Aguarde...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      if (!res || !res.sucesso) {
+        mostrarToast((res && res.erro) || 'Erro ao verificar protocolos.', 'erro');
+      } else {
+        var n = res.atualizados || 0;
+        mostrarToast(n + ' inicial(is) atualizada(s) com número de processo.', 'sucesso');
+      }
+    })
+    .withFailureHandler(function(err) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      mostrarToast('Erro ao verificar protocolos: ' + err.message, 'erro');
+    })
+    .acaoVerificarProtocolosIniciais();
+}
+
+function acaoEnviarParaSecretaria() {
+  var card = document.getElementById('cardEnviarParaSecretaria');
+  if (!card || card.classList.contains('carregando')) return;
+
+  card.classList.add('carregando');
+  var labelEl = card.querySelector('.util-card-label');
+  var labelOriginal = labelEl.textContent;
+  labelEl.textContent = 'Aguarde...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      if (res && res.erro) {
+        mostrarToast(res.erro, 'erro');
+      } else {
+        mostrarToast((res && res.mensagem) || 'Envio para secretaria concluido com sucesso!', 'sucesso');
+      }
+    })
+    .withFailureHandler(function(err) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      mostrarToast('Erro ao enviar para Secretaria: ' + err.message, 'erro');
+    })
+    .acaoEnviarParaSecretaria();
+}
+
+function acaoSincronizarGeral() {
+  var card = document.getElementById('cardSincronizarGeral');
+  if (!card || card.classList.contains('carregando')) return;
+
+  card.classList.add('carregando');
+  var labelEl = card.querySelector('.util-card-label');
+  var labelOriginal = labelEl.textContent;
+  labelEl.textContent = 'Aguarde...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      if (res && res.erro) {
+        mostrarToast(res.erro, 'erro');
+      } else {
+        mostrarToast((res && res.mensagem) || 'Sincronizacao com GERAL concluida!', 'sucesso');
+      }
+    })
+    .withFailureHandler(function(err) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      mostrarToast('Erro ao sincronizar com GERAL: ' + err.message, 'erro');
+    })
+    .acaoSincronizarGeral();
+}
+
+function acaoOrganizarPastas() {
+  var card = document.getElementById('cardOrganizarPastas');
+  if (!card || card.classList.contains('carregando')) return;
+
+  card.classList.add('carregando');
+  var labelEl = card.querySelector('.util-card-label');
+  var labelOriginal = labelEl.textContent;
+  labelEl.textContent = 'Aguarde...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      if (res && res.erro) {
+        mostrarToast(res.erro, 'erro');
+        return;
+      }
+
+      var partes = [];
+      partes.push((res.movidos || 0) + ' movido(s)');
+      partes.push((res.pastasCriadas || 0) + ' pasta(s) criada(s)');
+      if (res.naoEncontrados) partes.push(res.naoEncontrados + ' sem PDF');
+      if (res.ignorados) partes.push(res.ignorados + ' ignorada(s)');
+
+      var temAvisos = res.avisos && res.avisos.length > 0;
+      var mensagem = 'Pastas organizadas: ' + partes.join(', ') + '.';
+      if (temAvisos) mensagem += ' (' + res.avisos.length + ' aviso(s) — ver Log de execução)';
+
+      mostrarToast(mensagem, temAvisos ? 'alerta' : 'sucesso');
+    })
+    .withFailureHandler(function(err) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      mostrarToast('Erro ao organizar pastas: ' + err.message, 'erro');
+    })
+    .organizarPastasDiligencias();
+}
+
+// Chamado pelo botao "Arquivar Pastas" na aba "Utilitarios" (Drive) — move a
+// pasta dos estagiarios finalizados (FINALIZADO = true e ARQUIVADO != 'S')
+// de bd!L2 para bd!Q2 e marca ARQUIVADO = 'S' (ver arquivarPastasEstagiarios
+// em Drive.js).
+function acaoArquivarPastas() {
+  var card = document.getElementById('cardArquivarPastas');
+  if (!card || card.classList.contains('carregando')) return;
+
+  card.classList.add('carregando');
+  var labelEl = card.querySelector('.util-card-label');
+  var labelOriginal = labelEl.textContent;
+  labelEl.textContent = 'Aguarde...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      if (!res || !res.sucesso) {
+        mostrarToast((res && res.erro) || 'Erro ao arquivar pastas.', 'erro');
+        return;
+      }
+
+      var temAvisos = res.avisos && res.avisos.length > 0;
+      var mensagem = (res.arquivados || 0) + ' pasta(s) arquivada(s).';
+      if (temAvisos) mensagem += ' (' + res.avisos.length + ' aviso(s) — ver Log de execução)';
+
+      mostrarToast(mensagem, temAvisos ? 'alerta' : 'sucesso');
+    })
+    .withFailureHandler(function(err) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      mostrarToast('Erro ao arquivar pastas: ' + err.message, 'erro');
+    })
+    .arquivarPastasEstagiarios();
+}
+
+// === GERENCIAR ESTAGIARIOS (botao "Gerenciar Estagiários", aba Utilitarios > Sistema) ===
+var APP_GERENCIAR_ESTAGIARIOS = {
+  lista: []
+};
+
+function abrirModalGerenciarEstagiarios() {
+  document.getElementById('modalGerenciarEstagiariosOverlay').classList.add('visivel');
+
+  var listaEl = document.getElementById('geListaEstagiarios');
+  listaEl.innerHTML = '<div class="ge-vazio" id="geCarregando">Carregando...</div>';
+
+  var btnSalvar = document.getElementById('btnSalvarGerenciarEstagiarios');
+  btnSalvar.disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btnSalvar.disabled = false;
+      if (!res || !res.sucesso) {
+        listaEl.innerHTML = '<div class="ge-vazio">' + ((res && res.erro) || 'Erro ao carregar estagiários.') + '</div>';
+        return;
+      }
+      APP_GERENCIAR_ESTAGIARIOS.lista = res.estagiarios || [];
+      renderizarListaGerenciarEstagiarios();
+    })
+    .withFailureHandler(function(err) {
+      btnSalvar.disabled = false;
+      listaEl.innerHTML = '<div class="ge-vazio">Erro: ' + err.message + '</div>';
+    })
+    .acaoListarEstagiariosParaGerenciar();
+}
+
+function renderizarListaGerenciarEstagiarios() {
+  var listaEl = document.getElementById('geListaEstagiarios');
+  var lista = APP_GERENCIAR_ESTAGIARIOS.lista;
+
+  if (!lista.length) {
+    listaEl.innerHTML = '<div class="ge-vazio">Nenhum estagiário ativo encontrado.</div>';
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(e) {
+    var idEscapado = String(e.id).replace(/"/g, '&quot;');
+    html += '<label class="ge-item">' +
+      '<input type="checkbox" class="ge-checkbox" value="' + idEscapado + '">' +
+      '<span class="ge-item-nome">' + (e.nome || '') + '</span>' +
+      '</label>';
+  });
+  listaEl.innerHTML = html;
+}
+
+function fecharModalGerenciarEstagiarios() {
+  document.getElementById('modalGerenciarEstagiariosOverlay').classList.remove('visivel');
+}
+
+document.getElementById('modalGerenciarEstagiariosOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalGerenciarEstagiarios();
+});
+
+function salvarGerenciarEstagiarios() {
+  var checkboxes = document.querySelectorAll('#geListaEstagiarios .ge-checkbox:checked');
+  var ids = Array.prototype.map.call(checkboxes, function(cb) { return cb.value; });
+
+  if (ids.length === 0) {
+    mostrarToast('Marque ao menos um estagiário para finalizar.', 'alerta');
+    return;
+  }
+
+  var btnSalvar = document.getElementById('btnSalvarGerenciarEstagiarios');
+  btnSalvar.disabled = true;
+  btnSalvar.innerHTML = 'Salvando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btnSalvar.disabled = false;
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Salvar';
+
+      if (!res || !res.sucesso) {
+        mostrarToast((res && res.erro) || 'Erro ao finalizar estagiários.', 'erro');
+        return;
+      }
+
+      if (res.avisoGeral) {
+        mostrarToast((res.mensagem || 'Estagiários finalizados.') + ' Porém houve falha ao sincronizar com a planilha GERAL: ' + res.avisoGeral, 'alerta');
+      } else {
+        mostrarToast(res.mensagem || 'Estagiários finalizados com sucesso!', 'sucesso');
+      }
+      fecharModalGerenciarEstagiarios();
+
+      // Atualiza a lista global de estagiarios (usada nos selects de Novo
+      // Pedido, Novo Acompanhamento e editar Diligência) para que os
+      // finalizados deixem de aparecer imediatamente, sem precisar recarregar
+      // a pagina inteira.
+      google.script.run
+        .withSuccessHandler(function(dados) {
+          if (dados && dados.estagiarios) APP.dados.estagiarios = dados.estagiarios;
+        })
+        .recarregarListaEstagiarios();
+    })
+    .withFailureHandler(function(err) {
+      btnSalvar.disabled = false;
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Salvar';
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .acaoFinalizarEstagiarios(ids);
+}
+
+// --- Modal generico de resultado (reaproveitavel por qualquer acao de Utilitarios) ---
+
+function abrirModalResultado(titulo, stats, avisos) {
+  document.getElementById('mrTitulo').textContent = titulo;
+
+  var statsEl = document.getElementById('mrStats');
+  statsEl.innerHTML = '';
+  stats.forEach(function(s) {
+    var div = document.createElement('div');
+    div.className = 'modal-resultado-stat';
+    div.innerHTML =
+      '<div class="modal-resultado-stat-valor">' + (s.valor || 0) + '</div>' +
+      '<div class="modal-resultado-stat-label">' + s.label + '</div>';
+    statsEl.appendChild(div);
+  });
+
+  var blocoAvisos = document.getElementById('mrAvisos');
+  var listaAvisos = document.getElementById('mrListaAvisos');
+  listaAvisos.innerHTML = '';
+  if (avisos && avisos.length > 0) {
+    avisos.forEach(function(a) {
+      var li = document.createElement('li');
+      li.textContent = a;
+      listaAvisos.appendChild(li);
+    });
+    blocoAvisos.style.display = '';
+  } else {
+    blocoAvisos.style.display = 'none';
+  }
+
+  document.getElementById('modalResultadoOverlay').classList.add('visivel');
+}
+
+function fecharModalResultado() {
+  document.getElementById('modalResultadoOverlay').classList.remove('visivel');
+}
+
+document.getElementById('modalResultadoOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalResultado();
+});
+
+// === ABA: AUDIENCIAS ===
+// Le a aba "audiencias" diretamente (somente leitura — ver Audiencias.js).
+// Vista padrao mostra so as audiencias da semana vindoura (semana = sabado a
+// sexta, decisao de Thales); "Mostrar passadas" troca para a lista completa.
+
+var _audienciasCarregado = false;
+
+function carregarAbaAudiencias() {
+  if (_audienciasCarregado) return; // ja carregado — so recarrega via botao de refresh
+
+  var wrapper = document.getElementById('secaoAudiencias');
+  if (wrapper) wrapper.style.opacity = '0.5';
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (wrapper) wrapper.style.opacity = '1';
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+      APP.dados.audiencias = resultado.audiencias || [];
+      _audienciasCarregado = true;
+      renderizarTabelaAudiencias();
+    })
+    .withFailureHandler(function(err) {
+      if (wrapper) wrapper.style.opacity = '1';
+      mostrarToast('Erro ao carregar Audiências: ' + err.message, 'erro');
+    })
+    .carregarDadosAbaAudiencias();
+}
+
+function recarregarAbaAudiencias() {
+  _audienciasCarregado = false;
+  carregarAbaAudiencias();
+}
+
+function inicializarFiltrosAudiencias() {
+  var input = document.getElementById('inputBuscaAudiencias');
+  if (input) {
+    input.addEventListener('input', function() {
+      APP_AUDIENCIAS.busca = this.value.trim();
+      renderizarTabelaAudiencias();
+    });
+  }
+}
+
+function alternarPassadasAudiencias() {
+  APP_AUDIENCIAS.mostrarPassadas = !APP_AUDIENCIAS.mostrarPassadas;
+  var btn = document.getElementById('btnTogglePassadasAudiencias');
+  if (btn) btn.classList.toggle('ativo', APP_AUDIENCIAS.mostrarPassadas);
+  renderizarTabelaAudiencias();
+}
+
+// Semana = sabado a sexta (decisao de Thales). Se hoje for sabado, o
+// "inicio" e o proprio hoje — nao o sabado anterior — entao a vista padrao
+// (hoje até o fim da semana) mostra a semana que comeca hoje, nao a que
+// acabou de terminar.
+function calcularLimitesSemanaAudiencias() {
+  var hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  var diasDesdeSabado = (hoje.getDay() - 6 + 7) % 7; // 0=dom...6=sab
+  var inicioSemana = new Date(hoje);
+  inicioSemana.setDate(hoje.getDate() - diasDesdeSabado);
+  var fimSemana = new Date(inicioSemana);
+  fimSemana.setDate(inicioSemana.getDate() + 6);
+  return { hoje: hoje.getTime(), fimSemana: fimSemana.getTime() };
+}
+
+function classificarAudiencia(reg, hojeTs) {
+  var ts = converterDataBRParaTimestamp(reg.data);
+  if (ts === null) return 'semana';
+  if (ts < hojeTs) return 'passada';
+  if (ts === hojeTs) return 'hoje';
+  return 'semana';
+}
+
+function corStatusAudiencia(status) {
+  if (status === 'passada') return 'var(--cinza-texto)';
+  if (status === 'hoje') return 'var(--cor-atraso)';
+  return 'var(--cor-encaminhado)';
+}
+
+function getAudienciasFiltradas() {
+  var lista = APP.dados.audiencias || [];
+  var limites = calcularLimitesSemanaAudiencias();
+
+  if (!APP_AUDIENCIAS.mostrarPassadas) {
+    lista = lista.filter(function(r) {
+      var ts = converterDataBRParaTimestamp(r.data);
+      return ts !== null && ts >= limites.hoje && ts <= limites.fimSemana;
+    });
+  }
+
+  if (APP_AUDIENCIAS.busca) {
+    var b = normalizar(APP_AUDIENCIAS.busca);
+    lista = lista.filter(function(r) {
+      return normalizar(r.vara).includes(b) ||
+        normalizar(r.assistido).includes(b) ||
+        normalizar(r.processo).includes(b);
+    });
+  }
+
+  // Passadas em DESC (mais recente primeiro), vindouras em ASC (mais próxima primeiro)
+  var hojeTs = calcularLimitesSemanaAudiencias().hoje;
+  var passadas = lista.filter(function(r) {
+    var ts = converterDataBRParaTimestamp(r.data);
+    return ts !== null && ts < hojeTs;
+  });
+  var vindouras = lista.filter(function(r) {
+    var ts = converterDataBRParaTimestamp(r.data);
+    return ts === null || ts >= hojeTs;
+  });
+  passadas.reverse();
+  return vindouras.concat(passadas);
+}
+
+var MESES_ABREV_AUDIENCIAS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+
+function renderizarCabecalhoDataAudiencia(reg, limites) {
+  var partes = String(reg.data || '').split('/');
+  var diaNum = partes[0] || '—';
+  var mesAbrev = partes[1] ? (MESES_ABREV_AUDIENCIAS[parseInt(partes[1], 10) - 1] || '') : '';
+  var cor = corStatusAudiencia(classificarAudiencia(reg, limites.hoje));
+  var extenso = mesAbrev + (reg.dia ? ', ' + reg.dia : '');
+
+  return '<tr class="audiencias-data-header">' +
+    '<td colspan="4">' +
+      '<div class="audiencias-data-linha">' +
+        '<span class="audiencias-data-dot" style="background:' + cor + '"></span>' +
+        '<span class="audiencias-data-numero">' + diaNum + '</span>' +
+        '<span class="audiencias-data-extenso">' + extenso + '</span>' +
+      '</div>' +
+    '</td>' +
+  '</tr>';
+}
+
+function renderizarCelulaProcessoAudiencia(reg, idx) {
+  if (!reg.processo) return '<span class="celula-vazio">—</span>';
+  return '<span class="audiencias-processo-cell">' +
+    '<span>' + reg.processo + '</span>' +
+    '<span class="material-symbols-outlined modal-copiar-icone" onclick="copiarProcessoAudienciaLinha(event, ' + idx + ')" title="Copiar processo" role="button" tabindex="0">content_copy</span>' +
+  '</span>';
+}
+
+function renderizarTabelaAudiencias() {
+  var lista = getAudienciasFiltradas();
+  var limites = calcularLimitesSemanaAudiencias();
+
+  document.getElementById('tabelaInfoAudiencias').innerHTML =
+    '<strong>' + lista.length + '</strong> audiência(s) — ' +
+    (APP_AUDIENCIAS.mostrarPassadas ? 'todas' : 'semana vindoura');
+
+  var corpo = document.getElementById('audienciasCorpo');
+
+  if (lista.length === 0) {
+    corpo.innerHTML = celulaVaziaTabela(4, 'Nenhuma audiência encontrada');
+    return;
+  }
+
+  var html = '';
+  var dataAnterior = null;
+  lista.forEach(function(reg, idx) {
+    if (reg.data !== dataAnterior) {
+      dataAnterior = reg.data;
+      html += renderizarCabecalhoDataAudiencia(reg, limites);
+    }
+    html +=
+      '<tr onclick="abrirModalAudiencia(' + idx + ')">' +
+        '<td>' + (reg.hora || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.vara || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td class="td-assistido">' + (reg.assistido || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td class="td-processo">' + renderizarCelulaProcessoAudiencia(reg, idx) + '</td>' +
+      '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+// --- Modal de detalhe (somente leitura) ---
+
+function abrirModalAudiencia(idx) {
+  var lista = getAudienciasFiltradas();
+  var reg = lista[idx];
+  if (!reg) return;
+  APP_AUDIENCIAS.registroAtual = reg;
+
+  document.getElementById('auAssistido').textContent = reg.assistido || '—';
+  document.getElementById('auData').textContent = reg.dia ? (reg.data + ' (' + reg.dia + ')') : (reg.data || '—');
+  document.getElementById('auHora').textContent = reg.hora || '—';
+  document.getElementById('auVara').textContent = reg.vara || '—';
+  document.getElementById('auTipo').textContent = reg.tipo || '—';
+  document.getElementById('auAdv').textContent = reg.adv || '—';
+  document.getElementById('auProcesso').textContent = reg.processo || '—';
+  document.getElementById('auObs').textContent = reg.obs || '—';
+
+  document.getElementById('modalAudienciaOverlay').classList.add('visivel');
+}
+
+function fecharModalAudiencia() {
+  document.getElementById('modalAudienciaOverlay').classList.remove('visivel');
+  APP_AUDIENCIAS.registroAtual = null;
+}
+
+document.getElementById('modalAudienciaOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalAudiencia();
+});
+
+function copiarProcessoAudienciaLinha(evt, idx) {
+  evt.stopPropagation();
+  var lista = getAudienciasFiltradas();
+  var reg = lista[idx];
+  copiarProcessoAudienciaValor(reg ? reg.processo : '');
+}
+
+function copiarProcessoAudiencia() {
+  copiarProcessoAudienciaValor(APP_AUDIENCIAS.registroAtual ? APP_AUDIENCIAS.registroAtual.processo : '');
+}
+
+function copiarProcessoAudienciaValor(processo) {
+  processo = String(processo || '');
+  if (!processo) return;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(processo).then(function() {
+      mostrarToast('Processo copiado!', 'sucesso');
+    }, function() { copiarProcessoFallback(processo); });
+  } else {
+    copiarProcessoFallback(processo);
+  }
+}
+
+var btnCopiarProcessoAudiencia = document.getElementById('btnCopiarProcessoAudiencia');
+if (btnCopiarProcessoAudiencia) {
+  btnCopiarProcessoAudiencia.addEventListener('click', function(e) { e.stopPropagation(); copiarProcessoAudiencia(); });
+  btnCopiarProcessoAudiencia.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copiarProcessoAudiencia(); }
+  });
+}
+
+// Card "Publicar Pauta da Semana" (aba Utilitarios > Classroom) — publica no
+// mural do Classroom a pauta de segunda a sexta da semana corrente (ver
+// publicarPautaSemanalAudiencias, Classroom.js), fora do gatilho automatico
+// de segunda-feira as 8h. Reune as audiencias de TODOS os registros da
+// semana, nao so as de Thales (que e o filtro aplicado so na listagem da
+// aba Audiencias).
+function acaoPublicarPautaSemanal() {
+  var card = document.getElementById('cardPublicarPautaSemana');
+  if (!card || card.classList.contains('carregando')) return;
+
+  card.classList.add('carregando');
+  var labelEl = card.querySelector('.util-card-label');
+  var labelOriginal = labelEl.textContent;
+  labelEl.textContent = 'Publicando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao publicar a pauta da semana.', 'erro');
+        return;
+      }
+
+      var msg = res.quantidade > 0
+        ? 'Pauta da semana publicada no Classroom (' + res.quantidade + ' audiência(s))!'
+        : 'Pauta da semana publicada no Classroom (nenhuma audiência esta semana).';
+      mostrarToast(msg, 'sucesso');
+    })
+    .withFailureHandler(function(err) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      mostrarToast('Erro ao publicar a pauta da semana: ' + err.message, 'erro');
+    })
+    .acaoPublicarPautaSemanal();
+}
+
+// === MODAL: FIA (Ficha Individual de Avaliacao) ===
+// Calculadora pura no cliente. Nada e salvo em nenhuma planilha.
+var FIA_ESTADO = { estrutura: null, faixas: null, notaMinima: 7 };
+
+function abrirModalFIA() {
+  fecharMenuGerenciar();
+
+  document.getElementById('fiaCorpo').innerHTML = '<div class="ge-vazio" id="fiaCarregando">Carregando estrutura da FIA...</div>';
+  document.getElementById('fiaRodape').style.display = 'none';
+  document.getElementById('modalFIAOverlay').classList.add('visivel');
+
+  if (FIA_ESTADO.estrutura) {
+    renderizarFIA();
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      FIA_ESTADO.estrutura = res.estrutura;
+      FIA_ESTADO.faixas = res.faixas;
+      FIA_ESTADO.notaMinima = res.notaMinimaAprovacao;
+      renderizarFIA();
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('fiaCorpo').innerHTML =
+        '<div class="ge-vazio">Erro ao carregar a estrutura da FIA: ' + err.message + '</div>';
+    })
+    .obterEstruturaFIA();
+}
+
+function fecharModalFIA() {
+  document.getElementById('modalFIAOverlay').classList.remove('visivel');
+}
+
+document.getElementById('modalFIAOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalFIA();
+});
+
+function renderizarFIA() {
+  var estrutura = FIA_ESTADO.estrutura;
+  var faixas = FIA_ESTADO.faixas;
+  var html = '';
+
+  estrutura.blocos.forEach(function(bloco) {
+    var pesoBloco = bloco.indicadores.reduce(function(soma, ind) { return soma + ind.peso; }, 0);
+
+    html += '<div class="fia-bloco" data-bloco="' + bloco.id + '">';
+    html += '  <div class="fia-bloco-header">';
+    html += '    <div class="fia-bloco-titulo">' + bloco.id + ') ' + bloco.nome +
+            '      <span class="fia-bloco-peso">peso ' + pesoBloco + '</span></div>';
+    html += '    <div class="fia-classificacao">';
+    ['baixa', 'media', 'alta'].forEach(function(nivel) {
+      var faixa = faixas[nivel];
+      var rotulo = nivel.charAt(0).toUpperCase() + nivel.slice(1);
+      html += '      <button type="button" class="fia-class-btn" data-bloco="' + bloco.id + '" data-nivel="' + nivel + '" ' +
+              'onclick="classificarBlocoFIA(\'' + bloco.id + '\',\'' + nivel + '\')" ' +
+              'title="Preenche automaticamente com ' + faixa.padrao + ' (faixa ' + faixa.min + '-' + faixa.max + ')">' +
+              rotulo + '</button>';
+    });
+    html += '    </div>';
+    html += '  </div>';
+
+    html += '  <table class="fia-tabela"><thead><tr><th>Indicador</th><th>Peso</th><th>Nota</th><th>Parcial</th></tr></thead><tbody>';
+    bloco.indicadores.forEach(function(ind) {
+      var alerta = ehIndicadorReprovacaoAutomatica(ind.id)
+        ? ' <span class="material-symbols-outlined fia-icone-alerta" title="Reprovação automática se a nota for menor que 7">error</span>'
+        : '';
+      html += '<tr data-indicador="' + ind.id + '">';
+      html += '  <td class="fia-td-nome">' + ind.nome + alerta + '</td>';
+      html += '  <td class="fia-td-peso">' + ind.peso + '</td>';
+      html += '  <td class="fia-td-nota"><input type="number" class="fia-input-nota" id="fiaNota_' + ind.id + '" ' +
+              'min="0" max="10" step="0.1" placeholder="0-10" oninput="recalcularFIA()"></td>';
+      html += '  <td class="fia-td-parcial" id="fiaParcial_' + ind.id + '">—</td>';
+      html += '</tr>';
+    });
+    html += '  </tbody><tfoot><tr>';
+    html += '    <td colspan="3" class="fia-td-subtotal-label">Total Parcial</td>';
+    html += '    <td class="fia-td-subtotal" id="fiaSubtotal_' + bloco.id + '">—</td>';
+    html += '  </tr></tfoot></table>';
+    html += '</div>';
+  });
+
+  html += '<div class="fia-alerta-reprovacao" id="fiaAlertaReprovacao" style="display:none;">' +
+          '<span class="material-symbols-outlined" style="font-size:18px;">warning</span>' +
+          'Reprovação automática: nota do indicador de Ética e/ou Produtividade abaixo de 7.</div>';
+
+  document.getElementById('fiaCorpo').innerHTML = html;
+  document.getElementById('fiaRodape').style.display = 'flex';
+  recalcularFIA();
+}
+
+function ehIndicadorReprovacaoAutomatica(indicadorId) {
+  return FIA_ESTADO.estrutura.reprovacaoAutomatica.some(function(regra) {
+    return regra.indicadorId === indicadorId;
+  });
+}
+
+function classificarBlocoFIA(blocoId, nivel) {
+  var faixa = FIA_ESTADO.faixas[nivel];
+  var bloco = FIA_ESTADO.estrutura.blocos.filter(function(b) { return b.id === blocoId; })[0];
+  if (!bloco) return;
+
+  bloco.indicadores.forEach(function(ind) {
+    document.getElementById('fiaNota_' + ind.id).value = faixa.padrao;
+  });
+
+  document.querySelectorAll('.fia-class-btn[data-bloco="' + blocoId + '"]').forEach(function(btn) {
+    btn.classList.toggle('fia-class-btn-ativo', btn.getAttribute('data-nivel') === nivel);
+  });
+
+  recalcularFIA();
+}
+
+// Arredondamento da NOTA FINAL (unico ponto de arredondamento de toda a FIA):
+//   fracao entre 0.01 e 0.40  -> arredonda para baixo
+//   fracao entre 0.41 e 0.64  -> arredonda para 0.5
+//   fracao entre 0.65 e 0.99  -> arredonda para cima
+function arredondarNotaFinalFIA(bruta) {
+  var parteInteira = Math.floor(bruta + 1e-9);
+  var fracao = Math.round((bruta - parteInteira) * 100) / 100;
+
+  if (fracao <= 0.40) return parteInteira;
+  if (fracao <= 0.64) return parteInteira + 0.5;
+  return parteInteira + 1;
+}
+
+function recalcularFIA() {
+  var estrutura = FIA_ESTADO.estrutura;
+  if (!estrutura) return;
+
+  var totalGeral = 0;
+  var algumaNotaPreenchida = false;
+  var reprovacaoAutomatica = false;
+
+  estrutura.blocos.forEach(function(bloco) {
+    var subtotalBloco = 0;
+
+    bloco.indicadores.forEach(function(ind) {
+      var input = document.getElementById('fiaNota_' + ind.id);
+      var parcialEl = document.getElementById('fiaParcial_' + ind.id);
+      var valor = parseFloat(input.value);
+
+      if (isNaN(valor)) {
+        parcialEl.textContent = '—';
+        return;
+      }
+
+      valor = Math.max(0, Math.min(10, valor));
+      algumaNotaPreenchida = true;
+
+      var parcial = valor * ind.peso;
+      subtotalBloco += parcial;
+      totalGeral += parcial;
+      parcialEl.textContent = parcial.toFixed(1);
+
+      if (ehIndicadorReprovacaoAutomatica(ind.id) && valor < 7) {
+        reprovacaoAutomatica = true;
+      }
+    });
+
+    document.getElementById('fiaSubtotal_' + bloco.id).textContent = subtotalBloco.toFixed(1);
+  });
+
+  document.getElementById('fiaAlertaReprovacao').style.display = reprovacaoAutomatica ? 'flex' : 'none';
+
+  var notaFinalEl = document.getElementById('fiaNotaFinal');
+  var badgeEl = document.getElementById('fiaBadgeSituacao');
+
+  if (!algumaNotaPreenchida) {
+    notaFinalEl.textContent = '—';
+    badgeEl.textContent = '—';
+    badgeEl.className = 'fia-badge';
+    return;
+  }
+
+  var notaBruta = totalGeral / 100;
+  var notaFinal = arredondarNotaFinalFIA(notaBruta);
+  notaFinalEl.textContent = notaFinal.toFixed(1).replace('.0', ',0').replace('.5', ',5');
+
+  var aprovado = !reprovacaoAutomatica && notaFinal >= FIA_ESTADO.notaMinima;
+  badgeEl.textContent = aprovado ? 'Aprovado' : 'Reprovado';
+  badgeEl.className = 'fia-badge ' + (aprovado ? 'fia-badge-aprovado' : 'fia-badge-reprovado');
+}
+
+// === MODAL: CALCULAR DIA UTIL ===
+function abrirModalCalcularDiaUtil() {
+  document.getElementById('cduData').value = '';
+  document.getElementById('cduPrazo').value = '';
+  document.getElementById('cduResultado').style.display = 'none';
+  document.getElementById('cduResultadoValor').textContent = '';
+  document.getElementById('modalCalcularDiaUtilOverlay').classList.add('visivel');
+}
+
+function fecharModalCalcularDiaUtil() {
+  document.getElementById('modalCalcularDiaUtilOverlay').classList.remove('visivel');
+}
+
+document.getElementById('modalCalcularDiaUtilOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalCalcularDiaUtil();
+});
+
+function executarCalcularDiaUtil() {
+  var data = document.getElementById('cduData').value;
+  var prazo = parseInt(document.getElementById('cduPrazo').value, 10);
+
+  if (!data) {
+    mostrarToast('Informe a data de início.', 'erro');
+    return;
+  }
+  if (!prazo || prazo < 1) {
+    mostrarToast('Informe um prazo em dias úteis (mínimo 1).', 'erro');
+    return;
+  }
+
+  var btn = document.getElementById('btnCalcularDiaUtil');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Calculando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">calculate</span> Calcular';
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao calcular.', 'erro');
+        return;
+      }
+
+      document.getElementById('cduResultadoValor').textContent = res.dataFinal + ' (' + res.diaSemana + ')';
+      document.getElementById('cduResultado').style.display = 'block';
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">calculate</span> Calcular';
+      mostrarToast('Erro ao calcular: ' + err.message, 'erro');
+    })
+    .acaoCalcularDiaUtil(data, prazo);
+}
+</script>

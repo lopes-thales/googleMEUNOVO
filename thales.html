@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel de Thales</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Display:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <?!= include('Styles') ?>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-logo">
+      PAINEL <span>DE THALES</span>
+    </div>
+    <div class="header-acoes">
+      <button class="btn-tema" id="btnAlternarTema" onclick="alternarTema()" title="Alternar tema claro/escuro">
+        <span class="material-symbols-outlined" id="iconeTema" style="font-size:19px;">dark_mode</span>
+      </button>
+      <div class="header-user">
+        <span class="material-symbols-outlined" style="font-size:18px;">owl</span>
+        <span id="saudacaoUsuario">Olá, <strong><?= nomeUsuario ?></strong></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- BARRA DE NAVEGACAO (abas + Gerenciar) -->
+  <div class="nav-bar">
+    <nav class="nav-tabs">
+      <div class="nav-tab" data-vista="geral">
+        <span class="material-symbols-outlined nav-tab-icon">pending_actions</span>
+        Geral
+      </div>
+      <div class="nav-tab ativo" data-vista="diligencias">
+        <span class="material-symbols-outlined nav-tab-icon">assignment</span>
+        Diligências
+      </div>
+      <div class="nav-tab" data-vista="distribuicao">
+        <span class="material-symbols-outlined nav-tab-icon">assignment_ind</span>
+        Distribuição
+      </div>
+      <div class="nav-tab" data-vista="iniciais">
+        <span class="material-symbols-outlined nav-tab-icon">description</span>
+        Iniciais
+      </div>
+      <div class="nav-tab" data-vista="acompanhamentos">
+        <span class="material-symbols-outlined nav-tab-icon">timeline</span>
+        Acompanhamentos
+      </div>
+      <div class="nav-tab" data-vista="panorama">
+        <span class="material-symbols-outlined nav-tab-icon">dashboard</span>
+        Panorama
+      </div>
+      <div class="nav-tab" data-vista="graficos">
+        <span class="material-symbols-outlined nav-tab-icon">bar_chart</span>
+        Gráficos
+      </div>
+      <div class="nav-tab" data-vista="audiencias">
+        <span class="material-symbols-outlined nav-tab-icon">calendar_month</span>
+        Audiências
+      </div>
+      <div class="nav-tab" data-vista="utilitarios">
+        <span class="material-symbols-outlined nav-tab-icon">build</span>
+        Utilitários
+      </div>
+    </nav>
+
+    <div class="dropdown-gerenciar" id="dropdownGerenciar">
+      <button class="btn-gerenciar" id="btnGerenciar" onclick="alternarMenuGerenciar()">
+        <span class="material-symbols-outlined" style="font-size:18px;">tune</span>
+        Gerenciar
+        <span class="material-symbols-outlined" style="font-size:18px;">arrow_drop_down</span>
+      </button>
+      <div class="menu-gerenciar" id="menuGerenciar">
+        <div class="menu-gerenciar-item" onclick="acaoGerenciarEnviarClassroom()">
+          <span class="material-symbols-outlined">send</span>
+          Enviar ao Classroom
+        </div>
+        <div class="menu-gerenciar-item" onclick="acaoGerenciarVerificarEntregas()">
+          <span class="material-symbols-outlined">move_to_inbox</span>
+          Verificar Entregas
+        </div>
+        <div class="menu-gerenciar-separador"></div>
+        <div class="menu-gerenciar-item" onclick="abrirModalNovoPedido()">
+          <span class="material-symbols-outlined">post_add</span>
+          Novo Pedido
+        </div>
+        <div class="menu-gerenciar-item" onclick="abrirModalNovoAcompanhamento()">
+          <span class="material-symbols-outlined">timeline</span>
+          Pedido de Acompanhamento
+        </div>
+        <div class="menu-gerenciar-item menu-gerenciar-item-stub" onclick="acaoGerenciarEmBreve('Aprovar Petições')">
+          <span class="material-symbols-outlined">gavel</span>
+          Aprovar Petições
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loadingWrapper" style="text-align:center; padding: 60px 0;">
+    <div class="spinner"></div>
+    <p class="loading-texto">Carregando dados...</p>
+  </div>
+
+  <!-- CONTEUDO PRINCIPAL -->
+  <div id="conteudoPrincipal" style="display:none;">
+    <div class="main">
+
+      <!-- ABA: GERAL (todas as atividades pendentes — status != Ok/Protocolado/Cancelada) -->
+      <div class="secao-vista" id="secaoGeral" style="display:none;">
+
+        <!-- CARDS RESUMO -->
+        <div class="cards-grid cards-grid-panorama" id="cardsGridGeral"></div>
+
+        <!-- TABELA: DILIGÊNCIAS -->
+        <div class="panorama-tabela-bloco" id="blocoGeralDiligencias">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">assignment</span>
+            Diligências
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="geralCabecalhoDiligencias"></thead>
+              <tbody id="geralCorpoDiligencias"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABELA: INICIAIS -->
+        <div class="panorama-tabela-bloco" id="blocoGeralIniciais">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">description</span>
+            Iniciais
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="geralCabecalhoIniciais"></thead>
+              <tbody id="geralCorpoIniciais"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABELA: ACOMPANHAMENTOS -->
+        <div class="panorama-tabela-bloco" id="blocoGeralAcompanhamentos">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">timeline</span>
+            Acompanhamentos
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="geralCabecalhoAcompanhamentos"></thead>
+              <tbody id="geralCorpoAcompanhamentos"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+      <!-- fim secaoGeral -->
+
+      <!-- ABA: DILIGENCIAS (visao atual) -->
+      <div class="secao-vista" id="secaoDiligencias">
+
+        <!-- CARDS RESUMO -->
+        <div class="cards-grid" id="cardsGrid"></div>
+
+        <!-- BARRA DE BUSCA -->
+        <div class="barra-busca">
+          <span class="material-symbols-outlined busca-icon">search</span>
+          <input
+            type="text"
+            id="inputBusca"
+            class="input-busca"
+            placeholder="Buscar por processo, assistido, diligência, estagiário, vara..."
+          >
+          <div class="busca-separador"></div>
+          <span class="material-symbols-outlined busca-icon" style="font-size:18px;">date_range</span>
+          <span class="busca-label">DF de</span>
+          <input type="date" id="inputDfDe" class="input-data">
+          <span class="busca-sep">até</span>
+          <input type="date" id="inputDfAte" class="input-data">
+          <button class="btn-limpar-datas" id="btnLimparDatas" onclick="limparFiltroDatas()" title="Limpar filtro de datas" style="display:none;">
+            <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+          </button>
+        </div>
+
+        <!-- TABELA -->
+        <div class="tabela-wrapper">
+          <div class="tabela-header-info">
+            <span id="tabelaInfo"></span>
+            <div id="tabelaHeaderDireita">
+              <div class="seletor-semestre" id="seletorSemestre">
+                <span class="material-symbols-outlined" style="font-size:16px;">event</span>
+                <select id="selectSemestre" class="select-semestre" onchange="mudarSemestre(this.value)">
+                  <option value="">— Todos os semestres —</option>
+                </select>
+              </div>
+              <div class="legenda-cores" id="legendaCores">
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-atraso)"></span> Em Atraso</span>
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-encaminhado)"></span> Encaminhado</span>
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-entregue)"></span> Entregue</span>
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-devolvida)"></span> Devolvida</span>
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-concluido)"></span> Ok / Protocolado</span>
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-cancelada)"></span> Cancelada</span>
+              </div>
+            </div>
+          </div>
+
+          <table>
+            <thead id="tabelaCabecalho"></thead>
+            <tbody id="tabelaCorpo"></tbody>
+          </table>
+
+          <div class="paginacao" id="paginacao"></div>
+        </div>
+        <!-- fim tabela-wrapper -->
+
+      </div>
+      <!-- fim secaoDiligencias -->
+
+      <!-- ABA: DISTRIBUIÇÃO (somente diligencias sem estagiario, sem envio ao -->
+      <!-- Classroom e fora dos status finais — ver Distribuicao.js) -->
+      <div class="secao-vista" id="secaoDistribuicao" style="display:none;">
+
+        <div class="tabela-wrapper">
+          <div class="tabela-header-info">
+            <span id="tabelaInfoDistribuicao"></span>
+          </div>
+
+          <table>
+            <thead id="tabelaCabecalhoDistribuicao"></thead>
+            <tbody id="tabelaCorpoDistribuicao"></tbody>
+          </table>
+        </div>
+
+        <div class="distribuicao-rodape">
+          <span class="distribuicao-contagem" id="distribuicaoContagemSelecionados"></span>
+          <div class="distribuicao-botoes">
+            <button class="btn btn-salvar" id="btnSalvarDistribuicao" onclick="acaoSalvarDistribuicaoClique(false)" disabled>
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+              Salvar
+            </button>
+            <button class="btn btn-enviar" id="btnSalvarEnviarDistribuicao" onclick="acaoSalvarDistribuicaoClique(true)" disabled>
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span>
+              Salvar e Enviar
+            </button>
+          </div>
+        </div>
+
+        <!-- Mesmo grafico "Complexas, simples e acompanhamentos por estagiário"
+             exibido na aba Gráficos (ver renderizarGraficoPorEstagiario, Scripts.html) -->
+        <div class="graficos-card distribuicao-grafico">
+          <div class="graficos-card-header">
+            <div class="graficos-card-titulo">
+              <span class="material-symbols-outlined" style="font-size:18px;">stacked_bar_chart</span>
+              Complexas, simples e acompanhamentos por estagiário
+            </div>
+            <div class="legenda-cores" id="distribuicaoLegendaPecas"></div>
+          </div>
+          <div class="grafico-multi-wrap">
+            <div class="grafico-multi-eixo" id="distribuicaoEixoPecas"></div>
+            <div class="grafico-multi-scroll">
+              <div class="grafico-multi-plot" id="distribuicaoPlotPecas"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- fim secaoDistribuicao -->
+
+    <!-- ABA: INICIAIS -->
+    <div class="secao-vista" id="secaoIniciais" style="display:none;">
+      <div class="cards-grid" id="cardsGridIniciais"></div>
+      <div class="barra-busca">
+        <span class="material-symbols-outlined busca-icon">search</span>
+        <input type="text" id="inputBuscaIniciais" class="input-busca" placeholder="Buscar por assistido(a) ou estagiário(a)...">
+        <div class="busca-separador"></div>
+        <span class="material-symbols-outlined busca-icon" style="font-size:18px;">date_range</span>
+        <span class="busca-label">DF de</span>
+        <input type="date" id="inputDfDeIniciais" class="input-data">
+        <span class="busca-sep">até</span>
+        <input type="date" id="inputDfAteIniciais" class="input-data">
+        <button class="btn-limpar-datas" id="btnLimparDatasIniciais" onclick="limparFiltroDatasIniciais()" title="Limpar filtro de datas" style="display:none;">
+          <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+        </button>
+      </div>
+
+      <div class="tabela-wrapper">
+        <div class="tabela-header-info">
+          <span id="tabelaInfoIniciais"></span>
+          <div id="tabelaHeaderDireitaIniciais">
+            <div class="seletor-semestre" id="seletorSemestreIniciais">
+              <span class="material-symbols-outlined" style="font-size:16px;">event</span>
+              <select id="selectSemestreIniciais" class="select-semestre" onchange="mudarSemestreIniciais(this.value)">
+                <option value="">— Todos os semestres —</option>
+              </select>
+            </div>
+            <div class="legenda-cores" id="legendaCoresIniciais">
+              <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-atraso)"></span> Em Atraso</span>
+              <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-encaminhado)"></span> Encaminhado</span>
+              <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-entregue)"></span> Entregue</span>
+              <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-devolvida)"></span> Devolvida</span>
+              <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-concluido)"></span> Ok / Protocolado</span>
+              <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-cancelada)"></span> Cancelada</span>
+            </div>
+          </div>
+        </div>
+        <table>
+          <thead id="tabelaCabecalhoIniciais"></thead>
+          <tbody id="tabelaCorpoIniciais"></tbody>
+        </table>
+        <div class="paginacao" id="paginacaoIniciais"></div>
+      </div>
+    </div>
+
+      <!-- ABA: ACOMPANHAMENTOS -->
+      <div class="secao-vista" id="secaoAcompanhamentos" style="display:none;">
+        <div class="cards-grid" id="cardsGridAcompanhamentos"></div>
+
+        <div class="barra-busca">
+          <span class="material-symbols-outlined busca-icon">search</span>
+          <input type="text" id="inputBuscaAcompanhamentos" class="input-busca" placeholder="Buscar por processo ou estagiário(a)...">
+          <div class="busca-separador"></div>
+          <span class="material-symbols-outlined busca-icon" style="font-size:18px;">date_range</span>
+          <span class="busca-label">Entrega de</span>
+          <input type="date" id="inputDfDeAcompanhamentos" class="input-data">
+          <span class="busca-sep">até</span>
+          <input type="date" id="inputDfAteAcompanhamentos" class="input-data">
+          <button class="btn-limpar-datas" id="btnLimparDatasAcompanhamentos" onclick="limparFiltroDatasAcompanhamentos()" title="Limpar filtro de datas" style="display:none;">
+            <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+          </button>
+        </div>
+
+        <div class="tabela-wrapper">
+          <div class="tabela-header-info">
+            <span id="tabelaInfoAcompanhamentos"></span>
+            <div id="tabelaHeaderDireitaAcompanhamentos">
+              <div class="seletor-semestre" id="seletorSemestreAcompanhamentos">
+                <span class="material-symbols-outlined" style="font-size:16px;">event</span>
+                <select id="selectSemestreAcompanhamentos" class="select-semestre" onchange="mudarSemestreAcompanhamentos(this.value)">
+                  <option value="">— Todos os semestres —</option>
+                </select>
+              </div>
+              <div class="legenda-cores" id="legendaCoresAcompanhamentos">
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-atraso)"></span> Em Atraso</span>
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-encaminhado)"></span> Encaminhado</span>
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-entregue)"></span> Entregue</span>
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-devolvida)"></span> Devolvida</span>
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-concluido)"></span> Ok</span>
+                <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-cancelada)"></span> Cancelada</span>
+              </div>
+            </div>
+          </div>
+
+          <table>
+            <thead id="tabelaCabecalhoAcompanhamentos"></thead>
+            <tbody id="tabelaCorpoAcompanhamentos"></tbody>
+          </table>
+
+          <div class="paginacao" id="paginacaoAcompanhamentos"></div>
+        </div>
+      </div>
+
+      <!-- ABA: PANORAMA -->
+      <div class="secao-vista" id="secaoPanorama" style="display:none;">
+
+        <!-- SELETORES DE SEMESTRE E ALUNO -->
+        <div class="painel-semestre-panorama">
+          <span class="material-symbols-outlined" style="font-size:18px;">event</span>
+          <span class="busca-label">Semestre</span>
+          <select id="selectSemestrePanorama" class="select-semestre" onchange="mudarSemestrePanorama(this.value)">
+            <option value="">— Nenhum semestre encontrado —</option>
+          </select>
+
+          <span class="painel-semestre-separador"></span>
+
+          <span class="material-symbols-outlined" style="font-size:18px;">school</span>
+          <span class="busca-label">Aluno</span>
+          <select id="selectAlunoPanorama" class="select-semestre" onchange="mudarAlunoPanorama(this.value)">
+            <option value="">— Todos os alunos —</option>
+          </select>
+        </div>
+
+        <!-- CARDS RESUMO -->
+        <div class="cards-grid cards-grid-panorama" id="cardsGridPanorama"></div>
+
+        <!-- TABELA: DILIGÊNCIAS -->
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">assignment</span>
+            Diligências
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="panoramaCabecalhoDiligencias"></thead>
+              <tbody id="panoramaCorpoDiligencias"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABELA: INICIAIS -->
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">description</span>
+            Iniciais
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="panoramaCabecalhoIniciais"></thead>
+              <tbody id="panoramaCorpoIniciais"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABELA: ACOMPANHAMENTOS -->
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">timeline</span>
+            Acompanhamentos
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="panoramaCabecalhoAcompanhamentos"></thead>
+              <tbody id="panoramaCorpoAcompanhamentos"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABELA: ATENDIMENTOS -->
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">support_agent</span>
+            Atendimentos
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="panoramaCabecalhoAtendimentos"></thead>
+              <tbody id="panoramaCorpoAtendimentos"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ABA: GRAFICOS -->
+      <div class="secao-vista" id="secaoGraficos" style="display:none;">
+        <div class="graficos-card">
+          <div class="graficos-card-header">
+            <div class="graficos-card-titulo">
+              <span class="material-symbols-outlined" style="font-size:18px;">bar_chart</span>
+              Produção dos alunos ativos
+            </div>
+            <span class="graficos-card-subtitulo" id="graficosSubtitulo"></span>
+          </div>
+          <div id="graficosConteudo"></div>
+        </div>
+
+        <div class="graficos-card">
+          <div class="graficos-card-header">
+            <div class="graficos-card-titulo">
+              <span class="material-symbols-outlined" style="font-size:18px;">stacked_bar_chart</span>
+              Complexas, simples e acompanhamentos por estagiário
+            </div>
+            <div class="legenda-cores" id="graficosLegendaPecas"></div>
+          </div>
+          <div class="grafico-multi-wrap">
+            <div class="grafico-multi-eixo" id="graficosEixoPecas"></div>
+            <div class="grafico-multi-scroll">
+              <div class="grafico-multi-plot" id="graficosPlotPecas"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="graficos-card">
+          <div class="graficos-card-header">
+            <div class="graficos-card-titulo">
+              <span class="material-symbols-outlined" style="font-size:18px;">stacked_bar_chart</span>
+              Atendimentos e iniciais por estagiário
+            </div>
+            <div class="legenda-cores" id="graficosLegendaAtendIniciais"></div>
+          </div>
+          <div class="grafico-multi-wrap">
+            <div class="grafico-multi-eixo" id="graficosEixoAtendIniciais"></div>
+            <div class="grafico-multi-scroll">
+              <div class="grafico-multi-plot" id="graficosPlotAtendIniciais"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ABA: AUDIENCIAS -->
+      <div class="secao-vista" id="secaoAudiencias" style="display:none;">
+        <div class="barra-busca">
+          <span class="material-symbols-outlined busca-icon">search</span>
+          <input
+            type="text"
+            id="inputBuscaAudiencias"
+            class="input-busca"
+            placeholder="Buscar por vara, assistido(a) ou processo..."
+          >
+          <div class="busca-separador"></div>
+          <button class="btn-toggle-passadas" id="btnTogglePassadasAudiencias" onclick="alternarPassadasAudiencias()">
+            <span class="material-symbols-outlined" style="font-size:16px;">history</span>
+            Todas audiências
+          </button>
+          <button class="audiencias-btn-atualizar" id="audienciasBtnAtualizar" onclick="recarregarAbaAudiencias()" title="Recarregar audiências">
+            <span class="material-symbols-outlined" style="font-size:18px;">refresh</span>
+          </button>
+        </div>
+
+        <div class="tabela-wrapper">
+          <div class="tabela-header-info">
+            <span id="tabelaInfoAudiencias"></span>
+            <div class="legenda-cores" id="legendaCoresAudiencias">
+              <span class="legenda-item"><span class="legenda-dot" style="background:var(--cinza-texto)"></span> Passada</span>
+              <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-atraso)"></span> Hoje</span>
+              <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-encaminhado)"></span> Na semana</span>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th>Vara</th>
+                <th>Assistido(a)</th>
+                <th>Processo</th>
+              </tr>
+            </thead>
+            <tbody id="audienciasCorpo"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ABA: UTILITARIOS -->
+      <div class="secao-vista" id="secaoUtilitarios" style="display:none;">
+        <div class="utilitarios-pagina">
+
+          <!-- Secao: Sistema -->
+          <div class="utilitarios-secao">
+            <div class="utilitarios-secao-titulo">
+              <span class="material-symbols-outlined">settings</span>
+              Sistema
+            </div>
+            <div class="utilitarios-cards">
+              <div class="util-card" id="cardPreencherSemestre" onclick="acaoPreencherSemestre()">
+                <div class="util-card-icone">
+                  <span class="material-symbols-outlined">event_repeat</span>
+                </div>
+                <div class="util-card-label">Preencher Semestre</div>
+              </div>
+              <div class="util-card" id="cardPreencherDfFinal" onclick="acaoPreencherDfFinal()">
+                <div class="util-card-icone">
+                  <span class="material-symbols-outlined">edit_calendar</span>
+                </div>
+                <div class="util-card-label">Preencher DF Final</div>
+              </div>
+              <div class="util-card" id="cardEnviarParaSecretaria" onclick="acaoEnviarParaSecretaria()">
+                <div class="util-card-icone" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M14 3v5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8 14h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    <path d="m12 11 3 3-3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div class="util-card-label">Enviar para Secretaria</div>
+              </div>
+              <div class="util-card" id="cardSincronizarGeral" onclick="acaoSincronizarGeral()">
+                <div class="util-card-icone">
+                  <span class="material-symbols-outlined">sync</span>
+                </div>
+                <div class="util-card-label">Sincronizar com GERAL</div>
+              </div>
+              <div class="util-card" id="cardGerenciarEstagiarios" onclick="abrirModalGerenciarEstagiarios()">
+                <div class="util-card-icone">
+                  <span class="material-symbols-outlined">groups</span>
+                </div>
+                <div class="util-card-label">Gerenciar Estagiários</div>
+              </div>
+              <div class="util-card" id="cardVerificarProtocolos" onclick="acaoVerificarProtocolosIniciais()">
+                <div class="util-card-icone">
+                  <span class="material-symbols-outlined">fact_check</span>
+                </div>
+                <div class="util-card-label">Verificar Protocolos</div>
+              </div>
+              <div class="util-card" id="cardCalcularDiaUtil" onclick="abrirModalCalcularDiaUtil()">
+                <div class="util-card-icone">
+                  <span class="material-symbols-outlined">event_available</span>
+                </div>
+                <div class="util-card-label">Calcular Dia Útil</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Secao: Classroom + Drive (lado a lado) -->
+          <div class="utilitarios-linha">
+            <div class="utilitarios-secao" data-cor="classroom">
+              <div class="utilitarios-secao-titulo">
+                <span class="material-symbols-outlined">school</span>
+                Classroom
+              </div>
+              <div class="utilitarios-cards">
+                <div class="util-card" id="cardEnviarCobrancas" onclick="acaoGerenciarEnviarCobrancas()">
+                  <div class="util-card-icone">
+                    <span class="material-symbols-outlined">campaign</span>
+                  </div>
+                  <div class="util-card-label">Enviar Cobranças</div>
+                </div>
+                <div class="util-card" id="cardTransferirAtividade" onclick="abrirModalTransferirBusca()">
+                  <div class="util-card-icone">
+                    <span class="material-symbols-outlined">swap_horiz</span>
+                  </div>
+                  <div class="util-card-label">Transferir Atividade</div>
+                </div>
+                <div class="util-card" id="cardPublicarPautaSemana" onclick="acaoPublicarPautaSemanal()" title="Publicar a pauta da semana (segunda a sexta) no mural do Classroom">
+                  <div class="util-card-icone">
+                    <span class="material-symbols-outlined">event_upcoming</span>
+                  </div>
+                  <div class="util-card-label">Publicar Pauta da Semana</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Secao: Drive -->
+            <div class="utilitarios-secao" data-cor="drive">
+              <div class="utilitarios-secao-titulo">
+                <span class="material-symbols-outlined">folder_open</span>
+                Drive
+              </div>
+              <div class="utilitarios-cards">
+                <div class="util-card" id="cardOrganizarPastas" onclick="acaoOrganizarPastas()">
+                  <div class="util-card-icone">
+                    <span class="material-symbols-outlined">drive_file_move</span>
+                  </div>
+                  <div class="util-card-label">Organizar Pastas</div>
+                </div>
+                <div class="util-card" id="cardArquivarPastas" onclick="acaoArquivarPastas()">
+                  <div class="util-card-icone">
+                    <span class="material-symbols-outlined">archive</span>
+                  </div>
+                  <div class="util-card-label">Arquivar Pastas</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Secao: FIA + Relatorio (lado a lado) -->
+          <div class="utilitarios-linha">
+            <div class="utilitarios-secao" data-cor="fia">
+              <div class="utilitarios-secao-titulo">
+                <span class="material-symbols-outlined">account_balance</span>
+                FIA
+              </div>
+              <div class="utilitarios-cards">
+                <div class="util-card" id="cardPreencherFIA" onclick="abrirModalFIA()">
+                  <div class="util-card-icone">
+                    <span class="material-symbols-outlined">rule</span>
+                  </div>
+                  <div class="util-card-label">Preencher FIA</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Secao: Relatorio -->
+            <div class="utilitarios-secao" data-cor="relatorio">
+              <div class="utilitarios-secao-titulo">
+                <span class="material-symbols-outlined">bar_chart</span>
+                Relatório
+              </div>
+              <div class="utilitarios-cards"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL (mais largo que alto — duas colunas) -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal modal-largo">
+
+      <div class="modal-header">
+        <div class="modal-processo" id="modalProcesso"></div>
+        <div class="modal-assistido" id="modalAssistido"></div>
+        <div id="modalBadges"></div>
+        <button class="modal-fechar" onclick="fecharModal()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-alerta-atraso" id="modalAlertaAtraso" style="display:none;">
+        <span class="material-symbols-outlined" style="font-size:18px;">warning</span>
+        Esta diligência está em atraso.
+      </div>
+
+      <div class="modal-corpo modal-corpo-duas-colunas">
+
+        <!-- COLUNA ESQUERDA: dados do processo (somente leitura) -->
+        <div class="modal-coluna">
+          <div class="modal-secao">
+            <div class="modal-secao-titulo">Identificação</div>
+            <div class="modal-grid">
+              <div>
+                <div class="modal-campo-label">ID</div>
+                <div class="modal-campo-valor" id="mId"></div>
+              </div>
+              <div>
+                <div class="modal-campo-label">Processo N°</div>
+                <div class="modal-campo-valor modal-campo-valor-copiavel">
+                  <span id="mProcesso"></span>
+                  <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcesso" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+                </div>
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <div class="modal-campo-label">Assistido(a)</div>
+                <div class="modal-campo-valor" id="mAssistido"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-secao">
+            <div class="modal-secao-titulo">Diligência</div>
+            <div class="modal-grid">
+              <div>
+                <div class="modal-campo-label">Descrição</div>
+                <div class="modal-campo-valor" id="mDiligencia"></div>
+              </div>
+              <div>
+                <div class="modal-campo-label">Prazo</div>
+                <div class="modal-campo-valor" id="mPrazo"></div>
+              </div>
+              <div>
+                <div class="modal-campo-label">Data de Início (DI)</div>
+                <div class="modal-campo-valor" id="mDi"></div>
+              </div>
+              <div>
+                <div class="modal-campo-label">Vencimento (DF)</div>
+                <div class="modal-campo-valor" id="mDf"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-secao">
+            <div class="modal-secao-titulo">Classroom</div>
+            <div class="modal-campo-valor" id="mLink">—</div>
+            <div class="modal-grid" style="margin-top:10px;">
+              <div>
+                <div class="modal-campo-label">Criado em (DI CLASS)</div>
+                <div class="modal-campo-valor" id="mDiClass">—</div>
+              </div>
+              <div>
+                <div class="modal-campo-label">Vencimento (DF CLASS)</div>
+                <div class="modal-campo-valor" id="mDfClass">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-secao" id="secaoAlteradoEm">
+            <div class="modal-campo-label">Última alteração</div>
+            <div class="modal-campo-valor modal-campo-valor-secundario" id="mAlteradoEm">—</div>
+          </div>
+        </div>
+
+        <!-- COLUNA DIREITA: campos editaveis -->
+        <div class="modal-coluna">
+          <div class="modal-secao">
+            <div class="modal-secao-titulo">Classificação</div>
+            <div class="modal-grid">
+              <div>
+                <div class="modal-campo-label">Estagiário(a)</div>
+                <div class="modal-campo-editavel">
+                  <select class="modal-select" id="editEstagiario">
+                    <option value="">— Não atribuído —</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div class="modal-campo-label">Vara</div>
+                <div class="modal-campo-editavel">
+                  <select class="modal-select" id="editVara">
+                    <option value="">— Não informado —</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div class="modal-campo-label">Status</div>
+                <div class="modal-campo-editavel">
+                  <select class="modal-select" id="editStatus">
+                    <option value="">— Sem status —</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div class="modal-campo-label">Espécie</div>
+                <div class="modal-campo-editavel">
+                  <select class="modal-select" id="editEspecie">
+                    <option value="">— Não informado —</option>
+                  </select>
+                </div>
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <div class="modal-campo-label">Subespécie (Peça)</div>
+                <div class="modal-campo-valor modal-campo-calculado" id="displaySubespecie">—</div>
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <div class="modal-campo-label">Observações</div>
+                <div class="modal-campo-editavel">
+                  <textarea class="modal-textarea" id="editObs" placeholder="Observações sobre a diligência..."></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModal()">Fechar</button>
+        <button class="btn btn-salvar" id="btnSalvar" onclick="salvarModal()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          Salvar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <!-- MODAL: NOVO PEDIDO -->
+  <div class="modal-overlay" id="modalNovoPedidoOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo">GERENCIAR</div>
+        <div class="modal-assistido">Novo Pedido</div>
+        <button class="modal-fechar" onclick="fecharModalNovoPedido()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Processo N°</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="npProcesso" placeholder="0000000-00.0000.0.00.0000">
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Assistido(a)</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="npAssistido" placeholder="Nome do assistido(a)">
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Prazo (dias úteis)</div>
+              <div class="modal-campo-editavel">
+                <input type="number" min="1" step="1" class="modal-select" id="npPrazo" placeholder="Ex.: 5">
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Estagiário(a)</div>
+              <div class="modal-campo-editavel">
+                <select class="modal-select" id="npEstagiario">
+                  <option value="">— Selecione —</option>
+                </select>
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Espécie</div>
+              <div class="modal-campo-editavel">
+                <select class="modal-select" id="npEspecie">
+                  <option value="">— Selecione —</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalNovoPedido()">Cancelar</button>
+        <button class="btn btn-salvar" id="btnSalvarNovoPedido" onclick="salvarNovoPedido()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVO ACOMPANHAMENTO -->
+  <div class="modal-overlay" id="modalNovoAcompanhamentoOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo">GERENCIAR</div>
+        <div class="modal-assistido">Pedido de Acompanhamento</div>
+        <button class="modal-fechar" onclick="fecharModalNovoAcompanhamento()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Processo N°</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="naProcesso" placeholder="0000000-00.0000.0.00.0000">
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Prazo (dias úteis)</div>
+              <div class="modal-campo-editavel">
+                <input type="number" min="1" step="1" class="modal-select" id="naPrazo" placeholder="Ex.: 5">
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Estagiário(a)</div>
+              <div class="modal-campo-editavel">
+                <select class="modal-select" id="naEstagiario">
+                  <option value="">— Selecione —</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalNovoAcompanhamento()">Cancelar</button>
+        <button class="btn btn-salvar" id="btnSalvarNovoAcompanhamento" onclick="salvarNovoAcompanhamento()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: TRANSFERIR ATIVIDADE (etapa 1 — buscar por ID) -->
+  <div class="modal-overlay" id="modalTransferirBuscaOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo">GERENCIAR</div>
+        <div class="modal-assistido">Transferir Atividade</div>
+        <button class="modal-fechar" onclick="fecharModalTransferirBusca()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">ID da Diligência</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="tfId" placeholder="Ex.: 20016">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalTransferirBusca()">Cancelar</button>
+        <button class="btn btn-salvar" id="btnBuscarTransferir" onclick="buscarDiligenciaTransferencia()">Ok</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: TRANSFERIR ATIVIDADE (etapa 2 — dados + confirmação) -->
+  <div class="modal-overlay" id="modalTransferirDetalheOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo" id="mtProcesso">GERENCIAR</div>
+        <div class="modal-assistido">Transferir Atividade</div>
+        <button class="modal-fechar" onclick="fecharModalTransferirDetalhe()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Nome do Aluno</div>
+              <div class="modal-campo-valor" id="mtAssistido"></div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Espécie</div>
+              <div class="modal-campo-valor" id="mtEspecie"></div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Status</div>
+              <div class="modal-campo-valor" id="mtStatus"></div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Estagiário(a) atual</div>
+              <div class="modal-campo-valor" id="mtEstagiarioAtual"></div>
+            </div>
+            <div>
+              <div class="modal-campo-label">DF</div>
+              <div class="modal-campo-editavel">
+                <input type="date" class="modal-select" id="tfDf">
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Novo Estagiário(a)</div>
+              <div class="modal-campo-editavel">
+                <select class="modal-select" id="tfNovoEstagiario">
+                  <option value="">— Selecione —</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalTransferirDetalhe()">Cancelar</button>
+        <button class="btn btn-salvar" id="btnConfirmarTransferir" onclick="confirmarTransferencia()">Ok</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CALCULAR DIA UTIL -->
+  <div class="modal-overlay" id="modalCalcularDiaUtilOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo">SISTEMA</div>
+        <div class="modal-assistido">Calcular Dia Útil</div>
+        <button class="modal-fechar" onclick="fecharModalCalcularDiaUtil()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="fia-aviso-nao-salva">
+        <span class="material-symbols-outlined" style="font-size:16px;">info</span>
+        Este calculador não salva nenhum dado.
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-editavel">
+                <input type="date" class="modal-select" id="cduData">
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Prazo (dias úteis)</div>
+              <div class="modal-campo-editavel">
+                <input type="number" min="1" step="1" class="modal-select" id="cduPrazo" placeholder="Ex.: 5">
+              </div>
+            </div>
+          </div>
+
+          <div id="cduResultado" class="cdu-resultado" style="display:none;">
+            <div class="modal-campo-label">Data Final</div>
+            <div class="cdu-resultado-valor" id="cduResultadoValor"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalCalcularDiaUtil()">Fechar</button>
+        <button class="btn btn-salvar" id="btnCalcularDiaUtil" onclick="executarCalcularDiaUtil()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">calculate</span>
+          Calcular
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: GERENCIAR ESTAGIARIOS -->
+  <div class="modal-overlay" id="modalGerenciarEstagiariosOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo">SISTEMA</div>
+        <div class="modal-assistido">Gerenciar Estagiários</div>
+        <button class="modal-fechar" onclick="fecharModalGerenciarEstagiarios()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <p class="ge-instrucao">
+            Marque os estagiários que serão finalizados. Estagiários finalizados deixam de aparecer nos seletores de novos registros.
+          </p>
+          <div class="ge-lista" id="geListaEstagiarios">
+            <div class="ge-vazio" id="geCarregando">Carregando...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalGerenciarEstagiarios()">Cancelar</button>
+        <button class="btn btn-salvar" id="btnSalvarGerenciarEstagiarios" onclick="salvarGerenciarEstagiarios()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ACOMPANHAMENTO (detalhe/edicao) -->
+  <div class="modal-overlay" id="modalAcompanhamentoOverlay">
+    <div class="modal modal-estreito">
+
+      <div class="modal-header">
+        <div class="modal-processo" id="acProcessoLabel"></div>
+        <div class="modal-assistido" id="acEstagiarioNome"></div>
+        <div id="acBadges"></div>
+        <button class="modal-fechar" onclick="fecharModalAcompanhamento()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-alerta-atraso" id="acAlertaAtraso" style="display:none;">
+        <span class="material-symbols-outlined" style="font-size:18px;">warning</span>
+        Este acompanhamento está em atraso.
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-secao-titulo">Identificação</div>
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">ID</div>
+              <div class="modal-campo-valor" id="acId"></div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Estagiário(a)</div>
+              <div class="modal-campo-valor" id="acEstagiario"></div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Processo N°</div>
+              <div class="modal-campo-valor modal-campo-valor-copiavel">
+                <span id="acProcesso"></span>
+                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoAcompanhamento" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-secao">
+          <div class="modal-secao-titulo">Prazos</div>
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-valor" id="acData"></div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Data de Entrega</div>
+              <div class="modal-campo-valor" id="acDataEntrega"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-secao">
+          <div class="modal-secao-titulo">Classroom</div>
+          <div class="modal-campo-valor" id="acLink">—</div>
+          <div class="modal-grid" style="margin-top:10px;">
+            <div>
+              <div class="modal-campo-label">Criado em (DI CLASS)</div>
+              <div class="modal-campo-valor" id="acDiClass">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Vencimento (DF CLASS)</div>
+              <div class="modal-campo-valor" id="acDfClass">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-secao">
+          <div class="modal-secao-titulo">Classificação</div>
+          <div class="modal-grid">
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Status</div>
+              <div class="modal-campo-editavel">
+                <select class="modal-select" id="acEditStatus">
+                  <option value="">— Sem status —</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalAcompanhamento()">Fechar</button>
+        <button class="btn btn-salvar" id="btnSalvarAcompanhamento" onclick="salvarModalAcompanhamento()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          Salvar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: INICIAIS -->
+<div class="modal-overlay" id="modalIniciaisOverlay">
+  <div class="modal modal-largo">
+
+    <div class="modal-header">
+      <div class="modal-processo" id="miProcessoLabel"></div>
+      <div class="modal-assistido" id="miAssistido"></div>
+      <div id="miBadges"></div>
+      <button class="modal-fechar" onclick="fecharModalIniciais()">
+        <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+      </button>
+    </div>
+
+    <div class="modal-alerta-atraso" id="miAlertaAtraso" style="display:none;">
+      <span class="material-symbols-outlined" style="font-size:18px;">warning</span>
+      Esta inicial está em atraso.
+    </div>
+
+    <div class="modal-corpo modal-corpo-duas-colunas">
+
+      <div class="modal-coluna">
+        <div class="modal-secao">
+          <div class="modal-secao-titulo">Identificação</div>
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">ID</div>
+              <div class="modal-campo-valor" id="miId"></div>
+            </div>
+            <div>
+              <div class="modal-campo-label">CPF</div>
+              <div class="modal-campo-valor" id="miCpf"></div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Assistido(a)</div>
+              <div class="modal-campo-valor" id="miAssistidoValor"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-secao">
+          <div class="modal-secao-titulo">Pedido</div>
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Espécie</div>
+              <div class="modal-campo-valor" id="miEspecie"></div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Estagiário(a)</div>
+              <div class="modal-campo-valor" id="miEstagiario"></div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-valor" id="miData"></div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Vencimento (DF)</div>
+              <div class="modal-campo-valor" id="miDf"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-secao">
+          <div class="modal-secao-titulo">Protocolo</div>
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Processo N°</div>
+              <div class="modal-campo-valor modal-campo-valor-copiavel">
+                <span id="miProcesso">—</span>
+                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoIniciais" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Vara</div>
+              <div class="modal-campo-valor" id="miVara">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-secao">
+          <div class="modal-secao-titulo">Classroom</div>
+          <div class="modal-campo-valor" id="miLink">—</div>
+          <div class="modal-grid" style="margin-top:10px;">
+            <div>
+              <div class="modal-campo-label">Criado em (DI CLASS)</div>
+              <div class="modal-campo-valor" id="miDiClass">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Vencimento (DF CLASS)</div>
+              <div class="modal-campo-valor" id="miDfClass">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-secao">
+          <div class="modal-campo-label">Última alteração</div>
+          <div class="modal-campo-valor modal-campo-valor-secundario" id="miAlteradoEm">—</div>
+        </div>
+      </div>
+
+      <div class="modal-coluna">
+        <div class="modal-secao">
+          <div class="modal-secao-titulo">Classificação</div>
+          <div class="modal-grid">
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Status</div>
+              <div class="modal-campo-editavel">
+                <select class="modal-select" id="miEditStatus">
+                  <option value="">— Sem status —</option>
+                </select>
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Observações</div>
+              <div class="modal-campo-valor" id="miObs">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="modal-rodape">
+      <button class="btn btn-cancelar" onclick="fecharModalIniciais()">Fechar</button>
+      <button class="btn btn-salvar" id="btnSalvarIniciais" onclick="salvarModalIniciais()">
+        <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+        Salvar
+      </button>
+    </div>
+
+  </div>
+</div>
+  
+  <!-- MODAL: ATENDIMENTO (somente leitura — aba Panorama) -->
+  <!-- MODAL: RESULTADO DE ACAO DE UTILITARIOS (generico, reaproveitavel) -->
+  <div class="modal-overlay" id="modalResultadoOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo">UTILITÁRIOS</div>
+        <div class="modal-assistido" id="mrTitulo">Resultado</div>
+        <button class="modal-fechar" onclick="fecharModalResultado()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-resultado-stats" id="mrStats"></div>
+          <div class="modal-resultado-avisos" id="mrAvisos" style="display:none;">
+            <div class="modal-secao-titulo">Avisos</div>
+            <ul class="modal-resultado-lista" id="mrListaAvisos"></ul>
+          </div>
+        </div>
+      </div>
+      <div class="modal-rodape">
+        <button class="btn btn-salvar" onclick="fecharModalResultado()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalAtendimentoOverlay">
+    <div class="modal modal-estreito">
+
+      <div class="modal-header">
+        <div class="modal-processo">ATENDIMENTO</div>
+        <div class="modal-assistido" id="maNome"></div>
+        <button class="modal-fechar" onclick="fecharModalAtendimento()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-valor" id="maData">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">CPF</div>
+              <div class="modal-campo-valor" id="maCpf">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Telefone 1</div>
+              <div class="modal-campo-valor" id="maTelefone1">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Telefone 2</div>
+              <div class="modal-campo-valor" id="maTelefone2">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Emprego</div>
+              <div class="modal-campo-valor" id="maEmprego">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Ramo</div>
+              <div class="modal-campo-valor" id="maRamo">—</div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Estagiário(a)</div>
+              <div class="modal-campo-valor" id="maEstagiario">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalAtendimento()">Fechar</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: AUDIENCIA (somente leitura — retornada por formula na aba audiencias) -->
+  <div class="modal-overlay" id="modalAudienciaOverlay">
+    <div class="modal modal-estreito">
+
+      <div class="modal-header">
+        <div class="modal-processo">AUDIÊNCIA</div>
+        <div class="modal-assistido" id="auAssistido"></div>
+        <button class="modal-fechar" onclick="fecharModalAudiencia()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-valor" id="auData">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Hora</div>
+              <div class="modal-campo-valor" id="auHora">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Vara</div>
+              <div class="modal-campo-valor" id="auVara">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Tipo</div>
+              <div class="modal-campo-valor" id="auTipo">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Adv</div>
+              <div class="modal-campo-valor" id="auAdv">—</div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Processo N°</div>
+              <div class="modal-campo-valor modal-campo-valor-copiavel">
+                <span id="auProcesso">—</span>
+                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoAudiencia" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">OBS</div>
+              <div class="modal-campo-valor" id="auObs">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalAudiencia()">Fechar</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: FIA (Ficha Individual de Avaliacao) - calculadora, nao salva nada -->
+  <div class="modal-overlay" id="modalFIAOverlay">
+    <div class="modal modal-largo modal-fia">
+
+      <div class="modal-header">
+        <div class="modal-processo">FIA</div>
+        <div class="modal-assistido">Ficha Individual de Avaliação</div>
+        <button class="modal-fechar" onclick="fecharModalFIA()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="fia-aviso-nao-salva">
+        <span class="material-symbols-outlined" style="font-size:16px;">info</span>
+        Esta ficha é apenas uma calculadora. Nenhum valor é salvo.
+      </div>
+
+      <div class="modal-corpo" id="fiaCorpo">
+        <div class="ge-vazio" id="fiaCarregando">Carregando estrutura da FIA...</div>
+      </div>
+
+      <div class="modal-rodape fia-rodape" id="fiaRodape" style="display:none;">
+        <div class="fia-resultado" id="fiaResultado">
+          <div class="fia-resultado-item">
+            <span class="fia-resultado-label">Nota Final</span>
+            <span class="fia-resultado-valor" id="fiaNotaFinal">—</span>
+          </div>
+          <div class="fia-resultado-item">
+            <span class="fia-resultado-label">Situação</span>
+            <span class="fia-badge" id="fiaBadgeSituacao">—</span>
+          </div>
+        </div>
+        <button class="btn btn-cancelar" onclick="fecharModalFIA()">Fechar</button>
+        <button class="btn btn-salvar" onclick="recalcularFIA()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">calculate</span>
+          Recalcular
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <?!= include('Scripts') ?>
+</body>
+</html>
