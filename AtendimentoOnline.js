@@ -5,8 +5,9 @@
 // arquivo deve ler/escrever esta aba diretamente.
 //
 // Regras de negocio (decididas por Thales):
-//  - So podem ser referenciadas Diligencias, Iniciais ou Acompanhamentos
-//    (nunca um Atendimento presencial da aba "atendimentos", que nao tem ID).
+//  - So podem ser referenciadas Diligencias ou Iniciais (nunca um
+//    Acompanhamento nem um Atendimento presencial da aba "atendimentos",
+//    que nao tem ID).
 //  - Qualquer STATUS da atividade referenciada e aceito (inclusive Cancelada).
 //  - Uma mesma atividade (TIPO_ATIVIDADE + ID_ATIVIDADE) so pode aparecer UMA
 //    unica vez nesta aba, para sempre — mesmo que o registro tenha sido
@@ -54,9 +55,9 @@ function getTodosAtendimentosOnline() {
 }
 
 // --- Contexto da atividade referenciada (exibido no card de aprovacao) ---
-// Busca processo/assistido/estagiario da diligencia/inicial/acompanhamento
-// pelo ID, so para dar contexto a Thales na fila de aprovacao — nunca grava
-// nada, apenas leitura reaproveitando os getters ja existentes de cada aba.
+// Busca processo/assistido da diligencia/inicial pelo ID, so para dar
+// contexto a Thales na fila de aprovacao — nunca grava nada, apenas leitura
+// reaproveitando os getters ja existentes de cada aba.
 function resolverContextoAtividade(tipo, idAtividade) {
   var chaveId = String(idAtividade || '').trim();
   if (!chaveId) return null;
@@ -65,7 +66,6 @@ function resolverContextoAtividade(tipo, idAtividade) {
   var lista;
   if (chaveTipo === normalizarChave('Diligência')) lista = getTodasDiligencias();
   else if (chaveTipo === normalizarChave('Inicial')) lista = getTodasIniciais();
-  else if (chaveTipo === normalizarChave('Acompanhamento')) lista = getTodosAcompanhamentos();
   else return null;
 
   for (var i = 0; i < lista.length; i++) {
@@ -81,11 +81,13 @@ function resolverContextoAtividade(tipo, idAtividade) {
 }
 
 // --- Atividades elegiveis para um estagiario (usado pelo Painel Aluno) ---
-// Recebe as listas de diligencias/iniciais/acompanhamentos JA FILTRADAS para
-// o estagiario em foco (mesmas listas devolvidas por getDadosPainelAluno, ver
-// Aluno.js) e remove as que ja foram referenciadas em atendimentos_online
-// (qualquer STATUS, inclusive Reprovado — ver regra de negocio no cabecalho).
-function getAtividadesElegiveisAtendimentoOnline(diligenciasDoAluno, iniciaisDoAluno, acompanhamentosDoAluno) {
+// Recebe as listas de diligencias/iniciais JA FILTRADAS para o estagiario em
+// foco (mesmas listas devolvidas por getDadosPainelAluno, ver Aluno.js) e
+// remove as que ja foram referenciadas em atendimentos_online (qualquer
+// STATUS, inclusive Reprovado — ver regra de negocio no cabecalho).
+// Acompanhamento NAO entra nesta lista (decisao de Thales: so Diligencia e
+// Inicial sao vinculaveis).
+function getAtividadesElegiveisAtendimentoOnline(diligenciasDoAluno, iniciaisDoAluno) {
   var jaReferenciadas = {};
   getTodosAtendimentosOnline().forEach(function(ao) {
     jaReferenciadas[normalizarChave(ao.tipoAtividade) + '|' + String(ao.idAtividade || '').trim()] = true;
@@ -93,6 +95,17 @@ function getAtividadesElegiveisAtendimentoOnline(diligenciasDoAluno, iniciaisDoA
 
   function chaveOcupada(tipo, id) {
     return jaReferenciadas[normalizarChave(tipo) + '|' + String(id || '').trim()];
+  }
+
+  // Rotulo exibido no seletor: nome do(a) assistido(a) (diligencias!C /
+  // iniciais!D) seguido do numero do processo — decisao de Thales (antes
+  // mostrava o tipo/descricao da diligencia, que nao ajudava a identificar
+  // o caso). "Diligência"/"Inicial" continuam guardados em "tipo" (campo
+  // tecnico, nao exibido) para diferenciar as duas origens ao gravar.
+  function montarRotulo(assistido, processo, idFallback) {
+    var nomeAssistido = assistido || 'Sem assistido informado';
+    var numeroProcesso = processo || 'sem processo';
+    return nomeAssistido + ' — Processo ' + numeroProcesso;
   }
 
   var lista = [];
@@ -106,7 +119,7 @@ function getAtividadesElegiveisAtendimentoOnline(diligenciasDoAluno, iniciaisDoA
     lista.push({
       tipo: 'Diligência',
       id: d.id,
-      rotulo: (d.processo || 'sem processo') + ' — ' + (d.diligencia || d.especie || 'Diligência'),
+      rotulo: montarRotulo(d.assistido, d.processo, d.id),
       estagiario: d.estagiario || '',
       email: '',
       semestre: d.semestre || ''
@@ -118,22 +131,10 @@ function getAtividadesElegiveisAtendimentoOnline(diligenciasDoAluno, iniciaisDoA
     lista.push({
       tipo: 'Inicial',
       id: ini.id,
-      rotulo: 'Petição Inicial — ' + (ini.assistido || ini.processo || ini.id),
+      rotulo: montarRotulo(ini.assistido, ini.processo, ini.id),
       estagiario: ini.estagiario || '',
       email: ini.email || '',
       semestre: ini.semestre || ''
-    });
-  });
-
-  (acompanhamentosDoAluno || []).forEach(function(ac) {
-    if (chaveOcupada('Acompanhamento', ac.id)) return;
-    lista.push({
-      tipo: 'Acompanhamento',
-      id: ac.id,
-      rotulo: 'Acompanhamento — ' + (ac.processo || ac.id),
-      estagiario: ac.estagiario || '',
-      email: ac.email || '',
-      semestre: ac.semestre || ''
     });
   });
 
@@ -175,12 +176,6 @@ function _atividadePertenceAoEstagiario(tipo, idAtividade, nomeEstagiario, email
     return getTodasIniciais().some(function(ini) {
       return String(ini.id || '').trim() === chaveId &&
         (normalizarChave(ini.estagiario) === chaveNome || normalizarChave(ini.email) === chaveEmail);
-    });
-  }
-  if (chaveTipo === normalizarChave('Acompanhamento')) {
-    return getTodosAcompanhamentos().some(function(ac) {
-      return String(ac.id || '').trim() === chaveId &&
-        (normalizarChave(ac.estagiario) === chaveNome || normalizarChave(ac.email) === chaveEmail);
     });
   }
   return false;

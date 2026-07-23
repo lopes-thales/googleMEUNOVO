@@ -75,7 +75,7 @@ function getDadosPainelAluno(acesso) {
   // alunos ao mesmo tempo), a filtragem por aluno em foco continua sendo
   // feita no cliente, exatamente como ja acontece com diligencias/iniciais/
   // acompanhamentos nesta mesma funcao.
-  var atividadesElegiveisAO = getAtividadesElegiveisAtendimentoOnline(diligencias, iniciais, acompanhamentos);
+  var atividadesElegiveisAO = getAtividadesElegiveisAtendimentoOnline(diligencias, iniciais);
 
   return {
     tipo: acesso.tipo,

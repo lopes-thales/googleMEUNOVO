@@ -2531,7 +2531,7 @@ function renderizarFilaAtendimentoOnline() {
 
   if (!lista.length) {
     corpo.innerHTML =
-      '<tr><td colspan="8">' +
+      '<tr><td colspan="9">' +
         '<div class="estado-vazio">' +
           '<span class="material-symbols-outlined">task_alt</span>' +
           '<div class="estado-vazio-titulo">Nenhum atendimento online pendente</div>' +
@@ -2543,10 +2543,12 @@ function renderizarFilaAtendimentoOnline() {
   var html = '';
   lista.forEach(function(reg) {
     var processo = (reg.contexto && reg.contexto.processo) || '<span class="celula-vazio">—</span>';
+    var assistido = (reg.contexto && reg.contexto.assistido) || '<span class="celula-vazio">—</span>';
     html += '<tr>' +
       '<td class="td-numero">' + (reg.id || '') + '</td>' +
       '<td class="td-assistido">' + (reg.estagiario || '') + '</td>' +
       '<td>' + (reg.tipoAtividade || '') + ' ' + (reg.idAtividade || '') + '</td>' +
+      '<td class="td-assistido">' + assistido + '</td>' +
       '<td>' + processo + '</td>' +
       '<td>' + (reg.data || '') + '</td>' +
       '<td>' + (reg.atendido || '') + '</td>' +

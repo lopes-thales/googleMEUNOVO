@@ -52,12 +52,14 @@
 //
 //aba atendimentos_online (colunas A:L, base 0) — ver AtendimentoOnline.js:
 //ID	DATA	ESTAGIARIO	EMAIL	ATENDIDO	TIPO_ATIVIDADE	ID_ATIVIDADE	JUSTIFICATIVA	STATUS	OBS_APROVACAO	ALTERADO_EM	SEMESTRE
-//(uma atividade — Diligencia/Inicial/Acompanhamento — so pode ser referenciada
-//UMA UNICA VEZ nesta aba, decisao de Thales: apos criado o Atendimento Online
-//de uma atividade, ela nunca mais pode ser selecionada por outro registro,
-//mesmo que o primeiro tenha sido reprovado. Um registro Reprovado pode ser
-//editado e reenviado pelo proprio estagiario (mesma linha, volta a Pendente),
-//mas isso NAO libera a atividade para um novo registro distinto.)
+//(so pode referenciar Diligencia ou Inicial — Acompanhamento e Atendimento
+//presencial ficam de fora, decisao de Thales; uma atividade — Diligencia ou
+//Inicial — so pode ser referenciada UMA UNICA VEZ nesta aba: apos criado o
+//Atendimento Online de uma atividade, ela nunca mais pode ser selecionada
+//por outro registro, mesmo que o primeiro tenha sido reprovado. Um registro
+//Reprovado pode ser editado e reenviado pelo proprio estagiario (mesma
+//linha, volta a Pendente), mas isso NAO libera a atividade para um novo
+//registro distinto.)
 //(so conta na producao do estagiario — Panorama.js/Graficos.js — quando
 //STATUS = 'Aprovado'.)
 //
@@ -302,8 +304,9 @@ var CONFIG = {
   // --- Aba atendimentos_online (colunas A:L, base 0) ---
   // Ver AtendimentoOnline.js (unico arquivo com permissao de ler/escrever
   // esta aba). Cada linha e o registro de um Atendimento Online feito pelo
-  // estagiario, obrigatoriamente vinculado a uma Diligencia/Inicial/
-  // Acompanhamento propria, e sujeito a aprovacao de Thales.
+  // estagiario, obrigatoriamente vinculado a uma Diligencia ou Inicial
+  // propria (Acompanhamento fica de fora, decisao de Thales), e sujeito a
+  // aprovacao de Thales.
   SHEET_ATENDIMENTOS_ONLINE: 'atendimentos_online',
   ATENDIMENTO_ONLINE_COL: {
     ID: 0,               // A  (AO-0001, ...)
@@ -311,8 +314,8 @@ var CONFIG = {
     ESTAGIARIO: 2,        // C  (nome do estagiario)
     EMAIL: 3,              // D  (e-mail do estagiario logado — nunca vem do payload do cliente)
     ATENDIDO: 4,           // E  (nome da pessoa atendida)
-    TIPO_ATIVIDADE: 5,    // F  ('Diligência' | 'Inicial' | 'Acompanhamento')
-    ID_ATIVIDADE: 6,      // G  (ID da diligencia/inicial/acompanhamento referenciada — unico na aba)
+    TIPO_ATIVIDADE: 5,    // F  ('Diligência' | 'Inicial')
+    ID_ATIVIDADE: 6,      // G  (ID da diligencia/inicial referenciada — unico na aba)
     JUSTIFICATIVA: 7,      // H
     STATUS: 8,             // I  ('Pendente' | 'Aprovado' | 'Reprovado')
     OBS_APROVACAO: 9,      // J  (motivo informado por Thales ao reprovar)
@@ -330,9 +333,10 @@ var CONFIG = {
   },
 
   // Tipos de atividade vinculavel a um Atendimento Online — decisao de
-  // Thales: Atendimento presencial (aba atendimentos) fica de fora, pois
-  // aquela aba nao tem ID unico por linha.
-  TIPOS_ATIVIDADE_ATENDIMENTO_ONLINE: ['Diligência', 'Inicial', 'Acompanhamento'],
+  // Thales: apenas Diligencia e Inicial (Acompanhamento removido; Atendimento
+  // presencial da aba "atendimentos" tambem fica de fora, pois aquela aba nao
+  // tem ID unico por linha).
+  TIPOS_ATIVIDADE_ATENDIMENTO_ONLINE: ['Diligência', 'Inicial'],
 
   // --- Aba audiencias (colunas A:J, base 0) ---
   // Somente leitura neste painel: todos os valores vem prontos da planilha
