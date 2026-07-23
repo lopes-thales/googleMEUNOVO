@@ -432,6 +432,84 @@ function acaoCriarPedidoInicial(payload) {
   }
 }
 
+// === ATENDIMENTO ONLINE ===
+
+// Chamado pelo formulario "Atendimento Online" do Painel Aluno. Resolucao do
+// e-mail/nome dono do registro segue exatamente a mesma decisao de Thales ja
+// aplicada em acaoCriarPedidoInicial: Thales usa o aluno escolhido no
+// seletor (payload.emailAluno), validado contra a aba estagiarios; um aluno
+// sempre usa o proprio e-mail logado, nunca um valor vindo do payload.
+function acaoCriarAtendimentoOnline(payload) {
+  try {
+    var acesso = validarAcessoAluno();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+
+    var emailFinal, nomeFinal;
+    if (acesso.tipo === 'thales') {
+      var emailInformado = normalizarChave((payload && payload.emailAluno) || '');
+      var estagiarioAlvo = getTodosEstagiariosCompletos().filter(function(e) {
+        return normalizarChave(e.email) === emailInformado;
+      })[0];
+      if (!estagiarioAlvo) {
+        return { sucesso: false, erro: 'Selecione um aluno válido antes de registrar o atendimento.' };
+      }
+      emailFinal = estagiarioAlvo.email;
+      nomeFinal = estagiarioAlvo.nome;
+    } else {
+      emailFinal = acesso.email;
+      nomeFinal = acesso.nome;
+    }
+
+    return criarAtendimentoOnline(payload, nomeFinal, emailFinal);
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao criar atendimento online: ' + e.message };
+  }
+}
+
+// Chamado ao editar/reenviar um Atendimento Online Reprovado, no Painel Aluno.
+function acaoReenviarAtendimentoOnline(payload) {
+  try {
+    var acesso = validarAcessoAluno();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return reenviarAtendimentoOnline(payload, acesso.email, acesso.tipo === 'thales');
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao reenviar atendimento online: ' + e.message };
+  }
+}
+
+// Chamado pelo frontend ao abrir a aba "Atendimento Online" no Painel de Thales.
+function carregarDadosAprovacaoAtendimentoOnline() {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { erro: acesso.motivo };
+    return getDadosAprovacaoAtendimentoOnline();
+  } catch (e) {
+    return { erro: 'Erro ao carregar Atendimento Online: ' + e.message };
+  }
+}
+
+// Chamado pelo botao "Aprovar" na fila de Atendimento Online.
+function acaoAprovarAtendimentoOnline(linha) {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return aprovarAtendimentoOnline(linha);
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao aprovar: ' + e.message };
+  }
+}
+
+// Chamado pelo botao "Reprovar" (com motivo) na fila de Atendimento Online.
+function acaoReprovarAtendimentoOnline(linha, motivo) {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return reprovarAtendimentoOnline(linha, motivo);
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao reprovar: ' + e.message };
+  }
+}
+
 // Chamado pelo botao "Sincronizar GERAL" na aba "Utilitarios" (se criado).
 // Chamado pelo botao "Sincronizar GERAL" na aba "Utilitarios".
 function acaoSincronizarGeral() {

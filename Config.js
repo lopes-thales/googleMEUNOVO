@@ -50,6 +50,17 @@
 //
 //aba atendimentos colunas A:J ID	Nome	Processo	Data	Status	e-mail	link	DataEntrega	Semestre
 //
+//aba atendimentos_online (colunas A:L, base 0) — ver AtendimentoOnline.js:
+//ID	DATA	ESTAGIARIO	EMAIL	ATENDIDO	TIPO_ATIVIDADE	ID_ATIVIDADE	JUSTIFICATIVA	STATUS	OBS_APROVACAO	ALTERADO_EM	SEMESTRE
+//(uma atividade — Diligencia/Inicial/Acompanhamento — so pode ser referenciada
+//UMA UNICA VEZ nesta aba, decisao de Thales: apos criado o Atendimento Online
+//de uma atividade, ela nunca mais pode ser selecionada por outro registro,
+//mesmo que o primeiro tenha sido reprovado. Um registro Reprovado pode ser
+//editado e reenviado pelo proprio estagiario (mesma linha, volta a Pendente),
+//mas isso NAO libera a atividade para um novo registro distinto.)
+//(so conta na producao do estagiario — Panorama.js/Graficos.js — quando
+//STATUS = 'Aprovado'.)
+//
 //OBS: onde tiver aluno, considere Estagiários, ou seja, aluno=estagiário
 
 //Diligências (classificarStatusPelaSubmission e call site em verificarEntregasClassroom):
@@ -171,7 +182,8 @@ var CONFIG = {
     ID_PLANILHA_SECRETARIA: 'N2', // ID da planilha destino para envio da aba secretaria
     NOME_ABA_GERAL_DILIGENCIAS: 'O2', // nome da aba de diligencias dentro da planilha GERAL
     DATA_FINALIZACAO_ESTAGIO: 'P2', // data final do periodo de estagio corrente (mensageria — ver Mensagens.js)
-    ID_PASTA_ARQUIVO_ESTAGIARIOS: 'Q2' // ID da pasta no Drive para onde vao as pastas dos estagiarios finalizados, retiradas de bd!L2 — botao "Arquivar Pastas" (Drive.js)
+    ID_PASTA_ARQUIVO_ESTAGIARIOS: 'Q2', // ID da pasta no Drive para onde vao as pastas dos estagiarios finalizados, retiradas de bd!L2 — botao "Arquivar Pastas" (Drive.js)
+    CONTROLE_AO: 'R2' // contador para numeracao AO-XXXX (Atendimento Online) — guarda apenas o numero inteiro atual, ver AtendimentoOnline.js
   },
 
   // --- Integracao Google Classroom ---
@@ -287,6 +299,41 @@ var CONFIG = {
 
   PREFIXO_ACOMPANHAMENTO: 'AC-',
 
+  // --- Aba atendimentos_online (colunas A:L, base 0) ---
+  // Ver AtendimentoOnline.js (unico arquivo com permissao de ler/escrever
+  // esta aba). Cada linha e o registro de um Atendimento Online feito pelo
+  // estagiario, obrigatoriamente vinculado a uma Diligencia/Inicial/
+  // Acompanhamento propria, e sujeito a aprovacao de Thales.
+  SHEET_ATENDIMENTOS_ONLINE: 'atendimentos_online',
+  ATENDIMENTO_ONLINE_COL: {
+    ID: 0,               // A  (AO-0001, ...)
+    DATA: 1,              // B  (data do atendimento, informada pelo estagiario)
+    ESTAGIARIO: 2,        // C  (nome do estagiario)
+    EMAIL: 3,              // D  (e-mail do estagiario logado — nunca vem do payload do cliente)
+    ATENDIDO: 4,           // E  (nome da pessoa atendida)
+    TIPO_ATIVIDADE: 5,    // F  ('Diligência' | 'Inicial' | 'Acompanhamento')
+    ID_ATIVIDADE: 6,      // G  (ID da diligencia/inicial/acompanhamento referenciada — unico na aba)
+    JUSTIFICATIVA: 7,      // H
+    STATUS: 8,             // I  ('Pendente' | 'Aprovado' | 'Reprovado')
+    OBS_APROVACAO: 9,      // J  (motivo informado por Thales ao reprovar)
+    ALTERADO_EM: 10,        // K
+    SEMESTRE: 11            // L  (estatico, calculado uma unica vez a partir de DATA na criacao)
+  },
+  TOTAL_COLUNAS_ATENDIMENTO_ONLINE: 12, // A ate L
+
+  PREFIXO_ATENDIMENTO_ONLINE: 'AO-',
+
+  STATUS_ATENDIMENTO_ONLINE: {
+    PENDENTE: 'Pendente',
+    APROVADO: 'Aprovado',
+    REPROVADO: 'Reprovado'
+  },
+
+  // Tipos de atividade vinculavel a um Atendimento Online — decisao de
+  // Thales: Atendimento presencial (aba atendimentos) fica de fora, pois
+  // aquela aba nao tem ID unico por linha.
+  TIPOS_ATIVIDADE_ATENDIMENTO_ONLINE: ['Diligência', 'Inicial', 'Acompanhamento'],
+
   // --- Aba audiencias (colunas A:J, base 0) ---
   // Somente leitura neste painel: todos os valores vem prontos da planilha
   // (DIA e sempre uma formula a partir de DATA — nunca calculada aqui).
@@ -326,6 +373,7 @@ var CONFIG = {
       'Fazer a conferência das atividades junto à Secretaria, que vai fazer a validação em todas as atividades realizadas, com exceção dos atendimentos.',
       'Fazer a conferência dos atendimentos junto à Recepção, que vai fazer a validação.',
       'Levar o Relatório Final de Estágio para minha assinatura.',
+      'Lembrem-se que OS ATENDIMENTOS ONLINE devem ser validados por mim e só serão contados AQUELES RELACIONADOS A PROCESSOS ENVIADOS POR MIM no Classroom. Qualquer outro atendimento online que não esteja relacionado diretamente aos processos e partes de diligências enviadas por mim NÃO SERÁ ACEITO.',
       'Dar entrada no referido Relatório na Central de Atendimento CEST.'
     ]
   }

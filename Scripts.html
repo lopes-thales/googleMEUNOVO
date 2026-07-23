@@ -44,6 +44,7 @@ var SECOES_POR_VISTA = {
   distribuicao: 'secaoDistribuicao',
   iniciais: 'secaoIniciais',
   acompanhamentos: 'secaoAcompanhamentos',
+  atendimento_online: 'secaoAtendimentoOnline',
   panorama: 'secaoPanorama',
   graficos: 'secaoGraficos',
   audiencias: 'secaoAudiencias',
@@ -66,6 +67,7 @@ function trocarVista(vista) {
   if (vista === 'distribuicao') carregarAbaDistribuicao();
   if (vista === 'iniciais') carregarAbaIniciais();
   if (vista === 'acompanhamentos') carregarAbaAcompanhamentos();
+  if (vista === 'atendimento_online') carregarAbaAtendimentoOnline();
   if (vista === 'panorama') carregarAbaPanorama();
   if (vista === 'graficos') carregarAbaGraficos();
   if (vista === 'audiencias') carregarAbaAudiencias();
@@ -136,6 +138,7 @@ document.addEventListener('DOMContentLoaded', function() {
   inicializarFiltrosAcompanhamentos();
   inicializarFiltrosAudiencias();
   carregarDados();
+  atualizarContadorAtendimentoOnline();
 });
 
 function inicializarFiltros() {
@@ -2451,6 +2454,205 @@ function salvarModalAcompanhamento() {
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .salvarRegistroAcompanhamento(payload);
+}
+
+// === ABA: ATENDIMENTO ONLINE (fila de aprovacao) ===
+var APP_ATENDIMENTO_ONLINE = {
+  pendentes: [],
+  historico: [],
+  linhaEmReprovacao: null
+};
+
+// Badge de status reaproveitando as classes definidas em Styles.html
+// (badge-ao-pendente/aprovado/reprovado — ver AlunoScripts.html para a
+// mesma logica no Painel Aluno; duplicada aqui de proposito, pois os dois
+// arquivos de frontend sao independentes por definicao do projeto).
+function badgeStatusAtendimentoOnline(status) {
+  var chave = normalizarChave(status);
+  if (chave === 'aprovado') return '<span class="badge badge-ao-aprovado">Aprovado</span>';
+  if (chave === 'reprovado') return '<span class="badge badge-ao-reprovado">Reprovado</span>';
+  return '<span class="badge badge-ao-pendente">Pendente</span>';
+}
+
+// Atualiza so o contador da aba de navegacao — chamada na inicializacao da
+// pagina (para o numero aparecer mesmo sem abrir a aba) e sempre que a fila
+// muda (aprovar/reprovar/abrir a aba).
+function atualizarContadorAtendimentoOnline() {
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (resultado.erro) return; // silencioso — nao e critico para o resto do painel
+      var badge = document.getElementById('navContadorAO');
+      var qtd = (resultado.pendentes || []).length;
+      if (!badge) return;
+      if (qtd > 0) {
+        badge.textContent = qtd;
+        badge.style.display = 'inline-flex';
+      } else {
+        badge.style.display = 'none';
+      }
+    })
+    .withFailureHandler(function() {}) // silencioso
+    .carregarDadosAprovacaoAtendimentoOnline();
+}
+
+function carregarAbaAtendimentoOnline() {
+  var wrapper = document.getElementById('secaoAtendimentoOnline');
+  if (wrapper) wrapper.style.opacity = '0.5';
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (wrapper) wrapper.style.opacity = '1';
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+      APP_ATENDIMENTO_ONLINE.pendentes = resultado.pendentes || [];
+      APP_ATENDIMENTO_ONLINE.historico = resultado.historico || [];
+      renderizarFilaAtendimentoOnline();
+      renderizarHistoricoAtendimentoOnline();
+
+      var badge = document.getElementById('navContadorAO');
+      if (badge) {
+        var qtd = APP_ATENDIMENTO_ONLINE.pendentes.length;
+        if (qtd > 0) { badge.textContent = qtd; badge.style.display = 'inline-flex'; }
+        else { badge.style.display = 'none'; }
+      }
+    })
+    .withFailureHandler(function(err) {
+      if (wrapper) wrapper.style.opacity = '1';
+      mostrarToast('Erro ao carregar Atendimento Online: ' + err.message, 'erro');
+    })
+    .carregarDadosAprovacaoAtendimentoOnline();
+}
+
+function renderizarFilaAtendimentoOnline() {
+  var corpo = document.getElementById('corpoAtendimentoOnlinePendentes');
+  var lista = APP_ATENDIMENTO_ONLINE.pendentes;
+
+  if (!lista.length) {
+    corpo.innerHTML =
+      '<tr><td colspan="8">' +
+        '<div class="estado-vazio">' +
+          '<span class="material-symbols-outlined">task_alt</span>' +
+          '<div class="estado-vazio-titulo">Nenhum atendimento online pendente</div>' +
+        '</div>' +
+      '</td></tr>';
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg) {
+    var processo = (reg.contexto && reg.contexto.processo) || '<span class="celula-vazio">—</span>';
+    html += '<tr>' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.estagiario || '') + '</td>' +
+      '<td>' + (reg.tipoAtividade || '') + ' ' + (reg.idAtividade || '') + '</td>' +
+      '<td>' + processo + '</td>' +
+      '<td>' + (reg.data || '') + '</td>' +
+      '<td>' + (reg.atendido || '') + '</td>' +
+      '<td class="td-obs" title="' + (reg.justificativa || '').replace(/"/g, '&quot;') + '">' + (reg.justificativa || '') + '</td>' +
+      '<td>' +
+        '<button class="btn-icone btn-icone-sucesso" title="Aprovar" onclick="aprovarAtendimentoOnline(' + reg._linha + ')">' +
+          '<span class="material-symbols-outlined" style="font-size:18px;">check_circle</span>' +
+        '</button>' +
+        '<button class="btn-icone btn-icone-erro" title="Reprovar" onclick="abrirModalReprovarAO(' + reg._linha + ', \'' + (reg.id || '') + '\')">' +
+          '<span class="material-symbols-outlined" style="font-size:18px;">cancel</span>' +
+        '</button>' +
+      '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+function renderizarHistoricoAtendimentoOnline() {
+  var corpo = document.getElementById('corpoAtendimentoOnlineHistorico');
+  var lista = APP_ATENDIMENTO_ONLINE.historico;
+
+  if (!lista.length) {
+    corpo.innerHTML = '<tr><td colspan="7"><div class="estado-vazio"><span class="material-symbols-outlined">history</span><div class="estado-vazio-titulo">Nenhuma decisão registrada ainda</div></div></td></tr>';
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg) {
+    html += '<tr>' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.estagiario || '') + '</td>' +
+      '<td>' + (reg.tipoAtividade || '') + ' ' + (reg.idAtividade || '') + '</td>' +
+      '<td>' + (reg.data || '') + '</td>' +
+      '<td>' + (reg.atendido || '') + '</td>' +
+      '<td>' + badgeStatusAtendimentoOnline(reg.status) + '</td>' +
+      '<td>' + (reg.obsAprovacao || '<span class="celula-vazio">—</span>') + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+function aprovarAtendimentoOnline(linha) {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao aprovar.', 'erro');
+        return;
+      }
+      mostrarToast('Atendimento online aprovado!', 'sucesso');
+      carregarAbaAtendimentoOnline();
+    })
+    .withFailureHandler(function(err) {
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .acaoAprovarAtendimentoOnline(linha);
+}
+
+function abrirModalReprovarAO(linha, id) {
+  APP_ATENDIMENTO_ONLINE.linhaEmReprovacao = linha;
+  document.getElementById('raoIdLabel').textContent = id || 'ATENDIMENTO ONLINE';
+  document.getElementById('raoMotivo').value = '';
+  document.getElementById('modalReprovarAOOverlay').classList.add('visivel');
+}
+
+function fecharModalReprovarAO() {
+  document.getElementById('modalReprovarAOOverlay').classList.remove('visivel');
+  APP_ATENDIMENTO_ONLINE.linhaEmReprovacao = null;
+}
+
+document.getElementById('modalReprovarAOOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalReprovarAO();
+});
+
+function confirmarReprovarAtendimentoOnline() {
+  var linha = APP_ATENDIMENTO_ONLINE.linhaEmReprovacao;
+  if (!linha) return;
+
+  var motivo = document.getElementById('raoMotivo').value.trim();
+  if (!motivo) {
+    mostrarToast('Informe o motivo da reprovação.', 'erro');
+    return;
+  }
+
+  var btn = document.getElementById('btnConfirmarReprovarAO');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Reprovando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span> Reprovar';
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao reprovar.', 'erro');
+        return;
+      }
+      mostrarToast('Atendimento online reprovado.', 'sucesso');
+      fecharModalReprovarAO();
+      carregarAbaAtendimentoOnline();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span> Reprovar';
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .acaoReprovarAtendimentoOnline(linha, motivo);
 }
 
 // === ABA: PANORAMA ===

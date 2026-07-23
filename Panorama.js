@@ -106,11 +106,15 @@ function getContagemProducaoEstagiario(nomeEstagiario, semestre) {
     getTodasDiligencias(),
     getTodasIniciais(),
     getTodosAtendimentos(),
-    getTodosAcompanhamentos()
+    getTodosAcompanhamentos(),
+    getTodosAtendimentosOnline() // AtendimentoOnline.js
   );
 }
 
-function _contarProducaoComDados(nomeEstagiario, semestre, diligencias, iniciais, atendimentos, acompanhamentos) {
+// atendimentosOnline: so os com STATUS = 'Aprovado' entram na contagem — ver
+// regra de negocio em AtendimentoOnline.js. Somam-se aos atendimentos
+// presenciais no MESMO total (qtdAtendimentos), decisao de Thales.
+function _contarProducaoComDados(nomeEstagiario, semestre, diligencias, iniciais, atendimentos, acompanhamentos, atendimentosOnline) {
   var chaveNome = normalizarChave(nomeEstagiario);
 
   function naoCancelada(reg) { return normalizarChave(reg.status) !== 'cancelada'; }
@@ -127,9 +131,16 @@ function _contarProducaoComDados(nomeEstagiario, semestre, diligencias, iniciais
 
   var qtdComplexas = qtdComplexasDiligencias + qtdIniciais;
 
-  var qtdAtendimentos = atendimentos.filter(function(a) {
+  var qtdAtendimentosPresenciais = atendimentos.filter(function(a) {
     return normalizarChave(a.estagiario) === chaveNome && a.semestre === semestre;
   }).length;
+
+  var qtdAtendimentosOnlineAprovados = (atendimentosOnline || []).filter(function(ao) {
+    return normalizarChave(ao.estagiario) === chaveNome && ao.semestre === semestre &&
+      normalizarChave(ao.status) === normalizarChave(CONFIG.STATUS_ATENDIMENTO_ONLINE.APROVADO);
+  }).length;
+
+  var qtdAtendimentos = qtdAtendimentosPresenciais + qtdAtendimentosOnlineAprovados;
 
   var qtdAcompanhamentos = acompanhamentos.filter(function(c) {
     return normalizarChave(c.estagiario) === chaveNome && c.semestre === semestre && naoCancelada(c);
@@ -145,19 +156,21 @@ function _contarProducaoComDados(nomeEstagiario, semestre, diligencias, iniciais
 }
 
 // Mesma contagem de getContagemProducaoEstagiario, mas para VARIOS estagiarios
-// de uma vez — le diligencias/iniciais/atendimentos/acompanhamentos UMA unica
-// vez e reaproveita para todos, em vez de uma leitura completa das 4 abas por
-// estagiario. Usada pelos agregadores que precisam da producao de todos os
-// estagiarios ativos ao mesmo tempo (getDadosGraficos, Graficos.js — e, por
-// tabela, a aba Distribuição, que reaproveita esse mesmo agregador).
+// de uma vez — le diligencias/iniciais/atendimentos/acompanhamentos/
+// atendimentos_online UMA unica vez e reaproveita para todos, em vez de uma
+// leitura completa das abas por estagiario. Usada pelos agregadores que
+// precisam da producao de todos os estagiarios ativos ao mesmo tempo
+// (getDadosGraficos, Graficos.js — e, por tabela, a aba Distribuição, que
+// reaproveita esse mesmo agregador).
 function getProducaoPorEstagiarios(estagiarios) {
   var diligencias = getTodasDiligencias();
   var iniciais = getTodasIniciais();
   var atendimentos = getTodosAtendimentos();
   var acompanhamentos = getTodosAcompanhamentos();
+  var atendimentosOnline = getTodosAtendimentosOnline(); // AtendimentoOnline.js
 
   return estagiarios.map(function(e) {
-    var contagens = _contarProducaoComDados(e.nome, e.semestre, diligencias, iniciais, atendimentos, acompanhamentos);
+    var contagens = _contarProducaoComDados(e.nome, e.semestre, diligencias, iniciais, atendimentos, acompanhamentos, atendimentosOnline);
     contagens.nome = e.nome;
     return contagens;
   });

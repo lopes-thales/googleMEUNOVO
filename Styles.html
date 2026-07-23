@@ -623,8 +623,20 @@
   .td-processo { font-family: 'Google Sans', sans-serif; font-size: 12px; color: var(--azul-claro); white-space: nowrap; }
   .td-assistido { font-weight: 600; }
   .celula-vazio { color: var(--cinza-texto); }
+  .td-obs { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cinza-texto); font-size: 12.5px; }
   .sem-estagiario-indicador { color: var(--cor-sem-estagiario); font-size: 14px; font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 20; }
   .estagiario-celula-vazio { color: var(--cinza-texto); display: inline-flex; align-items: center; gap: 4px; }
+
+  /* BOTOES DE ICONE (acoes inline em tabela — ex.: aprovar/reprovar Atendimento Online) */
+  .btn-icone {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 50%; border: none; background: transparent;
+    cursor: pointer; margin-right: 2px; transition: background 0.13s;
+  }
+  .btn-icone-sucesso { color: var(--cor-concluido); }
+  .btn-icone-sucesso:hover { background: var(--fundo-concluido); }
+  .btn-icone-erro { color: var(--cor-atraso); }
+  .btn-icone-erro:hover { background: var(--fundo-atraso); }
 
   /* ABA DISTRIBUIÇÃO */
   .select-inline-tabela {
@@ -674,6 +686,19 @@
   .badge-cancelada   { background: var(--fundo-cancelada);   color: var(--cor-cancelada); }
   .badge-atraso      { background: var(--fundo-atraso);      color: var(--cor-atraso); }
   .badge-vazio       { background: var(--cinza-fundo); color: var(--cinza-texto); }
+
+  /* Atendimento Online: reaproveita as mesmas cores/tokens acima */
+  .badge-ao-pendente  { background: var(--fundo-encaminhado); color: var(--cor-encaminhado); }
+  .badge-ao-aprovado  { background: var(--fundo-concluido);   color: var(--cor-concluido); }
+  .badge-ao-reprovado { background: var(--fundo-atraso);      color: var(--cor-atraso); }
+
+  /* Contador de pendentes na aba de navegacao (ex.: "Atendimento Online (3)") */
+  .nav-tab-contador {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 17px; height: 17px; padding: 0 4px; margin-left: 5px;
+    border-radius: 20px; font-size: 10.5px; font-weight: 700;
+    background: var(--cor-atraso); color: #fff; line-height: 1;
+  }
 
   /* INDICADOR DE GATILHO DE PRAZO (Gatilho 1/2/3 — apenas visual, sem e-mail) */
   .badge-gatilho {

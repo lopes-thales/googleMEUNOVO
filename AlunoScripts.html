@@ -169,6 +169,8 @@ var PA = {
     iniciais: [],
     atendimentos: [],
     acompanhamentos: [],
+    atendimentosOnline: [],
+    atividadesElegiveisAO: [],
     especiePicklistIniciais: []
   },
   semestreFiltro: '',
@@ -177,6 +179,8 @@ var PA = {
   _iniciaisAtuais: [],
   _acompanhamentosAtuais: [],
   _atendimentosAtuais: [],
+  _atendimentosOnlineAtuais: [],
+  _atendimentoOnlineEmEdicao: null, // registro atual aberto no modal de detalhe (Reprovado -> editavel)
   _toastTimer: null
 };
 
@@ -220,6 +224,8 @@ function paCarregarDados() {
       PA.dados.iniciais = resultado.iniciais || [];
       PA.dados.atendimentos = resultado.atendimentos || [];
       PA.dados.acompanhamentos = resultado.acompanhamentos || [];
+      PA.dados.atendimentosOnline = resultado.atendimentosOnline || [];
+      PA.dados.atividadesElegiveisAO = resultado.atividadesElegiveisAO || [];
       PA.dados.especiePicklistIniciais = resultado.especiePicklistIniciais || [];
 
       mostrarLoading(false);
@@ -400,6 +406,12 @@ function paAtendimentosFiltrados(alunoAtual) {
 function paAcompanhamentosFiltrados(alunoAtual) {
   return paFiltrarPorAluno(PA.dados.acompanhamentos, alunoAtual, ['estagiario'], ['email']);
 }
+function paAtendimentosOnlineFiltrados(alunoAtual) {
+  return paFiltrarPorAluno(PA.dados.atendimentosOnline, alunoAtual, ['estagiario'], ['email']);
+}
+function paAtividadesElegiveisAOFiltradas(alunoAtual) {
+  return paFiltrarPorAluno(PA.dados.atividadesElegiveisAO, alunoAtual, ['estagiario'], ['email']);
+}
 
 // --- Cards resumo (mesmos 4 do Panorama + Acompanhamentos) ---
 function paRenderizarCards(alunoAtual) {
@@ -443,12 +455,21 @@ function paCelulaVazia(colspan, titulo) {
   '</td></tr>';
 }
 
+// --- Badge de status do Atendimento Online (Pendente/Aprovado/Reprovado) ---
+function badgeStatusAtendimentoOnline(status) {
+  var chave = normalizarChave(status);
+  if (chave === 'aprovado') return '<span class="badge badge-ao-aprovado">Aprovado</span>';
+  if (chave === 'reprovado') return '<span class="badge badge-ao-reprovado">Reprovado</span>';
+  return '<span class="badge badge-ao-pendente">Pendente</span>';
+}
+
 // --- Tabelas (read-only, clique na linha abre o modal correspondente) ---
 function paRenderizarTabelas(alunoAtual) {
   PA._diligenciasAtuais = paDiligenciasFiltradas(alunoAtual);
   PA._iniciaisAtuais = paIniciaisFiltradas(alunoAtual);
   PA._acompanhamentosAtuais = paAcompanhamentosFiltrados(alunoAtual);
   PA._atendimentosAtuais = paAtendimentosFiltrados(alunoAtual);
+  PA._atendimentosOnlineAtuais = paAtendimentosOnlineFiltrados(alunoAtual);
 
   // Diligencias
   document.getElementById('paCabecalhoDiligencias').innerHTML =
@@ -537,6 +558,26 @@ function paRenderizarTabelas(alunoAtual) {
     });
     corpoAt.innerHTML = htmlAt;
   }
+
+  // Atendimentos Online
+  document.getElementById('paCabecalhoAtendimentosOnline').innerHTML =
+    '<tr><th>ID</th><th>DATA</th><th>ATIVIDADE</th><th>ATENDIDO(A)</th><th>STATUS</th></tr>';
+  var corpoAo = document.getElementById('paCorpoAtendimentosOnline');
+  if (!PA._atendimentosOnlineAtuais.length) {
+    corpoAo.innerHTML = paCelulaVazia(5, 'Nenhum atendimento online encontrado');
+  } else {
+    var htmlAo = '';
+    PA._atendimentosOnlineAtuais.forEach(function(reg, idx) {
+      htmlAo += '<tr onclick="paAbrirModalDetalheAtendimentoOnline(' + idx + ')">' +
+        '<td class="td-numero">' + (reg.id || '') + '</td>' +
+        '<td>' + (reg.data || '') + '</td>' +
+        '<td>' + (reg.tipoAtividade || '') + ' ' + (reg.idAtividade || '') + '</td>' +
+        '<td class="td-assistido">' + (reg.atendido || '') + '</td>' +
+        '<td>' + badgeStatusAtendimentoOnline(reg.status) + '</td>' +
+      '</tr>';
+    });
+    corpoAo.innerHTML = htmlAo;
+  }
 }
 
 // === MODAIS DE VISUALIZACAO (somente leitura) ===
@@ -545,12 +586,14 @@ function paFecharModal(id) {
 }
 
 function paConfigurarFechamentoModais() {
-  ['paModalDiligenciaOverlay', 'paModalInicialOverlay', 'paModalAcompanhamentoOverlay', 'paModalAtendimentoOverlay'].forEach(function(id) {
+  ['paModalDiligenciaOverlay', 'paModalInicialOverlay', 'paModalAcompanhamentoOverlay', 'paModalAtendimentoOverlay', 'paModalAtendimentoOnlineOverlay'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('click', function(e) { if (e.target === this) paFecharModal(id); });
   });
   var elPeticao = document.getElementById('paModalPeticaoOverlay');
   if (elPeticao) elPeticao.addEventListener('click', function(e) { if (e.target === this) paFecharModalPeticao(); });
+  var elNovoAO = document.getElementById('paModalNovoAtendimentoOnlineOverlay');
+  if (elNovoAO) elNovoAO.addEventListener('click', function(e) { if (e.target === this) paFecharModalNovoAtendimentoOnline(); });
 }
 
 function paAbrirModalDiligencia(idx) {
@@ -756,5 +799,162 @@ function paSalvarPeticaoInicial() {
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .acaoCriarPedidoInicial(payload);
+}
+
+// === MODAL: NOVO ATENDIMENTO ONLINE ===
+function paAbrirModalNovoAtendimentoOnline() {
+  var alunoAtual = paResolverAlunoAtual();
+  if (!alunoAtual) {
+    mostrarToast('Selecione um aluno antes de registrar um atendimento online.', 'erro');
+    return;
+  }
+
+  var select = document.getElementById('aoNovoAtividade');
+  var atividades = paAtividadesElegiveisAOFiltradas(alunoAtual);
+  select.innerHTML = '<option value="">— Selecione —</option>';
+  atividades.forEach(function(a) {
+    var opt = document.createElement('option');
+    opt.value = a.tipo + '||' + a.id;
+    opt.textContent = a.rotulo;
+    select.appendChild(opt);
+  });
+
+  if (!atividades.length) {
+    mostrarToast('Você não tem nenhuma atividade disponível para vincular (todas já têm um Atendimento Online, ou você ainda não tem atividades neste semestre).', 'erro');
+  }
+
+  document.getElementById('aoNovoData').value = '';
+  document.getElementById('aoNovoAtendido').value = '';
+  document.getElementById('aoNovoJustificativa').value = '';
+
+  document.getElementById('paModalNovoAtendimentoOnlineOverlay').classList.add('visivel');
+}
+
+function paFecharModalNovoAtendimentoOnline() {
+  document.getElementById('paModalNovoAtendimentoOnlineOverlay').classList.remove('visivel');
+}
+
+function paSalvarNovoAtendimentoOnline() {
+  var alunoAtual = paResolverAlunoAtual();
+  if (!alunoAtual) {
+    mostrarToast('Selecione um aluno antes de continuar.', 'erro');
+    return;
+  }
+
+  var valorAtividade = document.getElementById('aoNovoAtividade').value;
+  if (!valorAtividade) {
+    mostrarToast('Selecione a atividade referente a este atendimento.', 'erro');
+    return;
+  }
+  var partes = valorAtividade.split('||');
+
+  var payload = {
+    tipoAtividade: partes[0],
+    idAtividade: partes[1],
+    data: document.getElementById('aoNovoData').value,
+    atendido: document.getElementById('aoNovoAtendido').value,
+    justificativa: document.getElementById('aoNovoJustificativa').value,
+    emailAluno: alunoAtual.email
+  };
+
+  var btn = document.getElementById('btnSalvarNovoAtendimentoOnline');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Enviando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Enviar para aprovação';
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao salvar.', 'erro');
+        return;
+      }
+      mostrarToast('Atendimento online ' + res.id + ' enviado para aprovação!', 'sucesso');
+      paFecharModalNovoAtendimentoOnline();
+      paCarregarDados();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Enviar para aprovação';
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .acaoCriarAtendimentoOnline(payload);
+}
+
+// === MODAL: DETALHE / REENVIO DE ATENDIMENTO ONLINE ===
+function paAbrirModalDetalheAtendimentoOnline(idx) {
+  var reg = PA._atendimentosOnlineAtuais[idx];
+  if (!reg) return;
+  PA._atendimentoOnlineEmEdicao = reg;
+
+  document.getElementById('aoViewIdLabel').textContent = reg.id || 'ATENDIMENTO ONLINE';
+  document.getElementById('aoViewAtendido').textContent = reg.atendido || '';
+  document.getElementById('aoViewBadges').innerHTML = badgeStatusAtendimentoOnline(reg.status);
+  document.getElementById('aoViewAtividade').textContent = (reg.tipoAtividade || '') + ' ' + (reg.idAtividade || '');
+
+  var ehReprovado = normalizarChave(reg.status) === 'reprovado';
+
+  var motivoWrapper = document.getElementById('aoViewMotivoWrapper');
+  if (ehReprovado && reg.obsAprovacao) {
+    motivoWrapper.style.display = 'block';
+    document.getElementById('aoViewMotivo').textContent = reg.obsAprovacao;
+  } else {
+    motivoWrapper.style.display = 'none';
+  }
+
+  var btnReenviar = document.getElementById('btnReenviarAtendimentoOnline');
+  if (ehReprovado) {
+    document.getElementById('aoViewSomenteLeitura').style.display = 'none';
+    document.getElementById('aoEditWrapper').style.display = 'block';
+    document.getElementById('aoEditData').value = '';
+    document.getElementById('aoEditAtendido').value = reg.atendido || '';
+    document.getElementById('aoEditJustificativa').value = reg.justificativa || '';
+    btnReenviar.style.display = 'inline-flex';
+  } else {
+    document.getElementById('aoViewSomenteLeitura').style.display = 'block';
+    document.getElementById('aoViewData').textContent = reg.data || '—';
+    document.getElementById('aoViewJustificativa').textContent = reg.justificativa || '—';
+    document.getElementById('aoEditWrapper').style.display = 'none';
+    btnReenviar.style.display = 'none';
+  }
+
+  document.getElementById('paModalAtendimentoOnlineOverlay').classList.add('visivel');
+}
+
+function paReenviarAtendimentoOnline() {
+  var reg = PA._atendimentoOnlineEmEdicao;
+  if (!reg) return;
+
+  var payload = {
+    _linha: reg._linha,
+    data: document.getElementById('aoEditData').value,
+    atendido: document.getElementById('aoEditAtendido').value,
+    justificativa: document.getElementById('aoEditJustificativa').value
+  };
+
+  var btn = document.getElementById('btnReenviarAtendimentoOnline');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Enviando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span> Reenviar';
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao reenviar.', 'erro');
+        return;
+      }
+      mostrarToast('Atendimento online reenviado para aprovação!', 'sucesso');
+      paFecharModal('paModalAtendimentoOnlineOverlay');
+      paCarregarDados();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span> Reenviar';
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .acaoReenviarAtendimentoOnline(payload);
 }
 </script>

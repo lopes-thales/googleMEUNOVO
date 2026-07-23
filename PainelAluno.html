@@ -43,6 +43,10 @@
         <span class="material-symbols-outlined" style="font-size:18px;">assignment_add</span>
         Solicitar Diligência
       </button>
+      <button class="btn-acao-aluno" id="btnNovoAtendimentoOnline" onclick="paAbrirModalNovoAtendimentoOnline()">
+        <span class="material-symbols-outlined" style="font-size:18px;">support_agent</span>
+        Atendimento Online
+      </button>
     </div>
   </div>
 
@@ -137,6 +141,20 @@
             <table>
               <thead id="paCabecalhoAtendimentos"></thead>
               <tbody id="paCorpoAtendimentos"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABELA: ATENDIMENTOS ONLINE -->
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">forum</span>
+            Atendimentos Online
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="paCabecalhoAtendimentosOnline"></thead>
+              <tbody id="paCorpoAtendimentosOnline"></tbody>
             </table>
           </div>
         </div>
@@ -427,6 +445,139 @@
 
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="paFecharModal('paModalAtendimentoOverlay')">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ATENDIMENTO ONLINE (visualizacao; permite editar e reenviar se Reprovado) -->
+  <div class="modal-overlay" id="paModalAtendimentoOnlineOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo" id="aoViewIdLabel">ATENDIMENTO ONLINE</div>
+        <div class="modal-assistido" id="aoViewAtendido"></div>
+        <div id="aoViewBadges"></div>
+        <button class="modal-fechar" onclick="paFecharModal('paModalAtendimentoOnlineOverlay')">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Atividade vinculada</div>
+              <div class="modal-campo-valor" id="aoViewAtividade">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-secao" id="aoViewMotivoWrapper" style="display:none;">
+          <div class="modal-secao-titulo">Motivo da reprovação</div>
+          <div class="modal-campo-valor modal-campo-valor-secundario" id="aoViewMotivo">—</div>
+        </div>
+
+        <!-- Somente leitura -->
+        <div class="modal-secao" id="aoViewSomenteLeitura">
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-valor" id="aoViewData">—</div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Justificativa</div>
+              <div class="modal-campo-valor" id="aoViewJustificativa">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edicao (apenas quando Reprovado) -->
+        <div class="modal-secao" id="aoEditWrapper" style="display:none;">
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-editavel">
+                <input type="date" class="modal-select" id="aoEditData">
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Nome do(a) atendido(a)</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="aoEditAtendido" placeholder="Nome de quem foi atendido(a)">
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Justificativa</div>
+              <div class="modal-campo-editavel">
+                <textarea class="modal-select" id="aoEditJustificativa" rows="3" placeholder="Descreva brevemente o atendimento realizado"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="paFecharModal('paModalAtendimentoOnlineOverlay')">Fechar</button>
+        <button class="btn btn-salvar" id="btnReenviarAtendimentoOnline" style="display:none;" onclick="paReenviarAtendimentoOnline()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span>
+          Reenviar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVO ATENDIMENTO ONLINE -->
+  <div class="modal-overlay" id="paModalNovoAtendimentoOnlineOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo">NOVO</div>
+        <div class="modal-assistido">Atendimento Online</div>
+        <button class="modal-fechar" onclick="paFecharModalNovoAtendimentoOnline()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Atividade referente a este atendimento</div>
+              <div class="modal-campo-editavel">
+                <select class="modal-select" id="aoNovoAtividade">
+                  <option value="">— Selecione —</option>
+                </select>
+              </div>
+              <div class="modal-campo-valor-secundario">
+                Apenas Diligências, Iniciais e Acompanhamentos seus que ainda não têm um Atendimento Online aparecem aqui.
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-editavel">
+                <input type="date" class="modal-select" id="aoNovoData">
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Nome do(a) atendido(a)</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="aoNovoAtendido" placeholder="Nome de quem foi atendido(a)">
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Justificativa</div>
+              <div class="modal-campo-editavel">
+                <textarea class="modal-select" id="aoNovoJustificativa" rows="3" placeholder="Descreva brevemente o atendimento realizado"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="paFecharModalNovoAtendimentoOnline()">Cancelar</button>
+        <button class="btn btn-salvar" id="btnSalvarNovoAtendimentoOnline" onclick="paSalvarNovoAtendimentoOnline()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          Enviar para aprovação
+        </button>
       </div>
     </div>
   </div>

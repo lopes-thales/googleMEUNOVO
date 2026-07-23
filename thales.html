@@ -51,6 +51,11 @@
         <span class="material-symbols-outlined nav-tab-icon">timeline</span>
         Acompanhamentos
       </div>
+      <div class="nav-tab" data-vista="atendimento_online">
+        <span class="material-symbols-outlined nav-tab-icon">forum</span>
+        Atendimento Online
+        <span class="nav-tab-contador" id="navContadorAO" style="display:none;">0</span>
+      </div>
       <div class="nav-tab" data-vista="panorama">
         <span class="material-symbols-outlined nav-tab-icon">dashboard</span>
         Panorama
@@ -362,6 +367,47 @@
 
           <div class="paginacao" id="paginacaoAcompanhamentos"></div>
         </div>
+      </div>
+
+      <!-- ABA: ATENDIMENTO ONLINE (fila de aprovacao + historico) -->
+      <div class="secao-vista" id="secaoAtendimentoOnline" style="display:none;">
+
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">pending_actions</span>
+            Pendentes de aprovação
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th><th>ESTAGIÁRIO(A)</th><th>ATIVIDADE</th><th>PROCESSO</th>
+                  <th>DATA</th><th>ATENDIDO(A)</th><th>JUSTIFICATIVA</th><th>AÇÕES</th>
+                </tr>
+              </thead>
+              <tbody id="corpoAtendimentoOnlinePendentes"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">history</span>
+            Histórico recente (últimas decisões)
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th><th>ESTAGIÁRIO(A)</th><th>ATIVIDADE</th><th>DATA</th>
+                  <th>ATENDIDO(A)</th><th>STATUS</th><th>OBSERVAÇÃO</th>
+                </tr>
+              </thead>
+              <tbody id="corpoAtendimentoOnlineHistorico"></tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
 
       <!-- ABA: PANORAMA -->
@@ -891,6 +937,40 @@
         <button class="btn btn-salvar" id="btnSalvarNovoPedido" onclick="salvarNovoPedido()">
           <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
           Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REPROVAR ATENDIMENTO ONLINE -->
+  <div class="modal-overlay" id="modalReprovarAOOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo" id="raoIdLabel">ATENDIMENTO ONLINE</div>
+        <div class="modal-assistido">Reprovar</div>
+        <button class="modal-fechar" onclick="fecharModalReprovarAO()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Motivo da reprovação</div>
+              <div class="modal-campo-editavel">
+                <textarea class="modal-select" id="raoMotivo" rows="3" placeholder="Explique por que este atendimento está sendo reprovado (o estagiário verá esta mensagem)"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalReprovarAO()">Cancelar</button>
+        <button class="btn btn-salvar" id="btnConfirmarReprovarAO" onclick="confirmarReprovarAtendimentoOnline()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span>
+          Reprovar
         </button>
       </div>
     </div>

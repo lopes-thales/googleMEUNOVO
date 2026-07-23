@@ -58,13 +58,24 @@ function getDadosPainelAluno(acesso) {
   var iniciais = getTodasIniciais();
   var atendimentos = getTodosAtendimentos(); // Panorama.js
   var acompanhamentos = getTodosAcompanhamentos(); // Acompanhamentos.js
+  var atendimentosOnline = getTodosAtendimentosOnline(); // AtendimentoOnline.js
 
   if (acesso.tipo !== 'thales') {
     diligencias = filtrarRegistrosPorEstagiarios(diligencias, estagiariosVisiveis, ['estagiario'], []);
     iniciais = filtrarRegistrosPorEstagiarios(iniciais, estagiariosVisiveis, ['estagiario'], ['email']);
     atendimentos = filtrarRegistrosPorEstagiarios(atendimentos, estagiariosVisiveis, ['estagiario'], []);
     acompanhamentos = filtrarRegistrosPorEstagiarios(acompanhamentos, estagiariosVisiveis, ['estagiario'], ['email']);
+    atendimentosOnline = filtrarRegistrosPorEstagiarios(atendimentosOnline, estagiariosVisiveis, ['estagiario'], ['email']);
   }
+
+  // Atividades ainda sem Atendimento Online vinculado, calculadas a partir
+  // das MESMAS listas ja filtradas acima (ver AtendimentoOnline.js) — o
+  // frontend do Painel Aluno usa isso para popular o seletor de atividade no
+  // formulario de "Atendimento Online". Quando tipo === 'thales' (varios
+  // alunos ao mesmo tempo), a filtragem por aluno em foco continua sendo
+  // feita no cliente, exatamente como ja acontece com diligencias/iniciais/
+  // acompanhamentos nesta mesma funcao.
+  var atividadesElegiveisAO = getAtividadesElegiveisAtendimentoOnline(diligencias, iniciais, acompanhamentos);
 
   return {
     tipo: acesso.tipo,
@@ -75,6 +86,8 @@ function getDadosPainelAluno(acesso) {
     iniciais: iniciais,
     atendimentos: atendimentos,
     acompanhamentos: acompanhamentos,
+    atendimentosOnline: atendimentosOnline,
+    atividadesElegiveisAO: atividadesElegiveisAO,
     // Picklist de ESPECIE do modal "Criar Peticao Inicial" (bd!E2:E — ver
     // pedido de Thales; distinta da picklist de ESPECIE de diligencias, que
     // vem de bd!D2:D).
