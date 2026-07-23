@@ -327,11 +327,23 @@ function aprovarAtendimentoOnline(linha) {
   var aba = ss.getSheetByName(CONFIG.SHEET_ATENDIMENTOS_ONLINE);
   if (!aba) return { sucesso: false, erro: 'Aba atendimentos_online não encontrada.' };
 
+  var linhaAtual = aba.getRange(linhaNum, 1, 1, CONFIG.TOTAL_COLUNAS_ATENDIMENTO_ONLINE).getValues()[0];
+  var reg = rowParaObjetoAtendimentoOnline(linhaAtual, linhaNum - 2);
+
   aba.getRange(linhaNum, CONFIG.ATENDIMENTO_ONLINE_COL.STATUS + 1).setValue(CONFIG.STATUS_ATENDIMENTO_ONLINE.APROVADO);
   aba.getRange(linhaNum, CONFIG.ATENDIMENTO_ONLINE_COL.OBS_APROVACAO + 1).setValue('');
   aba.getRange(linhaNum, CONFIG.ATENDIMENTO_ONLINE_COL.ALTERADO_EM + 1).setValue(new Date());
 
-  return { sucesso: true };
+  // E-mail ao estagiario (Mensagens.js) — decisao de Thales: avisa nos dois
+  // casos (aprovado/reprovado), so por e-mail. Falha no envio nao desfaz a
+  // aprovacao ja gravada, so entra como aviso na resposta.
+  var avisoEmail = null;
+  if (reg.email) {
+    var referencia = _montarReferenciaAtividade(reg.tipoAtividade, reg.idAtividade);
+    avisoEmail = enviarEmailAtendimentoOnlineAprovado(reg.email, reg.estagiario, reg.id, referencia);
+  }
+
+  return { sucesso: true, avisoEmail: avisoEmail };
 }
 
 function reprovarAtendimentoOnline(linha, motivo) {
@@ -345,9 +357,29 @@ function reprovarAtendimentoOnline(linha, motivo) {
   var aba = ss.getSheetByName(CONFIG.SHEET_ATENDIMENTOS_ONLINE);
   if (!aba) return { sucesso: false, erro: 'Aba atendimentos_online não encontrada.' };
 
+  var linhaAtual = aba.getRange(linhaNum, 1, 1, CONFIG.TOTAL_COLUNAS_ATENDIMENTO_ONLINE).getValues()[0];
+  var reg = rowParaObjetoAtendimentoOnline(linhaAtual, linhaNum - 2);
+
   aba.getRange(linhaNum, CONFIG.ATENDIMENTO_ONLINE_COL.STATUS + 1).setValue(CONFIG.STATUS_ATENDIMENTO_ONLINE.REPROVADO);
   aba.getRange(linhaNum, CONFIG.ATENDIMENTO_ONLINE_COL.OBS_APROVACAO + 1).setValue(motivoTexto);
   aba.getRange(linhaNum, CONFIG.ATENDIMENTO_ONLINE_COL.ALTERADO_EM + 1).setValue(new Date());
 
-  return { sucesso: true };
+  var avisoEmail = null;
+  if (reg.email) {
+    var referencia = _montarReferenciaAtividade(reg.tipoAtividade, reg.idAtividade);
+    avisoEmail = enviarEmailAtendimentoOnlineReprovado(reg.email, reg.estagiario, reg.id, referencia, motivoTexto);
+  }
+
+  return { sucesso: true, avisoEmail: avisoEmail };
+}
+
+// Monta a referencia curta da atividade usada no assunto/corpo do e-mail
+// (ver montarMensagemAtendimentoOnlineAprovado/Reprovado, Mensagens.js):
+// "{tipoAtividade} de {assistido} — Processo {processo}". Cai para so o
+// tipo+ID se o contexto nao for encontrado (atividade excluida, por exemplo).
+function _montarReferenciaAtividade(tipo, idAtividade) {
+  var contexto = resolverContextoAtividade(tipo, idAtividade);
+  if (!contexto) return tipo + ' ' + idAtividade;
+  return tipo + ' de ' + (contexto.assistido || 'assistido não identificado') +
+    ' — Processo ' + (contexto.processo || 'sem processo');
 }

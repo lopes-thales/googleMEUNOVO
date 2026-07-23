@@ -2597,7 +2597,10 @@ function aprovarAtendimentoOnline(linha) {
         mostrarToast(res.erro || 'Erro ao aprovar.', 'erro');
         return;
       }
-      mostrarToast('Atendimento online aprovado!', 'sucesso');
+      mostrarToast(
+        res.avisoEmail ? 'Aprovado! (aviso: falha ao enviar e-mail — ' + res.avisoEmail + ')' : 'Atendimento online aprovado! E-mail enviado ao estagiário.',
+        res.avisoEmail ? 'erro' : 'sucesso'
+      );
       carregarAbaAtendimentoOnline();
     })
     .withFailureHandler(function(err) {
@@ -2645,7 +2648,10 @@ function confirmarReprovarAtendimentoOnline() {
         mostrarToast(res.erro || 'Erro ao reprovar.', 'erro');
         return;
       }
-      mostrarToast('Atendimento online reprovado.', 'sucesso');
+      mostrarToast(
+        res.avisoEmail ? 'Reprovado! (aviso: falha ao enviar e-mail — ' + res.avisoEmail + ')' : 'Atendimento online reprovado. E-mail enviado ao estagiário.',
+        res.avisoEmail ? 'erro' : 'sucesso'
+      );
       fecharModalReprovarAO();
       carregarAbaAtendimentoOnline();
     })

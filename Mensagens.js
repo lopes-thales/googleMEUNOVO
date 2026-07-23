@@ -148,6 +148,61 @@ function enviarMensagemDuploCanal(cursoId, userId, email, assunto, texto) {
   return { muralErro: muralErro, emailErro: emailErro };
 }
 
+// --- Mensagens: Atendimento Online aprovado / reprovado (so e-mail, decisao
+// de Thales — sem mural do Classroom neste fluxo) ---
+// referenciaAtividade segue o mesmo espirito das demais mensagens: um texto
+// curto que identifica a atividade sem precisar abrir o sistema. Aqui e
+// montada em AtendimentoOnline.js como "{tipoAtividade} de {assistido} —
+// Processo {processo}" (ex.: "Diligência de Maria Silva — Processo
+// 0001234-56.2026.8.06.0001"), usando o contexto ja resolvido por
+// resolverContextoAtividade.
+function montarMensagemAtendimentoOnlineAprovado(nomeAluno, idAtendimentoOnline, referenciaAtividade) {
+  var linhas = [
+    primeiroNome(nomeAluno) + ', seu Atendimento Online ' + idAtendimentoOnline + ' (' + referenciaAtividade + ') foi APROVADO.',
+    '',
+    'Ele já está contabilizado na sua produção do semestre.'
+  ];
+  return linhas.join('\n');
+}
+
+function montarMensagemAtendimentoOnlineReprovado(nomeAluno, idAtendimentoOnline, referenciaAtividade, motivo) {
+  var linhas = [
+    primeiroNome(nomeAluno) + ', seu Atendimento Online ' + idAtendimentoOnline + ' (' + referenciaAtividade + ') foi REPROVADO.',
+    '',
+    'Motivo: ' + motivo,
+    '',
+    'Você pode corrigir e reenviar o mesmo registro pelo Painel Aluno, na tabela "Atendimentos Online".'
+  ];
+  return linhas.join('\n');
+}
+
+// Chamadas por AtendimentoOnline.js (aprovarAtendimentoOnline/
+// reprovarAtendimentoOnline) apos a escrita na planilha ja ter sido feita —
+// falha no envio de e-mail nao deve desfazer a decisao de aprovacao/
+// reprovacao, por isso cada uma trata seu proprio erro e retorna uma string
+// (mensagem de erro) ou null (sucesso), sem lancar excecao para quem chamou.
+function enviarEmailAtendimentoOnlineAprovado(email, nomeAluno, idAtendimentoOnline, referenciaAtividade) {
+  try {
+    var assunto = 'Atendimento Online ' + idAtendimentoOnline + ' aprovado';
+    var texto = montarMensagemAtendimentoOnlineAprovado(nomeAluno, idAtendimentoOnline, referenciaAtividade);
+    enviarEmailIndividual(email, assunto, texto);
+    return null;
+  } catch (e) {
+    return e.message;
+  }
+}
+
+function enviarEmailAtendimentoOnlineReprovado(email, nomeAluno, idAtendimentoOnline, referenciaAtividade, motivo) {
+  try {
+    var assunto = 'Atendimento Online ' + idAtendimentoOnline + ' reprovado';
+    var texto = montarMensagemAtendimentoOnlineReprovado(nomeAluno, idAtendimentoOnline, referenciaAtividade, motivo);
+    enviarEmailIndividual(email, assunto, texto);
+    return null;
+  } catch (e) {
+    return e.message;
+  }
+}
+
 // --- Rastreio de avisos de cobranca ja enviados (nota de celula) ---
 // Mesma tecnica de marcarNotificacaoInicialEnviada/notificacaoInicialJaEnviada
 // (Classroom.js): guarda o dado tecnico como nota (comentario) de uma celula
