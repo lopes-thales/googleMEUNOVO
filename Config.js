@@ -27,6 +27,7 @@
 //nome da aba geral de diligencias: o2
 //data final do estagio (mensageria — Mensagens.js): p2
 //id pasta de arquivo dos estagiarios finalizados (botao "Arquivar Pastas", Drive.js): q2
+//pesos do calculo de "Parcial de Horas" (aba Panorama — Panorama.js): peso por atendimento: s2, peso por simples: t2, peso por complexa/inicial: u2, peso por acompanhamento: v2
 //
 //aba atendimentos a:j
 //Data	Void	Nome	CPF	Telefone 1	Telefone 2	Emprego	Ramo	Estagiário SEMESTRE
@@ -185,7 +186,15 @@ var CONFIG = {
     NOME_ABA_GERAL_DILIGENCIAS: 'O2', // nome da aba de diligencias dentro da planilha GERAL
     DATA_FINALIZACAO_ESTAGIO: 'P2', // data final do periodo de estagio corrente (mensageria — ver Mensagens.js)
     ID_PASTA_ARQUIVO_ESTAGIARIOS: 'Q2', // ID da pasta no Drive para onde vao as pastas dos estagiarios finalizados, retiradas de bd!L2 — botao "Arquivar Pastas" (Drive.js)
-    CONTROLE_AO: 'R2' // contador para numeracao AO-XXXX (Atendimento Online) — guarda apenas o numero inteiro atual, ver AtendimentoOnline.js
+    CONTROLE_AO: 'R2', // contador para numeracao AO-XXXX (Atendimento Online) — guarda apenas o numero inteiro atual, ver AtendimentoOnline.js
+
+    // Pesos usados no calculo de "Parcial de Horas" da aba Panorama (ver
+    // getPesosPontuacaoPanorama, Panorama.js). Cada celula guarda um unico
+    // numero — quantas "horas" vale uma unidade daquele tipo de atividade.
+    PESO_ATENDIMENTO: 'S2',      // peso por atendimento (presencial + online aprovado)
+    PESO_SIMPLES: 'T2',          // peso por diligencia simples
+    PESO_COMPLEXA: 'U2',         // peso por diligencia complexa + inicial
+    PESO_ACOMPANHAMENTO: 'V2'    // peso por acompanhamento
   },
 
   // --- Integracao Google Classroom ---

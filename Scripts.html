@@ -467,21 +467,31 @@ function acaoGerenciarVerificarEntregas() {
       var totalAtualizados = (res.atualizados || []).length;
       var totalErros = (res.erros || []).length;
 
+      var mensagemEntregas, tipoEntregas;
       if (totalAtualizados === 0 && totalErros === 0) {
-        mostrarToast('Nenhuma atualização de entrega encontrada.', '');
+        mensagemEntregas = 'Nenhuma atualização de entrega encontrada.';
+        tipoEntregas = '';
       } else if (totalErros === 0) {
-        mostrarToast(totalAtualizados + ' registro(s) atualizado(s) com base nas entregas do Classroom.', 'sucesso');
+        mensagemEntregas = totalAtualizados + ' registro(s) atualizado(s) com base nas entregas do Classroom.';
+        tipoEntregas = 'sucesso';
       } else if (totalAtualizados === 0) {
-        mostrarToast('Falha ao verificar ' + totalErros + ' registro(s). Veja o console.', 'erro');
+        mensagemEntregas = 'Falha ao verificar ' + totalErros + ' registro(s). Veja o console.';
+        tipoEntregas = 'erro';
         console.error('Erros ao verificar entregas:', res.erros);
       } else {
-        mostrarToast(totalAtualizados + ' atualizado(s), ' + totalErros + ' com erro. Veja o console.', '');
+        mensagemEntregas = totalAtualizados + ' atualizado(s), ' + totalErros + ' com erro. Veja o console.';
+        tipoEntregas = '';
         console.error('Erros ao verificar entregas:', res.erros);
       }
 
       recarregarAposEdicao();
       if (APP.vistaAtual === 'acompanhamentos') carregarAbaAcompanhamentos();
       if (APP.vistaAtual === 'iniciais') carregarAbaIniciais();
+
+      // Alem das entregas, aproveita o clique para verificar se ha
+      // Atendimentos Online pendentes de aprovacao (mesma fonte usada pela
+      // aba e pelo contador da nav-bar — ver atualizarContadorAtendimentoOnline).
+      notificarNovosAtendimentosOnline(mensagemEntregas, tipoEntregas);
     })
     .withFailureHandler(function(err) {
       btn.disabled = false;
@@ -489,6 +499,32 @@ function acaoGerenciarVerificarEntregas() {
       mostrarToast('Erro ao verificar entregas: ' + err.message, 'erro');
     })
     .acaoVerificarEntregas();
+}
+
+// Busca a fila de Atendimento Online pendente (mesma chamada de
+// carregarAbaAtendimentoOnline) e atualiza o contador da nav-bar; se houver
+// algum pendente, acrescenta um aviso ao toast de "Verificar Entregas".
+function notificarNovosAtendimentosOnline(mensagemBase, tipoBase) {
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      var badge = document.getElementById('navContadorAO');
+      var qtd = (resultado && resultado.pendentes || []).length;
+      if (badge) {
+        if (qtd > 0) { badge.textContent = qtd; badge.style.display = 'inline-flex'; }
+        else { badge.style.display = 'none'; }
+      }
+
+      if (qtd > 0) {
+        var avisoAO = qtd + ' atendimento(s) online pendente(s) de aprovação.';
+        mostrarToast(mensagemBase ? mensagemBase + ' ' + avisoAO : avisoAO, tipoBase || '');
+      } else {
+        mostrarToast(mensagemBase, tipoBase);
+      }
+    })
+    .withFailureHandler(function() {
+      mostrarToast(mensagemBase, tipoBase); // silencioso — nao bloqueia o aviso principal
+    })
+    .carregarDadosAprovacaoAtendimentoOnline();
 }
 
 function acaoGerenciarEnviarCobrancas() {
@@ -2460,7 +2496,9 @@ function salvarModalAcompanhamento() {
 var APP_ATENDIMENTO_ONLINE = {
   pendentes: [],
   historico: [],
-  linhaEmReprovacao: null
+  selecionados: {}, // { linha: true }
+  linhasEmReprovacao: [], // sempre um array — 1 item (via modal de detalhe) ou N (lote)
+  registroDetalheAtual: null // registro aberto no modal de detalhe (Aprovar/Reprovar de dentro dele)
 };
 
 // Badge de status reaproveitando as classes definidas em Styles.html
@@ -2508,8 +2546,10 @@ function carregarAbaAtendimentoOnline() {
       }
       APP_ATENDIMENTO_ONLINE.pendentes = resultado.pendentes || [];
       APP_ATENDIMENTO_ONLINE.historico = resultado.historico || [];
+      APP_ATENDIMENTO_ONLINE.selecionados = {};
       renderizarFilaAtendimentoOnline();
       renderizarHistoricoAtendimentoOnline();
+      atualizarBotoesLoteAO();
 
       var badge = document.getElementById('navContadorAO');
       if (badge) {
@@ -2525,9 +2565,14 @@ function carregarAbaAtendimentoOnline() {
     .carregarDadosAprovacaoAtendimentoOnline();
 }
 
+// --- Fila de pendentes: checkbox por linha + acoes em lote ---
+
 function renderizarFilaAtendimentoOnline() {
   var corpo = document.getElementById('corpoAtendimentoOnlinePendentes');
   var lista = APP_ATENDIMENTO_ONLINE.pendentes;
+
+  var checkTodos = document.getElementById('checkTodosAO');
+  if (checkTodos) checkTodos.checked = false;
 
   if (!lista.length) {
     corpo.innerHTML =
@@ -2544,26 +2589,44 @@ function renderizarFilaAtendimentoOnline() {
   lista.forEach(function(reg) {
     var processo = (reg.contexto && reg.contexto.processo) || '<span class="celula-vazio">—</span>';
     var assistido = (reg.contexto && reg.contexto.assistido) || '<span class="celula-vazio">—</span>';
+    var marcado = APP_ATENDIMENTO_ONLINE.selecionados[reg._linha] ? ' checked' : '';
     html += '<tr>' +
-      '<td class="td-numero">' + (reg.id || '') + '</td>' +
-      '<td class="td-assistido">' + (reg.estagiario || '') + '</td>' +
-      '<td>' + (reg.tipoAtividade || '') + ' ' + (reg.idAtividade || '') + '</td>' +
-      '<td class="td-assistido">' + assistido + '</td>' +
-      '<td>' + processo + '</td>' +
-      '<td>' + (reg.data || '') + '</td>' +
-      '<td>' + (reg.atendido || '') + '</td>' +
-      '<td class="td-obs" title="' + (reg.justificativa || '').replace(/"/g, '&quot;') + '">' + (reg.justificativa || '') + '</td>' +
-      '<td>' +
-        '<button class="btn-icone btn-icone-sucesso" title="Aprovar" onclick="aprovarAtendimentoOnline(' + reg._linha + ')">' +
-          '<span class="material-symbols-outlined" style="font-size:18px;">check_circle</span>' +
-        '</button>' +
-        '<button class="btn-icone btn-icone-erro" title="Reprovar" onclick="abrirModalReprovarAO(' + reg._linha + ', \'' + (reg.id || '') + '\')">' +
-          '<span class="material-symbols-outlined" style="font-size:18px;">cancel</span>' +
-        '</button>' +
-      '</td>' +
+      '<td onclick="event.stopPropagation();"><input type="checkbox" data-linha="' + reg._linha + '"' + marcado + ' onchange="alternarSelecaoAtendimentoOnline(' + reg._linha + ', this.checked)"></td>' +
+      '<td class="td-numero" onclick="abrirModalDetalheAOPendente(' + reg._linha + ')">' + (reg.id || '') + '</td>' +
+      '<td class="td-assistido" onclick="abrirModalDetalheAOPendente(' + reg._linha + ')">' + (reg.estagiario || '') + '</td>' +
+      '<td onclick="abrirModalDetalheAOPendente(' + reg._linha + ')">' + (reg.tipoAtividade || '') + ' ' + (reg.idAtividade || '') + '</td>' +
+      '<td class="td-assistido" onclick="abrirModalDetalheAOPendente(' + reg._linha + ')">' + assistido + '</td>' +
+      '<td onclick="abrirModalDetalheAOPendente(' + reg._linha + ')">' + processo + '</td>' +
+      '<td onclick="abrirModalDetalheAOPendente(' + reg._linha + ')">' + (reg.data || '') + '</td>' +
+      '<td onclick="abrirModalDetalheAOPendente(' + reg._linha + ')">' + (reg.atendido || '') + '</td>' +
+      '<td class="td-obs" title="' + (reg.justificativa || '').replace(/"/g, '&quot;') + '" onclick="abrirModalDetalheAOPendente(' + reg._linha + ')">' + (reg.justificativa || '') + '</td>' +
     '</tr>';
   });
   corpo.innerHTML = html;
+}
+
+function alternarSelecaoAtendimentoOnline(linha, marcado) {
+  if (marcado) APP_ATENDIMENTO_ONLINE.selecionados[linha] = true;
+  else delete APP_ATENDIMENTO_ONLINE.selecionados[linha];
+  atualizarBotoesLoteAO();
+}
+
+function alternarTodosAtendimentoOnline(marcado) {
+  APP_ATENDIMENTO_ONLINE.selecionados = {};
+  if (marcado) {
+    APP_ATENDIMENTO_ONLINE.pendentes.forEach(function(reg) { APP_ATENDIMENTO_ONLINE.selecionados[reg._linha] = true; });
+  }
+  renderizarFilaAtendimentoOnline();
+  if (marcado) { var c = document.getElementById('checkTodosAO'); if (c) c.checked = true; }
+  atualizarBotoesLoteAO();
+}
+
+function atualizarBotoesLoteAO() {
+  var qtd = Object.keys(APP_ATENDIMENTO_ONLINE.selecionados).length;
+  var btnAprovar = document.getElementById('btnAprovarSelecionadosAO');
+  var btnReprovar = document.getElementById('btnReprovarSelecionadosAO');
+  if (btnAprovar) btnAprovar.disabled = qtd === 0;
+  if (btnReprovar) btnReprovar.disabled = qtd === 0;
 }
 
 function renderizarHistoricoAtendimentoOnline() {
@@ -2576,8 +2639,8 @@ function renderizarHistoricoAtendimentoOnline() {
   }
 
   var html = '';
-  lista.forEach(function(reg) {
-    html += '<tr>' +
+  lista.forEach(function(reg, idx) {
+    html += '<tr onclick="abrirModalDetalheAOHistorico(' + idx + ')">' +
       '<td class="td-numero">' + (reg.id || '') + '</td>' +
       '<td class="td-assistido">' + (reg.estagiario || '') + '</td>' +
       '<td>' + (reg.tipoAtividade || '') + ' ' + (reg.idAtividade || '') + '</td>' +
@@ -2590,35 +2653,140 @@ function renderizarHistoricoAtendimentoOnline() {
   corpo.innerHTML = html;
 }
 
-function aprovarAtendimentoOnline(linha) {
+function abrirModalDetalheAOHistorico(idx) {
+  var reg = APP_ATENDIMENTO_ONLINE.historico[idx];
+  if (reg) abrirModalDetalheAO(reg);
+}
+
+// --- Modal de detalhe completo (Panorama e Atendimento Online: pendentes/historico) ---
+
+function abrirModalDetalheAOPendente(linha) {
+  var reg = APP_ATENDIMENTO_ONLINE.pendentes.filter(function(r) { return r._linha === linha; })[0];
+  if (reg) abrirModalDetalheAO(reg);
+}
+
+// reg: registro de atendimentos_online. Aceita tanto os campos ja resolvidos
+// pela fila de aprovacao (reg.contexto) quanto registros "crus" vindos da
+// aba Panorama (sem contexto) — neste ultimo caso resolve na hora usando as
+// listas ja carregadas em APP.dados (mesma logica de resolverContextoAtividade,
+// aqui replicada no cliente para nao precisar de ida ao servidor so para exibir).
+function abrirModalDetalheAO(reg) {
+  if (!reg) return;
+  APP_ATENDIMENTO_ONLINE.registroDetalheAtual = reg;
+
+  var contexto = reg.contexto || _resolverContextoAtividadeCliente(reg.tipoAtividade, reg.idAtividade);
+
+  document.getElementById('daoIdLabel').textContent = reg.id || 'ATENDIMENTO ONLINE';
+  document.getElementById('daoAtendido').textContent = reg.atendido || '';
+  document.getElementById('daoBadge').innerHTML = badgeStatusAtendimentoOnline(reg.status);
+  document.getElementById('daoEstagiario').textContent = reg.estagiario || '—';
+  document.getElementById('daoData').textContent = reg.data || '—';
+  document.getElementById('daoAtividade').textContent = (reg.tipoAtividade || '') + ' ' + (reg.idAtividade || '');
+  document.getElementById('daoAssistido').textContent = (contexto && contexto.assistido) || '—';
+  document.getElementById('daoProcesso').textContent = (contexto && contexto.processo) || '—';
+  document.getElementById('daoJustificativa').textContent = reg.justificativa || '—';
+
+  var motivoWrapper = document.getElementById('daoMotivoWrapper');
+  if (reg.obsAprovacao) {
+    motivoWrapper.style.display = 'block';
+    document.getElementById('daoMotivo').textContent = reg.obsAprovacao;
+  } else {
+    motivoWrapper.style.display = 'none';
+  }
+
+  var ehPendente = normalizarChave(reg.status) === 'pendente';
+  document.getElementById('btnDaoAprovar').style.display = ehPendente ? 'inline-flex' : 'none';
+  document.getElementById('btnDaoReprovar').style.display = ehPendente ? 'inline-flex' : 'none';
+
+  document.getElementById('modalDetalheAOOverlay').classList.add('visivel');
+}
+
+function fecharModalDetalheAO() {
+  document.getElementById('modalDetalheAOOverlay').classList.remove('visivel');
+  APP_ATENDIMENTO_ONLINE.registroDetalheAtual = null;
+}
+
+document.getElementById('modalDetalheAOOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalDetalheAO();
+});
+
+// Resolucao de contexto no cliente (usada quando o registro vem da aba
+// Panorama, que nao tem o campo "contexto" — so a fila de aprovacao
+// resolve isso no servidor, ver getDadosAprovacaoAtendimentoOnline em
+// AtendimentoOnline.js). Reaproveita as mesmas listas ja carregadas em
+// APP.dados.panoramaDiligencias/panoramaIniciais.
+function _resolverContextoAtividadeCliente(tipo, idAtividade) {
+  var chaveTipo = normalizarChave(tipo);
+  var lista = chaveTipo === normalizarChave('Diligência') ? (APP.dados.panoramaDiligencias || []) :
+    (chaveTipo === normalizarChave('Inicial') ? (APP.dados.panoramaIniciais || []) : []);
+  var achado = lista.filter(function(r) { return String(r.id || '').trim() === String(idAtividade || '').trim(); })[0];
+  if (!achado) return null;
+  return { processo: achado.processo || '', assistido: achado.assistido || '' };
+}
+
+function aprovarAtendimentoOnlineDoModal() {
+  var reg = APP_ATENDIMENTO_ONLINE.registroDetalheAtual;
+  if (!reg) return;
+  executarAprovacaoAtendimentoOnline([reg._linha], function() { fecharModalDetalheAO(); });
+}
+
+function reprovarAtendimentoOnlineDoModal() {
+  var reg = APP_ATENDIMENTO_ONLINE.registroDetalheAtual;
+  if (!reg) return;
+  abrirModalReprovarAO([reg._linha], reg.id);
+}
+
+// --- Aprovacao/reprovacao (single ou em lote — sempre via array) ---
+
+function executarAprovacaoAtendimentoOnline(linhas, aoFinalizar) {
   google.script.run
     .withSuccessHandler(function(res) {
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao aprovar.', 'erro');
         return;
       }
-      mostrarToast(
-        res.avisoEmail ? 'Aprovado! (aviso: falha ao enviar e-mail — ' + res.avisoEmail + ')' : 'Atendimento online aprovado! E-mail enviado ao estagiário.',
-        res.avisoEmail ? 'erro' : 'sucesso'
-      );
+      var qtd = linhas.length;
+      var falhas = res.falhas || [];
+      if (falhas.length) {
+        mostrarToast((qtd - falhas.length) + ' de ' + qtd + ' aprovado(s). ' + falhas.length + ' falharam.', 'erro');
+      } else {
+        mostrarToast(qtd > 1 ? qtd + ' atendimentos online aprovados! E-mails enviados.' : 'Atendimento online aprovado! E-mail enviado ao estagiário.', 'sucesso');
+      }
+      if (aoFinalizar) aoFinalizar();
       carregarAbaAtendimentoOnline();
+      // Se a aba Panorama ja foi carregada nesta sessao, atualiza o card de
+      // Atendimentos e a tabela la tambem (aprovado passa a contar).
+      if (APP.dados.panoramaEstagiarios && APP.dados.panoramaEstagiarios.length) carregarAbaPanorama();
     })
     .withFailureHandler(function(err) {
       mostrarToast('Erro: ' + err.message, 'erro');
     })
-    .acaoAprovarAtendimentoOnline(linha);
+    .acaoAprovarAtendimentosOnlineEmLote(linhas);
 }
 
-function abrirModalReprovarAO(linha, id) {
-  APP_ATENDIMENTO_ONLINE.linhaEmReprovacao = linha;
-  document.getElementById('raoIdLabel').textContent = id || 'ATENDIMENTO ONLINE';
+function aprovarSelecionadosAtendimentoOnline() {
+  var linhas = Object.keys(APP_ATENDIMENTO_ONLINE.selecionados).map(Number);
+  if (!linhas.length) return;
+  executarAprovacaoAtendimentoOnline(linhas, null);
+}
+
+function abrirModalReprovarAO(linhas, idLabel) {
+  APP_ATENDIMENTO_ONLINE.linhasEmReprovacao = linhas;
+  document.getElementById('raoIdLabel').textContent =
+    linhas.length > 1 ? (linhas.length + ' registros selecionados') : (idLabel || 'ATENDIMENTO ONLINE');
   document.getElementById('raoMotivo').value = '';
   document.getElementById('modalReprovarAOOverlay').classList.add('visivel');
 }
 
+function abrirModalReprovarAOEmLote() {
+  var linhas = Object.keys(APP_ATENDIMENTO_ONLINE.selecionados).map(Number);
+  if (!linhas.length) return;
+  abrirModalReprovarAO(linhas, null);
+}
+
 function fecharModalReprovarAO() {
   document.getElementById('modalReprovarAOOverlay').classList.remove('visivel');
-  APP_ATENDIMENTO_ONLINE.linhaEmReprovacao = null;
+  APP_ATENDIMENTO_ONLINE.linhasEmReprovacao = [];
 }
 
 document.getElementById('modalReprovarAOOverlay').addEventListener('click', function(e) {
@@ -2626,8 +2794,8 @@ document.getElementById('modalReprovarAOOverlay').addEventListener('click', func
 });
 
 function confirmarReprovarAtendimentoOnline() {
-  var linha = APP_ATENDIMENTO_ONLINE.linhaEmReprovacao;
-  if (!linha) return;
+  var linhas = APP_ATENDIMENTO_ONLINE.linhasEmReprovacao;
+  if (!linhas || !linhas.length) return;
 
   var motivo = document.getElementById('raoMotivo').value.trim();
   if (!motivo) {
@@ -2648,11 +2816,15 @@ function confirmarReprovarAtendimentoOnline() {
         mostrarToast(res.erro || 'Erro ao reprovar.', 'erro');
         return;
       }
-      mostrarToast(
-        res.avisoEmail ? 'Reprovado! (aviso: falha ao enviar e-mail — ' + res.avisoEmail + ')' : 'Atendimento online reprovado. E-mail enviado ao estagiário.',
-        res.avisoEmail ? 'erro' : 'sucesso'
-      );
+      var qtd = linhas.length;
+      var falhas = res.falhas || [];
+      if (falhas.length) {
+        mostrarToast((qtd - falhas.length) + ' de ' + qtd + ' reprovado(s). ' + falhas.length + ' falharam.', 'erro');
+      } else {
+        mostrarToast(qtd > 1 ? qtd + ' atendimentos online reprovados. E-mails enviados.' : 'Atendimento online reprovado. E-mail enviado ao estagiário.', 'sucesso');
+      }
       fecharModalReprovarAO();
+      fecharModalDetalheAO();
       carregarAbaAtendimentoOnline();
     })
     .withFailureHandler(function(err) {
@@ -2660,7 +2832,7 @@ function confirmarReprovarAtendimentoOnline() {
       btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span> Reprovar';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
-    .acaoReprovarAtendimentoOnline(linha, motivo);
+    .acaoReprovarAtendimentosOnlineEmLote(linhas, motivo);
 }
 
 // === ABA: PANORAMA ===
@@ -2692,6 +2864,8 @@ function carregarAbaPanorama() {
       APP.dados.panoramaIniciais = resultado.iniciais || [];
       APP.dados.panoramaAtendimentos = resultado.atendimentos || [];
       APP.dados.panoramaAcompanhamentos = resultado.acompanhamentos || [];
+      APP.dados.panoramaAtendimentosOnline = resultado.atendimentosOnline || [];
+      APP.dados.pesosPontuacao = resultado.pesosPontuacao || {};
       // O modal de Inicial e reaproveitado tal como esta e depende de
       // statusPicklist — garante que exista mesmo que a aba Iniciais nunca
       // tenha sido aberta nesta sessao.
@@ -3044,12 +3218,33 @@ function getAtendimentosPanoramaFiltrados() {
   });
 }
 
+// Cruzamento por e-mail e nome, mesmo padrao de Iniciais/Acompanhamentos
+// (ver AtendimentoOnline.js — atendimentos_online guarda os dois campos).
+function getAtendimentosOnlinePanoramaFiltrados() {
+  var sem = APP_PANORAMA.semestreFiltro;
+  var emails = {};
+  var nomes = {};
+  getConjuntoAlunosPanorama().forEach(function(a) {
+    if (a.email) emails[normalizarChave(a.email)] = true;
+    if (a.nome) nomes[normalizarChave(a.nome)] = true;
+  });
+  return (APP.dados.panoramaAtendimentosOnline || []).filter(function(r) {
+    if (r.semestre !== sem) return false;
+    var emailOk = !!emails[normalizarChave(r.email)];
+    var nomeOk = !!nomes[normalizarChave(r.estagiario)];
+    return emailOk || nomeOk;
+  });
+}
+
 // --- Cards resumo ---
 
 function renderizarCardsPanorama() {
   var diligencias = getDiligenciasPanoramaFiltradas().filter(naoEhCancelada);
   var iniciais = getIniciaisPanoramaFiltradas().filter(naoEhCancelada);
   var atendimentos = getAtendimentosPanoramaFiltrados();
+  var atendimentosOnlineAprovados = getAtendimentosOnlinePanoramaFiltrados().filter(function(r) {
+    return normalizarChave(r.status) === 'aprovado';
+  });
   var acompanhamentos = getAcompanhamentosPanoramaFiltrados().filter(naoEhCancelada);
 
   var complexasDiligencias = diligencias.filter(function(r) {
@@ -3061,14 +3256,36 @@ function renderizarCardsPanorama() {
   // Cada inicial conta como uma diligencia complexa.
   var complexas = complexasDiligencias + iniciais.length;
   var total = diligencias.length + iniciais.length;
+  // Atendimentos = presenciais + Atendimentos Online aprovados (decisao de
+  // Thales — os reprovados/pendentes nao contam).
+  var totalAtendimentos = atendimentos.length + atendimentosOnlineAprovados.length;
 
   var cards = [
     { label: 'TOTAL',          num: total,                   classe: 'card-total',       icone: 'folder_open' },
     { label: 'COMPLEXAS',      num: complexas,               classe: 'card-entregue',    icone: 'gavel' },
     { label: 'SIMPLES',        num: simples,                 classe: 'card-encaminhado', icone: 'description' },
     { label: 'ACOMPANHAMENTOS', num: acompanhamentos.length, classe: 'card-devolvida',   icone: 'timeline' },
-    { label: 'ATENDIMENTOS',   num: atendimentos.length,     classe: 'card-concluido',   icone: 'support_agent' }
+    { label: 'ATENDIMENTOS',   num: totalAtendimentos,       classe: 'card-concluido',   icone: 'support_agent' }
   ];
+
+  // "Parcial de Horas": pontuacao de conferencia (bd!S2:V2, CONFIG.BD_CELL —
+  // Config.js), so aparece com UM aluno selecionado (nao faz sentido somada
+  // para "Todos os alunos").
+  if (APP_PANORAMA.alunoSelecionado) {
+    var pesos = APP.dados.pesosPontuacao || {};
+    var pontuacao =
+      simples * (pesos.simples || 0) +
+      complexas * (pesos.complexa || 0) +
+      acompanhamentos.length * (pesos.acompanhamento || 0) +
+      totalAtendimentos * (pesos.atendimento || 0);
+
+    cards.push({
+      label: 'PARCIAL DE HORAS',
+      num: pontuacao.toFixed(1).replace('.', ','),
+      classe: 'card-sem-estagiario',
+      icone: 'military_tech'
+    });
+  }
 
   var html = '';
   cards.forEach(function(c) {
@@ -3091,6 +3308,7 @@ function renderizarTabelasPanorama() {
   renderizarTabelaIniciaisPanorama();
   renderizarTabelaAcompanhamentosPanorama();
   renderizarTabelaAtendimentosPanorama();
+  renderizarTabelaAtendimentosOnlinePanorama();
 }
 
 function celulaVaziaTabela(colspan, titulo) {
@@ -3234,6 +3452,44 @@ function renderizarTabelaAtendimentosPanorama() {
     '</tr>';
   });
   corpo.innerHTML = html;
+}
+
+// Clique na linha abre o modal de detalhe completo (ver modalDetalheAOOverlay,
+// secao "ABA: ATENDIMENTO ONLINE"), com Aprovar/Reprovar quando Pendente —
+// mesmo modal reaproveitado pela fila de aprovacao.
+function renderizarTabelaAtendimentosOnlinePanorama() {
+  var lista = getAtendimentosOnlinePanoramaFiltrados();
+
+  document.getElementById('panoramaCabecalhoAtendimentosOnline').innerHTML =
+    '<tr>' +
+      '<th>ID</th><th>ESTAGIÁRIO(A)</th><th>ATIVIDADE</th><th>DATA</th>' +
+      '<th>ATENDIDO(A)</th><th>STATUS</th>' +
+    '</tr>';
+
+  var corpo = document.getElementById('panoramaCorpoAtendimentosOnline');
+  if (lista.length === 0) {
+    corpo.innerHTML = celulaVaziaTabela(6, 'Nenhum atendimento online encontrado');
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg, idx) {
+    html += '<tr onclick="abrirModalDetalheAOPanorama(' + idx + ')">' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.estagiario || '') + '</td>' +
+      '<td>' + (reg.tipoAtividade || '') + ' ' + (reg.idAtividade || '') + '</td>' +
+      '<td>' + (reg.data || '') + '</td>' +
+      '<td>' + (reg.atendido || '') + '</td>' +
+      '<td>' + badgeStatusAtendimentoOnline(reg.status) + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+function abrirModalDetalheAOPanorama(idx) {
+  var lista = getAtendimentosOnlinePanoramaFiltrados();
+  var reg = lista[idx];
+  if (reg) abrirModalDetalheAO(reg);
 }
 
 // --- Modal de Atendimento (somente leitura) ---

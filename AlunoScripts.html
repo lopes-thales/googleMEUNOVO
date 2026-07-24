@@ -418,19 +418,25 @@ function paRenderizarCards(alunoAtual) {
   var diligencias = paDiligenciasFiltradas(alunoAtual).filter(naoEhCancelada);
   var iniciais = paIniciaisFiltradas(alunoAtual).filter(naoEhCancelada);
   var atendimentos = paAtendimentosFiltrados(alunoAtual);
+  var atendimentosOnlineAprovados = paAtendimentosOnlineFiltrados(alunoAtual).filter(function(r) {
+    return normalizarChave(r.status) === 'aprovado';
+  });
   var acompanhamentos = paAcompanhamentosFiltrados(alunoAtual).filter(naoEhCancelada);
 
   var complexasDiligencias = diligencias.filter(function(r) { return normalizarChave(r.subespecie) === 'complexa'; }).length;
   var simples = diligencias.filter(function(r) { return normalizarChave(r.subespecie) === 'simples'; }).length;
   var complexas = complexasDiligencias + iniciais.length;
   var total = diligencias.length + iniciais.length;
+  // Atendimentos = presenciais + Atendimentos Online aprovados (mesma regra
+  // aplicada em Panorama.js/thales.html — pendentes/reprovados nao contam).
+  var totalAtendimentos = atendimentos.length + atendimentosOnlineAprovados.length;
 
   var cards = [
     { label: 'TOTAL',          num: total,                   classe: 'card-total',       icone: 'folder_open' },
     { label: 'COMPLEXAS',      num: complexas,               classe: 'card-entregue',    icone: 'gavel' },
     { label: 'SIMPLES',        num: simples,                 classe: 'card-encaminhado', icone: 'description' },
     { label: 'ACOMPANHAMENTOS', num: acompanhamentos.length, classe: 'card-devolvida',   icone: 'timeline' },
-    { label: 'ATENDIMENTOS',   num: atendimentos.length,     classe: 'card-concluido',   icone: 'support_agent' }
+    { label: 'ATENDIMENTOS',   num: totalAtendimentos,       classe: 'card-concluido',   icone: 'support_agent' }
   ];
 
   var html = '';

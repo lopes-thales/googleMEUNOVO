@@ -313,6 +313,10 @@ function getDadosAprovacaoAtendimentoOnline() {
 
   var historico = todos
     .filter(function(ao) { return normalizarChave(ao.status) !== normalizarChave(CONFIG.STATUS_ATENDIMENTO_ONLINE.PENDENTE); })
+    .map(function(ao) {
+      ao.contexto = resolverContextoAtividade(ao.tipoAtividade, ao.idAtividade);
+      return ao;
+    })
     .sort(function(a, b) { return (b._linha || 0) - (a._linha || 0); })
     .slice(0, 50);
 
@@ -371,6 +375,42 @@ function reprovarAtendimentoOnline(linha, motivo) {
   }
 
   return { sucesso: true, avisoEmail: avisoEmail };
+}
+
+// --- Acoes em lote (checkboxes da fila "Pendentes de aprovacao") ---
+// Reaproveitam aprovarAtendimentoOnline/reprovarAtendimentoOnline linha a
+// linha (mesma validacao e mesmo e-mail individual por registro) — apenas
+// agrupam o resultado numa unica resposta para o frontend nao precisar de
+// uma chamada ao servidor por checkbox marcado.
+function aprovarAtendimentosOnlineEmLote(linhas) {
+  var lista = Array.isArray(linhas) ? linhas : [];
+  var falhas = [];
+  var avisosEmail = [];
+
+  lista.forEach(function(linha) {
+    var res = aprovarAtendimentoOnline(linha);
+    if (!res.sucesso) falhas.push({ linha: linha, erro: res.erro });
+    else if (res.avisoEmail) avisosEmail.push({ linha: linha, erro: res.avisoEmail });
+  });
+
+  return { sucesso: true, total: lista.length, falhas: falhas, avisosEmail: avisosEmail };
+}
+
+function reprovarAtendimentosOnlineEmLote(linhas, motivo) {
+  var motivoTexto = String(motivo || '').trim();
+  if (!motivoTexto) return { sucesso: false, erro: 'Informe o motivo da reprovação.' };
+
+  var lista = Array.isArray(linhas) ? linhas : [];
+  var falhas = [];
+  var avisosEmail = [];
+
+  lista.forEach(function(linha) {
+    var res = reprovarAtendimentoOnline(linha, motivoTexto);
+    if (!res.sucesso) falhas.push({ linha: linha, erro: res.erro });
+    else if (res.avisoEmail) avisosEmail.push({ linha: linha, erro: res.avisoEmail });
+  });
+
+  return { sucesso: true, total: lista.length, falhas: falhas, avisosEmail: avisosEmail };
 }
 
 // Monta a referencia curta da atividade usada no assunto/corpo do e-mail

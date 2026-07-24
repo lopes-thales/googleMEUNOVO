@@ -376,13 +376,23 @@
           <div class="panorama-tabela-titulo">
             <span class="material-symbols-outlined" style="font-size:18px;">pending_actions</span>
             Pendentes de aprovação
+            <span class="painel-semestre-separador"></span>
+            <button class="btn btn-salvar" id="btnAprovarSelecionadosAO" onclick="aprovarSelecionadosAtendimentoOnline()" disabled style="padding:6px 14px; font-size:12.5px;">
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">check_circle</span>
+              Aprovar selecionados
+            </button>
+            <button class="btn btn-salvar" id="btnReprovarSelecionadosAO" onclick="abrirModalReprovarAOEmLote()" disabled style="padding:6px 14px; font-size:12.5px; background: var(--cor-atraso); margin-left:8px;">
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">cancel</span>
+              Reprovar selecionados
+            </button>
           </div>
           <div class="tabela-wrapper">
             <table>
               <thead>
                 <tr>
+                  <th style="width:34px;"><input type="checkbox" id="checkTodosAO" onchange="alternarTodosAtendimentoOnline(this.checked)"></th>
                   <th>ID</th><th>ESTAGIÁRIO(A)</th><th>ATIVIDADE</th><th>ASSISTIDO(A)</th><th>PROCESSO</th>
-                  <th>DATA</th><th>ATENDIDO(A)</th><th>JUSTIFICATIVA</th><th>AÇÕES</th>
+                  <th>DATA</th><th>ATENDIDO(A)</th><th>JUSTIFICATIVA</th>
                 </tr>
               </thead>
               <tbody id="corpoAtendimentoOnlinePendentes"></tbody>
@@ -485,6 +495,20 @@
             <table>
               <thead id="panoramaCabecalhoAtendimentos"></thead>
               <tbody id="panoramaCorpoAtendimentos"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABELA: ATENDIMENTOS ONLINE -->
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">forum</span>
+            Atendimentos Online
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="panoramaCabecalhoAtendimentosOnline"></thead>
+              <tbody id="panoramaCorpoAtendimentosOnline"></tbody>
             </table>
           </div>
         </div>
@@ -937,6 +961,68 @@
         <button class="btn btn-salvar" id="btnSalvarNovoPedido" onclick="salvarNovoPedido()">
           <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
           Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DETALHE ATENDIMENTO ONLINE (view completa + Aprovar/Reprovar) -->
+  <div class="modal-overlay" id="modalDetalheAOOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo" id="daoIdLabel">ATENDIMENTO ONLINE</div>
+        <div class="modal-assistido" id="daoAtendido"></div>
+        <div id="daoBadge"></div>
+        <button class="modal-fechar" onclick="fecharModalDetalheAO()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Estagiário(a)</div>
+              <div class="modal-campo-valor" id="daoEstagiario">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-valor" id="daoData">—</div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Atividade vinculada</div>
+              <div class="modal-campo-valor" id="daoAtividade">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Assistido(a)</div>
+              <div class="modal-campo-valor" id="daoAssistido">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Processo</div>
+              <div class="modal-campo-valor" id="daoProcesso">—</div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Justificativa</div>
+              <div class="modal-campo-valor" id="daoJustificativa">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-secao" id="daoMotivoWrapper" style="display:none;">
+          <div class="modal-secao-titulo">Observação da aprovação/reprovação</div>
+          <div class="modal-campo-valor modal-campo-valor-secundario" id="daoMotivo">—</div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalDetalheAO()">Fechar</button>
+        <button class="btn btn-salvar" id="btnDaoReprovar" style="display:none; background: var(--cor-atraso);" onclick="reprovarAtendimentoOnlineDoModal()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">cancel</span>
+          Reprovar
+        </button>
+        <button class="btn btn-salvar" id="btnDaoAprovar" style="display:none;" onclick="aprovarAtendimentoOnlineDoModal()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">check_circle</span>
+          Aprovar
         </button>
       </div>
     </div>

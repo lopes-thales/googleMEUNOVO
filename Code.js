@@ -510,6 +510,28 @@ function acaoReprovarAtendimentoOnline(linha, motivo) {
   }
 }
 
+// Chamado pelo botao "Aprovar selecionados" na fila de Atendimento Online.
+function acaoAprovarAtendimentosOnlineEmLote(linhas) {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return aprovarAtendimentosOnlineEmLote(linhas);
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao aprovar em lote: ' + e.message };
+  }
+}
+
+// Chamado pelo botao "Reprovar selecionados" (com motivo) na fila de Atendimento Online.
+function acaoReprovarAtendimentosOnlineEmLote(linhas, motivo) {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return reprovarAtendimentosOnlineEmLote(linhas, motivo);
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao reprovar em lote: ' + e.message };
+  }
+}
+
 // Chamado pelo botao "Sincronizar GERAL" na aba "Utilitarios" (se criado).
 // Chamado pelo botao "Sincronizar GERAL" na aba "Utilitarios".
 function acaoSincronizarGeral() {

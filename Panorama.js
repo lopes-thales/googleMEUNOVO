@@ -176,6 +176,29 @@ function getProducaoPorEstagiarios(estagiarios) {
   });
 }
 
+// Pesos do calculo de "Parcial de Horas", exibido no final da aba Panorama
+// quando um unico aluno esta selecionado (ver renderizarPontuacaoPanorama,
+// Scripts.html). Cada peso e uma celula unica em bd (CONFIG.BD_CELL),
+// preenchida manualmente por Thales — mesmo padrao das demais celulas
+// unicas da aba bd (ex.: DATA_FINALIZACAO_ESTAGIO).
+function getPesosPontuacaoPanorama() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName(CONFIG.SHEET_BD);
+  if (!aba) return { simples: 0, complexa: 0, acompanhamento: 0, atendimento: 0 };
+
+  function lerPeso(celula) {
+    var valor = Number(aba.getRange(celula).getValue());
+    return isNaN(valor) ? 0 : valor;
+  }
+
+  return {
+    simples: lerPeso(CONFIG.BD_CELL.PESO_SIMPLES),
+    complexa: lerPeso(CONFIG.BD_CELL.PESO_COMPLEXA),
+    acompanhamento: lerPeso(CONFIG.BD_CELL.PESO_ACOMPANHAMENTO),
+    atendimento: lerPeso(CONFIG.BD_CELL.PESO_ATENDIMENTO)
+  };
+}
+
 // --- Agregador usado pelo frontend ao abrir a aba "Panorama" ---
 
 // statusPicklist e incluido aqui porque o modal de Inicial e reaproveitado
@@ -188,6 +211,8 @@ function getDadosPanorama() {
     iniciais: getTodasIniciais(),
     atendimentos: getTodosAtendimentos(),
     acompanhamentos: getTodosAcompanhamentos(), // Acompanhamentos.js
-    statusPicklist: lerColunaBd(CONFIG.BD_COL.STATUS)
+    atendimentosOnline: getTodosAtendimentosOnline(), // AtendimentoOnline.js
+    statusPicklist: lerColunaBd(CONFIG.BD_COL.STATUS),
+    pesosPontuacao: getPesosPontuacaoPanorama()
   };
 }
