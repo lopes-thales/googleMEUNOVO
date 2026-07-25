@@ -532,6 +532,91 @@ function acaoReprovarAtendimentosOnlineEmLote(linhas, motivo) {
   }
 }
 
+// === AUDIÊNCIAS DO ESTAGIÁRIO ===
+// Modulo independente de Atendimento Online — ver AudienciasEstagiario.js.
+// Assim como acaoCriarAtendimentoOnline/acaoCriarPedidoInicial, o payload
+// nunca e fonte de identidade: aqui quem resolve nome/e-mail/semestre a
+// partir do e-mail logado (ou do emailAluno+semestre escolhidos por Thales,
+// validados contra a aba estagiarios) e sempre o proprio
+// AudienciasEstagiario.js (ver _resolverEstagiarioAlvoAudiencia).
+
+// Chamado pelo modal "Registrar Audiência" do Painel Aluno.
+function acaoCriarAudienciaEstagiario(payload) {
+  try {
+    var acesso = validarAcessoAluno();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return criarAudienciaEstagiario(payload, acesso.email, acesso.tipo === 'thales');
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao registrar audiência: ' + e.message };
+  }
+}
+
+// Chamado ao editar/reenviar uma Audiência Pendente ou Reprovada, no Painel Aluno.
+function acaoReenviarAudienciaEstagiario(payload) {
+  try {
+    var acesso = validarAcessoAluno();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return reenviarAudienciaEstagiario(payload, acesso.email, acesso.tipo === 'thales');
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao reenviar audiência: ' + e.message };
+  }
+}
+
+// Chamado pelo frontend ao abrir a aba "Audiências (Estagiários)" no Painel de Thales.
+function carregarDadosAprovacaoAudiencias() {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { erro: acesso.motivo };
+    return getDadosAprovacaoAudiencias();
+  } catch (e) {
+    return { erro: 'Erro ao carregar Audiências do Estagiário: ' + e.message };
+  }
+}
+
+// Chamado pelo botao "Aprovar" na fila de Audiências do Estagiário.
+function acaoAprovarAudienciaEstagiario(linha) {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return aprovarAudienciaEstagiario(linha);
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao aprovar: ' + e.message };
+  }
+}
+
+// Chamado pelo botao "Reprovar" (com motivo) na fila de Audiências do Estagiário.
+function acaoReprovarAudienciaEstagiario(linha, motivo) {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return reprovarAudienciaEstagiario(linha, motivo);
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao reprovar: ' + e.message };
+  }
+}
+
+// Chamado pelo botao "Aprovar selecionadas" na fila de Audiências do Estagiário.
+function acaoAprovarAudienciasEmLote(linhas) {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return aprovarAudienciasEmLote(linhas);
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao aprovar em lote: ' + e.message };
+  }
+}
+
+// Chamado pelo botao "Reprovar selecionadas" (com motivo) na fila de Audiências do Estagiário.
+function acaoReprovarAudienciasEmLote(linhas, motivo) {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return reprovarAudienciasEmLote(linhas, motivo);
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao reprovar em lote: ' + e.message };
+  }
+}
+
 // Chamado pelo botao "Sincronizar GERAL" na aba "Utilitarios" (se criado).
 // Chamado pelo botao "Sincronizar GERAL" na aba "Utilitarios".
 function acaoSincronizarGeral() {

@@ -59,6 +59,7 @@ function getDadosPainelAluno(acesso) {
   var atendimentos = getTodosAtendimentos(); // Panorama.js
   var acompanhamentos = getTodosAcompanhamentos(); // Acompanhamentos.js
   var atendimentosOnline = getTodosAtendimentosOnline(); // AtendimentoOnline.js
+  var audienciasEstagiario = getTodasAudienciasEstagiario(); // AudienciasEstagiario.js
 
   if (acesso.tipo !== 'thales') {
     diligencias = filtrarRegistrosPorEstagiarios(diligencias, estagiariosVisiveis, ['estagiario'], []);
@@ -66,6 +67,7 @@ function getDadosPainelAluno(acesso) {
     atendimentos = filtrarRegistrosPorEstagiarios(atendimentos, estagiariosVisiveis, ['estagiario'], []);
     acompanhamentos = filtrarRegistrosPorEstagiarios(acompanhamentos, estagiariosVisiveis, ['estagiario'], ['email']);
     atendimentosOnline = filtrarRegistrosPorEstagiarios(atendimentosOnline, estagiariosVisiveis, ['estagiario'], ['email']);
+    audienciasEstagiario = filtrarRegistrosPorEstagiarios(audienciasEstagiario, estagiariosVisiveis, ['estagiario'], ['email']);
   }
 
   // Atividades ainda sem Atendimento Online vinculado, calculadas a partir
@@ -88,6 +90,12 @@ function getDadosPainelAluno(acesso) {
     acompanhamentos: acompanhamentos,
     atendimentosOnline: atendimentosOnline,
     atividadesElegiveisAO: atividadesElegiveisAO,
+    audienciasEstagiario: audienciasEstagiario, // AudienciasEstagiario.js
+    parametrosAudiencias: lerParametrosAudiencias(), // bd!X:Z — tipo/meta/horas (AudienciasEstagiario.js)
+    // RN-13: aviso obrigatorio sobre a ata/declaracao, com o e-mail sempre
+    // interpolado a partir de CONFIG.EMAIL_AUTORIZADO — nunca digitado fixo
+    // no HTML (ver modal/confirmacao/legenda em AlunoScripts.html).
+    avisoComprovanteAudiencia: String(CONFIG.AVISO_COMPROVANTE_AUDIENCIA || '').replace('{EMAIL}', CONFIG.EMAIL_AUTORIZADO),
     // Picklist de ESPECIE do modal "Criar Peticao Inicial" (bd!E2:E — ver
     // pedido de Thales; distinta da picklist de ESPECIE de diligencias, que
     // vem de bd!D2:D).

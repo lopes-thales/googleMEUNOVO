@@ -171,8 +171,11 @@ var PA = {
     acompanhamentos: [],
     atendimentosOnline: [],
     atividadesElegiveisAO: [],
+    audienciasEstagiario: [],
+    parametrosAudiencias: [],
     especiePicklistIniciais: []
   },
+  avisoComprovanteAudiencia: '',
   semestreFiltro: '',
   alunoSelecionado: null, // { nome, email } — so usado quando tipo === 'thales'
   _diligenciasAtuais: [],
@@ -181,6 +184,8 @@ var PA = {
   _atendimentosAtuais: [],
   _atendimentosOnlineAtuais: [],
   _atendimentoOnlineEmEdicao: null, // registro atual aberto no modal de detalhe (Reprovado -> editavel)
+  _audienciasAtuais: [],
+  _audienciaEmEdicao: null, // registro atual aberto no modal de detalhe (Pendente/Reprovada -> editavel)
   _toastTimer: null
 };
 
@@ -226,7 +231,10 @@ function paCarregarDados() {
       PA.dados.acompanhamentos = resultado.acompanhamentos || [];
       PA.dados.atendimentosOnline = resultado.atendimentosOnline || [];
       PA.dados.atividadesElegiveisAO = resultado.atividadesElegiveisAO || [];
+      PA.dados.audienciasEstagiario = resultado.audienciasEstagiario || [];
+      PA.dados.parametrosAudiencias = resultado.parametrosAudiencias || [];
       PA.dados.especiePicklistIniciais = resultado.especiePicklistIniciais || [];
+      PA.avisoComprovanteAudiencia = resultado.avisoComprovanteAudiencia || '';
 
       mostrarLoading(false);
       paPopularSeletores();
@@ -378,7 +386,46 @@ function paRenderizarTudo() {
   document.getElementById('paConteudoAluno').style.display = 'block';
 
   paRenderizarCards(alunoAtual);
+  paRenderizarProgressoAudiencias(alunoAtual);
   paRenderizarTabelas(alunoAtual);
+}
+
+// --- Card de progresso "Audiências" (uma barra por tipo, RN-06: trava em
+// 100% visualmente mas mostra o valor real quando excedente) ---
+function paRenderizarProgressoAudiencias(alunoAtual) {
+  var card = document.getElementById('paProgressoAudienciasCard');
+  var lista = document.getElementById('paProgressoAudienciasLista');
+  var parametros = PA.dados.parametrosAudiencias || [];
+
+  if (!parametros.length) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+
+  var aprovadas = paAudienciasFiltradas(alunoAtual).filter(function(a) {
+    return normalizarChave(a.status) === 'aprovada';
+  });
+
+  var html = '';
+  parametros.forEach(function(p) {
+    var realizado = aprovadas.filter(function(a) { return normalizarChave(a.tipo) === normalizarChave(p.tipo); }).length;
+    var meta = p.meta || 0;
+    var percentual = meta > 0 ? Math.min(100, Math.round((realizado / meta) * 100)) : (realizado > 0 ? 100 : 0);
+    var excedente = meta > 0 && realizado > meta;
+
+    html += '<div class="progresso-item">' +
+      '<div class="progresso-item-cabecalho">' +
+        '<span class="progresso-item-tipo">' + p.tipo + '</span>' +
+        '<span class="progresso-item-valor' + (excedente ? ' progresso-item-valor-excedente' : '') + '">' + realizado + '/' + meta + '</span>' +
+      '</div>' +
+      '<div class="progresso-barra-trilho">' +
+        '<div class="progresso-barra-preenchimento' + (percentual >= 100 ? ' progresso-completo' : '') + '" style="width:' + percentual + '%"></div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  lista.innerHTML = html;
 }
 
 // --- Filtragem client-side (semestre + o unico aluno em foco) ---
@@ -411,6 +458,9 @@ function paAtendimentosOnlineFiltrados(alunoAtual) {
 }
 function paAtividadesElegiveisAOFiltradas(alunoAtual) {
   return paFiltrarPorAluno(PA.dados.atividadesElegiveisAO, alunoAtual, ['estagiario'], ['email']);
+}
+function paAudienciasFiltradas(alunoAtual) {
+  return paFiltrarPorAluno(PA.dados.audienciasEstagiario, alunoAtual, ['estagiario'], ['email']);
 }
 
 // --- Cards resumo (mesmos 4 do Panorama + Acompanhamentos) ---
@@ -469,6 +519,14 @@ function badgeStatusAtendimentoOnline(status) {
   return '<span class="badge badge-ao-pendente">Pendente</span>';
 }
 
+// --- Badge de status da Audiência do Estagiário (Pendente/Aprovada/Reprovada) ---
+function badgeStatusAudiencia(status) {
+  var chave = normalizarChave(status);
+  if (chave === 'aprovada') return '<span class="badge badge-ao-aprovado">Aprovada</span>';
+  if (chave === 'reprovada') return '<span class="badge badge-ao-reprovado">Reprovada</span>';
+  return '<span class="badge badge-ao-pendente">Pendente</span>';
+}
+
 // --- Tabelas (read-only, clique na linha abre o modal correspondente) ---
 function paRenderizarTabelas(alunoAtual) {
   PA._diligenciasAtuais = paDiligenciasFiltradas(alunoAtual);
@@ -476,6 +534,7 @@ function paRenderizarTabelas(alunoAtual) {
   PA._acompanhamentosAtuais = paAcompanhamentosFiltrados(alunoAtual);
   PA._atendimentosAtuais = paAtendimentosFiltrados(alunoAtual);
   PA._atendimentosOnlineAtuais = paAtendimentosOnlineFiltrados(alunoAtual);
+  PA._audienciasAtuais = paAudienciasFiltradas(alunoAtual);
 
   // Diligencias
   document.getElementById('paCabecalhoDiligencias').innerHTML =
@@ -584,6 +643,41 @@ function paRenderizarTabelas(alunoAtual) {
     });
     corpoAo.innerHTML = htmlAo;
   }
+
+  // Audiências
+  document.getElementById('paCabecalhoAudiencias').innerHTML =
+    '<tr><th>ID</th><th>DATA</th><th>HORA</th><th>TIPO</th><th>VARA</th><th>PROCESSO</th><th>PARTES</th><th>STATUS</th></tr>';
+  var corpoAu = document.getElementById('paCorpoAudiencias');
+  if (!PA._audienciasAtuais.length) {
+    corpoAu.innerHTML = paCelulaVazia(8, 'Nenhuma audiência encontrada');
+  } else {
+    var htmlAu = '';
+    PA._audienciasAtuais.forEach(function(reg, idx) {
+      htmlAu += '<tr onclick="paAbrirModalDetalheAudiencia(' + idx + ')">' +
+        '<td class="td-numero">' + (reg.id || '') + '</td>' +
+        '<td>' + (reg.data || '') + '</td>' +
+        '<td>' + (reg.hora || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.tipo || '') + '</td>' +
+        '<td>' + (reg.vara || '') + '</td>' +
+        '<td class="td-processo">' + (reg.processo || '') + '</td>' +
+        '<td>' + (reg.partes || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + badgeStatusAudiencia(reg.status) + '</td>' +
+      '</tr>';
+    });
+    corpoAu.innerHTML = htmlAu;
+  }
+
+  // Legenda fixa da RN-13, enquanto houver ao menos um registro pendente.
+  var haPendente = PA._audienciasAtuais.some(function(reg) { return normalizarChave(reg.status) === 'pendente'; });
+  var avisoTabela = document.getElementById('paAvisoComprovanteAudiencia');
+  if (avisoTabela) {
+    if (haPendente && PA.avisoComprovanteAudiencia) {
+      avisoTabela.style.display = 'block';
+      avisoTabela.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">mail</span>' + PA.avisoComprovanteAudiencia;
+    } else {
+      avisoTabela.style.display = 'none';
+    }
+  }
 }
 
 // === MODAIS DE VISUALIZACAO (somente leitura) ===
@@ -592,7 +686,7 @@ function paFecharModal(id) {
 }
 
 function paConfigurarFechamentoModais() {
-  ['paModalDiligenciaOverlay', 'paModalInicialOverlay', 'paModalAcompanhamentoOverlay', 'paModalAtendimentoOverlay', 'paModalAtendimentoOnlineOverlay'].forEach(function(id) {
+  ['paModalDiligenciaOverlay', 'paModalInicialOverlay', 'paModalAcompanhamentoOverlay', 'paModalAtendimentoOverlay', 'paModalAtendimentoOnlineOverlay', 'paModalAudienciaOverlay'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('click', function(e) { if (e.target === this) paFecharModal(id); });
   });
@@ -600,6 +694,8 @@ function paConfigurarFechamentoModais() {
   if (elPeticao) elPeticao.addEventListener('click', function(e) { if (e.target === this) paFecharModalPeticao(); });
   var elNovoAO = document.getElementById('paModalNovoAtendimentoOnlineOverlay');
   if (elNovoAO) elNovoAO.addEventListener('click', function(e) { if (e.target === this) paFecharModalNovoAtendimentoOnline(); });
+  var elNovaAudiencia = document.getElementById('paModalNovaAudienciaOverlay');
+  if (elNovaAudiencia) elNovaAudiencia.addEventListener('click', function(e) { if (e.target === this) paFecharModalNovaAudiencia(); });
 }
 
 function paAbrirModalDiligencia(idx) {
@@ -720,7 +816,8 @@ function paConfigurarCopiarProcesso() {
   var pares = [
     ['btnCopiarProcessoDiligencia', 'pdProcesso'],
     ['btnCopiarProcessoInicial', 'piViewProcesso'],
-    ['btnCopiarProcessoAcompanhamento', 'acViewProcesso']
+    ['btnCopiarProcessoAcompanhamento', 'acViewProcesso'],
+    ['btnCopiarProcessoAudiencia', 'auViewProcesso']
   ];
   pares.forEach(function(par) {
     var btn = document.getElementById(par[0]);
@@ -962,5 +1059,194 @@ function paReenviarAtendimentoOnline() {
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .acaoReenviarAtendimentoOnline(payload);
+}
+
+// === MODAL: REGISTRAR AUDIÊNCIA ===
+// Popula o select de Tipo a partir de bd!X:Z (PA.dados.parametrosAudiencias)
+// — nunca uma lista fixa no HTML (RN do documento de requisitos).
+function paPopularSelectTipoAudiencia(selectEl, valorAtual) {
+  var parametros = PA.dados.parametrosAudiencias || [];
+  selectEl.innerHTML = '<option value="">— Selecione —</option>';
+  parametros.forEach(function(p) {
+    var opt = document.createElement('option');
+    opt.value = p.tipo;
+    opt.textContent = p.tipo + ' (meta: ' + p.meta + ')';
+    if (valorAtual && normalizarChave(p.tipo) === normalizarChave(valorAtual)) opt.selected = true;
+    selectEl.appendChild(opt);
+  });
+}
+
+function paAbrirModalNovaAudiencia() {
+  var alunoAtual = paResolverAlunoAtual();
+  if (!alunoAtual) {
+    mostrarToast('Selecione um aluno antes de registrar uma audiência.', 'erro');
+    return;
+  }
+
+  var parametros = PA.dados.parametrosAudiencias || [];
+  if (!parametros.length) {
+    mostrarToast('Nenhum tipo de audiência cadastrado. Procure o coordenador.', 'erro');
+    return;
+  }
+
+  paPopularSelectTipoAudiencia(document.getElementById('auNovaTipo'), '');
+  document.getElementById('auNovaData').value = '';
+  document.getElementById('auNovaHora').value = '';
+  document.getElementById('auNovaVara').value = '';
+  document.getElementById('auNovaProcesso').value = '';
+  document.getElementById('auNovaPartes').value = '';
+  document.getElementById('auNovaObs').value = '';
+
+  var aviso = document.getElementById('auNovaAviso');
+  aviso.innerHTML = PA.avisoComprovanteAudiencia
+    ? '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">mail</span>' + PA.avisoComprovanteAudiencia
+    : '';
+
+  document.getElementById('paModalNovaAudienciaOverlay').classList.add('visivel');
+}
+
+function paFecharModalNovaAudiencia() {
+  document.getElementById('paModalNovaAudienciaOverlay').classList.remove('visivel');
+}
+
+function paSalvarNovaAudiencia() {
+  var alunoAtual = paResolverAlunoAtual();
+  if (!alunoAtual) {
+    mostrarToast('Selecione um aluno antes de continuar.', 'erro');
+    return;
+  }
+
+  var payload = {
+    data: document.getElementById('auNovaData').value,
+    hora: document.getElementById('auNovaHora').value,
+    tipo: document.getElementById('auNovaTipo').value,
+    vara: document.getElementById('auNovaVara').value,
+    processo: document.getElementById('auNovaProcesso').value,
+    partes: document.getElementById('auNovaPartes').value,
+    obs: document.getElementById('auNovaObs').value,
+    semestre: PA.semestreFiltro,
+    emailAluno: alunoAtual.email
+  };
+
+  var btn = document.getElementById('btnSalvarNovaAudiencia');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Registrando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Registrar';
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao registrar.', 'erro');
+        return;
+      }
+
+      // RN-13, momento 2: aviso obrigatorio tambem na confirmacao de sucesso.
+      var mensagemSucesso = 'Audiência ' + res.id + ' registrada e enviada para aprovação.';
+      if (PA.avisoComprovanteAudiencia) mensagemSucesso += ' ' + PA.avisoComprovanteAudiencia;
+      mostrarToast(mensagemSucesso, 'sucesso');
+
+      paFecharModalNovaAudiencia();
+      paCarregarDados();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Registrar';
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .acaoCriarAudienciaEstagiario(payload);
+}
+
+// === MODAL: DETALHE / REENVIO DE AUDIÊNCIA ===
+function paAbrirModalDetalheAudiencia(idx) {
+  var reg = PA._audienciasAtuais[idx];
+  if (!reg) return;
+  PA._audienciaEmEdicao = reg;
+
+  document.getElementById('auViewIdLabel').textContent = reg.id || 'AUDIÊNCIA';
+  document.getElementById('auViewTipo').textContent = reg.tipo || '';
+  document.getElementById('auViewBadges').innerHTML = badgeStatusAudiencia(reg.status);
+
+  var chaveStatus = normalizarChave(reg.status);
+  var ehEditavel = chaveStatus === 'pendente' || chaveStatus === 'reprovada';
+
+  var motivoWrapper = document.getElementById('auViewMotivoWrapper');
+  if (chaveStatus === 'reprovada' && reg.obsAprovacao) {
+    motivoWrapper.style.display = 'block';
+    document.getElementById('auViewMotivo').textContent = reg.obsAprovacao;
+  } else {
+    motivoWrapper.style.display = 'none';
+  }
+
+  var btnReenviar = document.getElementById('btnReenviarAudiencia');
+  if (ehEditavel) {
+    document.getElementById('auViewSomenteLeitura').style.display = 'none';
+    document.getElementById('auEditWrapper').style.display = 'block';
+    document.getElementById('auEditData').value = '';
+    document.getElementById('auEditHora').value = '';
+    paPopularSelectTipoAudiencia(document.getElementById('auEditTipo'), reg.tipo);
+    document.getElementById('auEditVara').value = reg.vara || '';
+    document.getElementById('auEditProcesso').value = reg.processo || '';
+    document.getElementById('auEditPartes').value = reg.partes || '';
+    document.getElementById('auEditObs').value = reg.obs || '';
+    var avisoEdit = document.getElementById('auEditAviso');
+    avisoEdit.innerHTML = PA.avisoComprovanteAudiencia
+      ? '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">mail</span>' + PA.avisoComprovanteAudiencia
+      : '';
+    btnReenviar.style.display = 'inline-flex';
+  } else {
+    document.getElementById('auViewSomenteLeitura').style.display = 'block';
+    document.getElementById('auViewData').textContent = reg.data || '—';
+    document.getElementById('auViewHora').textContent = reg.hora || '—';
+    document.getElementById('auViewVara').textContent = reg.vara || '—';
+    document.getElementById('auViewProcesso').textContent = reg.processo || '—';
+    document.getElementById('auViewPartes').textContent = reg.partes || '—';
+    document.getElementById('auViewObs').textContent = reg.obs || '—';
+    document.getElementById('auEditWrapper').style.display = 'none';
+    btnReenviar.style.display = 'none';
+  }
+
+  document.getElementById('paModalAudienciaOverlay').classList.add('visivel');
+}
+
+function paReenviarAudiencia() {
+  var reg = PA._audienciaEmEdicao;
+  if (!reg) return;
+
+  var payload = {
+    _linha: reg._linha,
+    data: document.getElementById('auEditData').value,
+    hora: document.getElementById('auEditHora').value,
+    tipo: document.getElementById('auEditTipo').value,
+    vara: document.getElementById('auEditVara').value,
+    processo: document.getElementById('auEditProcesso').value,
+    partes: document.getElementById('auEditPartes').value,
+    obs: document.getElementById('auEditObs').value
+  };
+
+  var btn = document.getElementById('btnReenviarAudiencia');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Enviando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span> Reenviar';
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao reenviar.', 'erro');
+        return;
+      }
+      mostrarToast('Audiência reenviada para aprovação!', 'sucesso');
+      paFecharModal('paModalAudienciaOverlay');
+      paCarregarDados();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span> Reenviar';
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .acaoReenviarAudienciaEstagiario(payload);
 }
 </script>

@@ -45,6 +45,7 @@ var SECOES_POR_VISTA = {
   iniciais: 'secaoIniciais',
   acompanhamentos: 'secaoAcompanhamentos',
   atendimento_online: 'secaoAtendimentoOnline',
+  audiencias_estagiario: 'secaoAudienciasEstagiario',
   panorama: 'secaoPanorama',
   graficos: 'secaoGraficos',
   audiencias: 'secaoAudiencias',
@@ -68,6 +69,7 @@ function trocarVista(vista) {
   if (vista === 'iniciais') carregarAbaIniciais();
   if (vista === 'acompanhamentos') carregarAbaAcompanhamentos();
   if (vista === 'atendimento_online') carregarAbaAtendimentoOnline();
+  if (vista === 'audiencias_estagiario') carregarAbaAudienciasEstagiario();
   if (vista === 'panorama') carregarAbaPanorama();
   if (vista === 'graficos') carregarAbaGraficos();
   if (vista === 'audiencias') carregarAbaAudiencias();
@@ -139,6 +141,7 @@ document.addEventListener('DOMContentLoaded', function() {
   inicializarFiltrosAudiencias();
   carregarDados();
   atualizarContadorAtendimentoOnline();
+  atualizarContadorAudienciasEstagiario();
 });
 
 function inicializarFiltros() {
@@ -2835,6 +2838,330 @@ function confirmarReprovarAtendimentoOnline() {
     .acaoReprovarAtendimentosOnlineEmLote(linhas, motivo);
 }
 
+// === ABA: AUDIÊNCIAS (ESTAGIÁRIOS) (fila de aprovacao) ===
+// Modulo independente de Atendimento Online (mesmo padrao estrutural, ver
+// AudienciasEstagiario.js) — nao ha "contexto" de atividade vinculada aqui
+// (RN do documento: nao existe vinculo com a pauta de audiencias).
+var APP_AUDIENCIAS_ESTAGIARIO = {
+  pendentes: [],
+  historico: [],
+  selecionados: {}, // { linha: true }
+  linhasEmReprovacao: [],
+  registroDetalheAtual: null
+};
+
+// Badge de status reaproveitando as classes ja definidas em Styles.html
+// (badge-ao-pendente/aprovado/reprovado) — rotulos proprios (Aprovada/
+// Reprovada, concordancia de genero com "audiência").
+function badgeStatusAudiencia(status) {
+  var chave = normalizarChave(status);
+  if (chave === 'aprovada') return '<span class="badge badge-ao-aprovado">Aprovada</span>';
+  if (chave === 'reprovada') return '<span class="badge badge-ao-reprovado">Reprovada</span>';
+  return '<span class="badge badge-ao-pendente">Pendente</span>';
+}
+
+function atualizarContadorAudienciasEstagiario() {
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (resultado.erro) return; // silencioso — nao e critico para o resto do painel
+      var badge = document.getElementById('navContadorAU');
+      var qtd = (resultado.pendentes || []).length;
+      if (!badge) return;
+      if (qtd > 0) {
+        badge.textContent = qtd;
+        badge.style.display = 'inline-flex';
+      } else {
+        badge.style.display = 'none';
+      }
+    })
+    .withFailureHandler(function() {}) // silencioso
+    .carregarDadosAprovacaoAudiencias();
+}
+
+function carregarAbaAudienciasEstagiario() {
+  var wrapper = document.getElementById('secaoAudienciasEstagiario');
+  if (wrapper) wrapper.style.opacity = '0.5';
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (wrapper) wrapper.style.opacity = '1';
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+      APP_AUDIENCIAS_ESTAGIARIO.pendentes = resultado.pendentes || [];
+      APP_AUDIENCIAS_ESTAGIARIO.historico = resultado.historico || [];
+      APP_AUDIENCIAS_ESTAGIARIO.selecionados = {};
+      renderizarFilaAudiencias();
+      renderizarHistoricoAudiencias();
+      atualizarBotoesLoteAU();
+
+      var badge = document.getElementById('navContadorAU');
+      if (badge) {
+        var qtd = APP_AUDIENCIAS_ESTAGIARIO.pendentes.length;
+        if (qtd > 0) { badge.textContent = qtd; badge.style.display = 'inline-flex'; }
+        else { badge.style.display = 'none'; }
+      }
+    })
+    .withFailureHandler(function(err) {
+      if (wrapper) wrapper.style.opacity = '1';
+      mostrarToast('Erro ao carregar Audiências do Estagiário: ' + err.message, 'erro');
+    })
+    .carregarDadosAprovacaoAudiencias();
+}
+
+// --- Fila de pendentes: checkbox por linha + acoes em lote ---
+
+function renderizarFilaAudiencias() {
+  var corpo = document.getElementById('corpoAudienciasPendentes');
+  var lista = APP_AUDIENCIAS_ESTAGIARIO.pendentes;
+
+  var checkTodos = document.getElementById('checkTodosAU');
+  if (checkTodos) checkTodos.checked = false;
+
+  if (!lista.length) {
+    corpo.innerHTML =
+      '<tr><td colspan="9">' +
+        '<div class="estado-vazio">' +
+          '<span class="material-symbols-outlined">task_alt</span>' +
+          '<div class="estado-vazio-titulo">Nenhuma audiência pendente</div>' +
+        '</div>' +
+      '</td></tr>';
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg) {
+    var marcado = APP_AUDIENCIAS_ESTAGIARIO.selecionados[reg._linha] ? ' checked' : '';
+    html += '<tr>' +
+      '<td onclick="event.stopPropagation();"><input type="checkbox" data-linha="' + reg._linha + '"' + marcado + ' onchange="alternarSelecaoAudiencia(' + reg._linha + ', this.checked)"></td>' +
+      '<td class="td-numero" onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.id || '') + '</td>' +
+      '<td class="td-assistido" onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.estagiario || '') + '</td>' +
+      '<td onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.data || '') + '</td>' +
+      '<td onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.hora || '') + '</td>' +
+      '<td onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.tipo || '') + '</td>' +
+      '<td onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.vara || '') + '</td>' +
+      '<td class="td-processo" onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.processo || '') + '</td>' +
+      '<td onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.partes || '') + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+function alternarSelecaoAudiencia(linha, marcado) {
+  if (marcado) APP_AUDIENCIAS_ESTAGIARIO.selecionados[linha] = true;
+  else delete APP_AUDIENCIAS_ESTAGIARIO.selecionados[linha];
+  atualizarBotoesLoteAU();
+}
+
+function alternarTodosAudiencias(marcado) {
+  APP_AUDIENCIAS_ESTAGIARIO.selecionados = {};
+  if (marcado) {
+    APP_AUDIENCIAS_ESTAGIARIO.pendentes.forEach(function(reg) { APP_AUDIENCIAS_ESTAGIARIO.selecionados[reg._linha] = true; });
+  }
+  renderizarFilaAudiencias();
+  if (marcado) { var c = document.getElementById('checkTodosAU'); if (c) c.checked = true; }
+  atualizarBotoesLoteAU();
+}
+
+function atualizarBotoesLoteAU() {
+  var qtd = Object.keys(APP_AUDIENCIAS_ESTAGIARIO.selecionados).length;
+  var btnAprovar = document.getElementById('btnAprovarSelecionadosAU');
+  var btnReprovar = document.getElementById('btnReprovarSelecionadosAU');
+  if (btnAprovar) btnAprovar.disabled = qtd === 0;
+  if (btnReprovar) btnReprovar.disabled = qtd === 0;
+}
+
+function renderizarHistoricoAudiencias() {
+  var corpo = document.getElementById('corpoAudienciasHistorico');
+  var lista = APP_AUDIENCIAS_ESTAGIARIO.historico;
+
+  if (!lista.length) {
+    corpo.innerHTML = '<tr><td colspan="7"><div class="estado-vazio"><span class="material-symbols-outlined">history</span><div class="estado-vazio-titulo">Nenhuma decisão registrada ainda</div></div></td></tr>';
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg, idx) {
+    html += '<tr onclick="abrirModalDetalheAUHistorico(' + idx + ')">' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.estagiario || '') + '</td>' +
+      '<td>' + (reg.data || '') + '</td>' +
+      '<td>' + (reg.tipo || '') + '</td>' +
+      '<td class="td-processo">' + (reg.processo || '') + '</td>' +
+      '<td>' + badgeStatusAudiencia(reg.status) + '</td>' +
+      '<td>' + (reg.obsAprovacao || '<span class="celula-vazio">—</span>') + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+function abrirModalDetalheAUHistorico(idx) {
+  var reg = APP_AUDIENCIAS_ESTAGIARIO.historico[idx];
+  if (reg) abrirModalDetalheAU(reg);
+}
+
+// --- Modal de detalhe completo (Panorama e Audiências: pendentes/historico) ---
+
+function abrirModalDetalheAUPendente(linha) {
+  var reg = APP_AUDIENCIAS_ESTAGIARIO.pendentes.filter(function(r) { return r._linha === linha; })[0];
+  if (reg) abrirModalDetalheAU(reg);
+}
+
+// somenteLeitura: true quando aberto a partir da tabela da aba Panorama —
+// RN do documento: aprovacao/reprovacao acontecem exclusivamente na aba
+// propria, mesmo que o registro esteja Pendente.
+function abrirModalDetalheAU(reg, somenteLeitura) {
+  if (!reg) return;
+  APP_AUDIENCIAS_ESTAGIARIO.registroDetalheAtual = reg;
+
+  document.getElementById('dauIdLabel').textContent = reg.id || 'AUDIÊNCIA';
+  document.getElementById('dauTipo').textContent = reg.tipo || '';
+  document.getElementById('dauBadge').innerHTML = badgeStatusAudiencia(reg.status);
+  document.getElementById('dauEstagiario').textContent = reg.estagiario || '—';
+  document.getElementById('dauData').textContent = reg.data || '—';
+  document.getElementById('dauHora').textContent = reg.hora || '—';
+  document.getElementById('dauVara').textContent = reg.vara || '—';
+  document.getElementById('dauProcesso').textContent = reg.processo || '—';
+  document.getElementById('dauPartes').textContent = reg.partes || '—';
+  document.getElementById('dauObs').textContent = reg.obs || '—';
+
+  var motivoWrapper = document.getElementById('dauMotivoWrapper');
+  if (reg.obsAprovacao) {
+    motivoWrapper.style.display = 'block';
+    document.getElementById('dauMotivo').textContent = reg.obsAprovacao;
+  } else {
+    motivoWrapper.style.display = 'none';
+  }
+
+  var ehPendente = normalizarChave(reg.status) === 'pendente';
+  var mostrarAcoes = ehPendente && !somenteLeitura;
+  document.getElementById('btnDauAprovar').style.display = mostrarAcoes ? 'inline-flex' : 'none';
+  document.getElementById('btnDauReprovar').style.display = mostrarAcoes ? 'inline-flex' : 'none';
+
+  document.getElementById('modalDetalheAUOverlay').classList.add('visivel');
+}
+
+function fecharModalDetalheAU() {
+  document.getElementById('modalDetalheAUOverlay').classList.remove('visivel');
+  APP_AUDIENCIAS_ESTAGIARIO.registroDetalheAtual = null;
+}
+
+document.getElementById('modalDetalheAUOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalDetalheAU();
+});
+
+function aprovarAudienciaDoModal() {
+  var reg = APP_AUDIENCIAS_ESTAGIARIO.registroDetalheAtual;
+  if (!reg) return;
+  executarAprovacaoAudiencias([reg._linha], function() { fecharModalDetalheAU(); });
+}
+
+function reprovarAudienciaDoModal() {
+  var reg = APP_AUDIENCIAS_ESTAGIARIO.registroDetalheAtual;
+  if (!reg) return;
+  abrirModalReprovarAU([reg._linha], reg.id);
+}
+
+// --- Aprovacao/reprovacao (single ou em lote — sempre via array) ---
+
+function executarAprovacaoAudiencias(linhas, aoFinalizar) {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao aprovar.', 'erro');
+        return;
+      }
+      var qtd = linhas.length;
+      var falhas = res.falhas || [];
+      if (falhas.length) {
+        mostrarToast((qtd - falhas.length) + ' de ' + qtd + ' aprovada(s). ' + falhas.length + ' falharam.', 'erro');
+      } else {
+        mostrarToast(qtd > 1 ? qtd + ' audiências aprovadas! E-mails enviados.' : 'Audiência aprovada! E-mail enviado ao estagiário.', 'sucesso');
+      }
+      if (aoFinalizar) aoFinalizar();
+      carregarAbaAudienciasEstagiario();
+      // Se a aba Panorama ja foi carregada nesta sessao, atualiza os cards/
+      // tabela de audiencias e o Parcial de Horas la tambem.
+      if (APP.dados.panoramaEstagiarios && APP.dados.panoramaEstagiarios.length) carregarAbaPanorama();
+    })
+    .withFailureHandler(function(err) {
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .acaoAprovarAudienciasEmLote(linhas);
+}
+
+function aprovarSelecionadosAudiencias() {
+  var linhas = Object.keys(APP_AUDIENCIAS_ESTAGIARIO.selecionados).map(Number);
+  if (!linhas.length) return;
+  executarAprovacaoAudiencias(linhas, null);
+}
+
+function abrirModalReprovarAU(linhas, idLabel) {
+  APP_AUDIENCIAS_ESTAGIARIO.linhasEmReprovacao = linhas;
+  document.getElementById('rauIdLabel').textContent =
+    linhas.length > 1 ? (linhas.length + ' registros selecionados') : (idLabel || 'AUDIÊNCIA');
+  document.getElementById('rauMotivo').value = '';
+  document.getElementById('modalReprovarAUOverlay').classList.add('visivel');
+}
+
+function abrirModalReprovarAUEmLote() {
+  var linhas = Object.keys(APP_AUDIENCIAS_ESTAGIARIO.selecionados).map(Number);
+  if (!linhas.length) return;
+  abrirModalReprovarAU(linhas, null);
+}
+
+function fecharModalReprovarAU() {
+  document.getElementById('modalReprovarAUOverlay').classList.remove('visivel');
+  APP_AUDIENCIAS_ESTAGIARIO.linhasEmReprovacao = [];
+}
+
+document.getElementById('modalReprovarAUOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalReprovarAU();
+});
+
+function confirmarReprovarAudiencia() {
+  var linhas = APP_AUDIENCIAS_ESTAGIARIO.linhasEmReprovacao;
+  if (!linhas || !linhas.length) return;
+
+  var motivo = document.getElementById('rauMotivo').value.trim();
+  if (!motivo) {
+    mostrarToast('Informe o motivo da reprovação.', 'erro');
+    return;
+  }
+
+  var btn = document.getElementById('btnConfirmarReprovarAU');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Reprovando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span> Reprovar';
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao reprovar.', 'erro');
+        return;
+      }
+      var qtd = linhas.length;
+      var falhas = res.falhas || [];
+      if (falhas.length) {
+        mostrarToast((qtd - falhas.length) + ' de ' + qtd + ' reprovada(s). ' + falhas.length + ' falharam.', 'erro');
+      } else {
+        mostrarToast(qtd > 1 ? qtd + ' audiências reprovadas. E-mails enviados.' : 'Audiência reprovada. E-mail enviado ao estagiário.', 'sucesso');
+      }
+      fecharModalReprovarAU();
+      fecharModalDetalheAU();
+      carregarAbaAudienciasEstagiario();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span> Reprovar';
+      mostrarToast('Erro: ' + err.message, 'erro');
+    })
+    .acaoReprovarAudienciasEmLote(linhas, motivo);
+}
+
 // === ABA: PANORAMA ===
 // Estado especifico da aba Panorama (independente das demais abas).
 // alunoSelecionado = e-mail do estagiario em foco, ou null = semestre inteiro.
@@ -2865,6 +3192,8 @@ function carregarAbaPanorama() {
       APP.dados.panoramaAtendimentos = resultado.atendimentos || [];
       APP.dados.panoramaAcompanhamentos = resultado.acompanhamentos || [];
       APP.dados.panoramaAtendimentosOnline = resultado.atendimentosOnline || [];
+      APP.dados.panoramaAudienciasEstagiario = resultado.audienciasEstagiario || [];
+      APP.dados.parametrosAudiencias = resultado.parametrosAudiencias || [];
       APP.dados.pesosPontuacao = resultado.pesosPontuacao || {};
       // O modal de Inicial e reaproveitado tal como esta e depende de
       // statusPicklist — garante que exista mesmo que a aba Iniciais nunca
@@ -2994,6 +3323,94 @@ function renderizarGraficos() {
     categoriasGraficosPorChaves(['atendimentos', 'iniciais']),
     dados.porEstagiario || []
   );
+
+  renderizarGraficoAudiencias(dados.parametrosAudiencias || [], dados.porEstagiario || []);
+}
+
+// Cores cicladas a partir da mesma paleta ja usada nas demais barras (nunca
+// uma cor nova por tipo) — suporta qualquer quantidade de tipos cadastrados
+// em bd!X:Z, nao apenas os tres atuais.
+var GRAFICOS_CLASSES_AUDIENCIA = ['grafico-barra-audiencia-1', 'grafico-barra-audiencia-2', 'grafico-barra-audiencia-3', 'grafico-barra-audiencia-4'];
+
+// Grafico de barras agrupadas por estagiario, uma barra por tipo de
+// audiencia, com uma linha tracejada marcando a meta de CADA tipo sobre a
+// respectiva barra (RN do documento: "linha da meta marcada sobre cada
+// barra"). Nao reaproveita renderizarGraficoPorEstagiario porque cada
+// categoria tem sua propria meta (10/10/2), impossivel de expressar com uma
+// unica linha de eixo compartilhada.
+function renderizarGraficoAudiencias(parametrosAudiencias, porEstagiario) {
+  var legendaEl = document.getElementById('graficosLegendaAudiencias');
+  var eixoEl = document.getElementById('graficosEixoAudiencias');
+  var plotEl = document.getElementById('graficosPlotAudiencias');
+  if (!legendaEl || !eixoEl || !plotEl) return;
+
+  var categorias = parametrosAudiencias.map(function(p, i) {
+    return { tipo: p.tipo, meta: p.meta || 0, classe: GRAFICOS_CLASSES_AUDIENCIA[i % GRAFICOS_CLASSES_AUDIENCIA.length] };
+  });
+
+  legendaEl.innerHTML = categorias.map(function(cat) {
+    return '<span class="legenda-item"><span class="legenda-dot ' + cat.classe + '"></span> ' + cat.tipo + '</span>';
+  }).join('') + '<span class="legenda-item"><span class="legenda-linha-meta"></span> Meta</span>';
+
+  if (!categorias.length || !porEstagiario.length) {
+    eixoEl.innerHTML = '';
+    plotEl.innerHTML =
+      '<div class="estado-vazio">' +
+        '<span class="material-symbols-outlined">group_off</span>' +
+        '<div class="estado-vazio-titulo">Nenhum tipo de audiência cadastrado ou nenhum aluno ativo</div>' +
+      '</div>';
+    return;
+  }
+
+  function realizadoDoTipo(a, tipo) {
+    var achado = (a.audiencias || []).filter(function(c) { return normalizarChave(c.tipo) === normalizarChave(tipo); })[0];
+    return achado ? achado.realizado : 0;
+  }
+
+  var PLOT_HEIGHT = 170;
+  var valorMaximo = 0;
+  porEstagiario.forEach(function(a) {
+    categorias.forEach(function(cat) {
+      valorMaximo = Math.max(valorMaximo, realizadoDoTipo(a, cat.tipo), cat.meta);
+    });
+  });
+  var eixoMaximo = arredondarMaximoEixoGraficos(valorMaximo);
+
+  var eixoHtml = '';
+  var gridHtml = '';
+  for (var i = 4; i >= 0; i--) {
+    eixoHtml += '<span>' + Math.round(eixoMaximo * (i / 4)) + '</span>';
+    gridHtml += '<div class="grafico-linha-eixo"></div>';
+  }
+  eixoEl.innerHTML = eixoHtml;
+
+  var gruposHtml = '';
+  porEstagiario.forEach(function(a) {
+    var barrasHtml = categorias.map(function(cat) {
+      var valor = realizadoDoTipo(a, cat.tipo);
+      var alturaPx = valor > 0 ? Math.max(3, Math.round((valor / eixoMaximo) * PLOT_HEIGHT)) : 0;
+      var metaPx = eixoMaximo > 0 ? Math.round((cat.meta / eixoMaximo) * PLOT_HEIGHT) : 0;
+      return '<div class="grafico-coluna-audiencia">' +
+        '<div class="grafico-meta-linha" style="bottom:' + metaPx + 'px" title="Meta de ' + cat.tipo + ': ' + cat.meta + '"></div>' +
+        '<div class="grafico-mini-barra ' + cat.classe + '" style="height:' + alturaPx + 'px" ' +
+        'data-valor="' + valor + '" title="' + a.nome + ' — ' + cat.tipo + ': ' + valor + ' (meta ' + cat.meta + ')"></div>' +
+      '</div>';
+    }).join('');
+    gruposHtml +=
+      '<div class="grafico-grupo">' +
+        '<div class="grafico-grupo-barras">' + barrasHtml + '</div>' +
+        '<div class="grafico-grupo-nome" title="' + a.nome + '">' + a.primeiroNome + '</div>' +
+      '</div>';
+  });
+
+  plotEl.innerHTML =
+    '<div class="grafico-multi-gridlines">' + gridHtml + '</div>' +
+    '<div class="grafico-multi-grupos">' + gruposHtml + '</div>';
+
+  var gruposEl = plotEl.querySelector('.grafico-multi-grupos');
+  var larguraConteudo = gruposEl.scrollWidth;
+  var larguraDisponivel = plotEl.parentElement.clientWidth;
+  plotEl.style.width = Math.max(larguraConteudo, larguraDisponivel) + 'px';
 }
 
 // Grafico de barras agrupadas por estagiario (eixo Y compartilhado entre as
@@ -3104,7 +3521,38 @@ function mudarSemestrePanorama(valor) {
 function renderizarPanorama() {
   popularSelectAlunoPanorama();
   renderizarCardsPanorama();
+  renderizarProgressoAudienciasPanorama();
   renderizarTabelasPanorama();
+}
+
+// Card de progresso "Audiências" (uma barra por tipo) — so aparece com UM
+// aluno selecionado, mesmo criterio do card "Parcial de Horas" acima.
+function renderizarProgressoAudienciasPanorama() {
+  var card = document.getElementById('panoramaProgressoAudienciasCard');
+  var lista = document.getElementById('panoramaProgressoAudienciasLista');
+  if (!card || !lista) return;
+
+  var parametros = APP.dados.parametrosAudiencias || [];
+  if (!APP_PANORAMA.alunoSelecionado || !parametros.length) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+
+  var contagens = contarAudienciasPorTipoCliente(getAudienciasPanoramaFiltradas());
+  var html = '';
+  contagens.forEach(function(c) {
+    html += '<div class="progresso-item">' +
+      '<div class="progresso-item-cabecalho">' +
+        '<span class="progresso-item-tipo">' + c.tipo + '</span>' +
+        '<span class="progresso-item-valor' + (c.excedente ? ' progresso-item-valor-excedente' : '') + '">' + c.realizado + '/' + c.meta + '</span>' +
+      '</div>' +
+      '<div class="progresso-barra-trilho">' +
+        '<div class="progresso-barra-preenchimento' + (c.percentual >= 100 ? ' progresso-completo' : '') + '" style="width:' + c.percentual + '%"></div>' +
+      '</div>' +
+    '</div>';
+  });
+  lista.innerHTML = html;
 }
 
 // --- Alunos do semestre escolhido ---
@@ -3236,6 +3684,38 @@ function getAtendimentosOnlinePanoramaFiltrados() {
   });
 }
 
+// Cruzamento por e-mail e nome, mesmo padrao acima (ver AudienciasEstagiario.js).
+function getAudienciasPanoramaFiltradas() {
+  var sem = APP_PANORAMA.semestreFiltro;
+  var emails = {};
+  var nomes = {};
+  getConjuntoAlunosPanorama().forEach(function(a) {
+    if (a.email) emails[normalizarChave(a.email)] = true;
+    if (a.nome) nomes[normalizarChave(a.nome)] = true;
+  });
+  return (APP.dados.panoramaAudienciasEstagiario || []).filter(function(r) {
+    if (r.semestre !== sem) return false;
+    var emailOk = !!emails[normalizarChave(r.email)];
+    var nomeOk = !!nomes[normalizarChave(r.estagiario)];
+    return emailOk || nomeOk;
+  });
+}
+
+// --- Progresso por tipo (contagem local, mesma regra de
+// contarAudienciasPorTipo em AudienciasEstagiario.js — so Aprovada conta) ---
+function contarAudienciasPorTipoCliente(lista) {
+  var parametros = APP.dados.parametrosAudiencias || [];
+  var aprovadas = (lista || []).filter(function(r) { return normalizarChave(r.status) === 'aprovada'; });
+
+  return parametros.map(function(p) {
+    var realizado = aprovadas.filter(function(r) { return normalizarChave(r.tipo) === normalizarChave(p.tipo); }).length;
+    var meta = p.meta || 0;
+    var percentual = meta > 0 ? Math.min(100, Math.round((realizado / meta) * 100)) : (realizado > 0 ? 100 : 0);
+    var excedente = meta > 0 && realizado > meta;
+    return { tipo: p.tipo, meta: meta, horas: p.horas || 0, realizado: realizado, percentual: percentual, excedente: excedente };
+  });
+}
+
 // --- Cards resumo ---
 
 function renderizarCardsPanorama() {
@@ -3270,14 +3750,22 @@ function renderizarCardsPanorama() {
 
   // "Parcial de Horas": pontuacao de conferencia (bd!S2:V2, CONFIG.BD_CELL —
   // Config.js), so aparece com UM aluno selecionado (nao faz sentido somada
-  // para "Todos os alunos").
+  // para "Todos os alunos"). Cada tipo de audiencia Aprovada soma
+  // integralmente (RN-06: excedente sobre a meta conta por inteiro), usando
+  // as horas de bd!Z (ver contarAudienciasPorTipoCliente).
   if (APP_PANORAMA.alunoSelecionado) {
     var pesos = APP.dados.pesosPontuacao || {};
+    var contagensAudiencias = contarAudienciasPorTipoCliente(getAudienciasPanoramaFiltradas());
+    var pontuacaoAudiencias = contagensAudiencias.reduce(function(soma, c) {
+      return soma + (c.realizado * (c.horas || 0));
+    }, 0);
+
     var pontuacao =
       simples * (pesos.simples || 0) +
       complexas * (pesos.complexa || 0) +
       acompanhamentos.length * (pesos.acompanhamento || 0) +
-      totalAtendimentos * (pesos.atendimento || 0);
+      totalAtendimentos * (pesos.atendimento || 0) +
+      pontuacaoAudiencias;
 
     cards.push({
       label: 'PARCIAL DE HORAS',
@@ -3309,6 +3797,7 @@ function renderizarTabelasPanorama() {
   renderizarTabelaAcompanhamentosPanorama();
   renderizarTabelaAtendimentosPanorama();
   renderizarTabelaAtendimentosOnlinePanorama();
+  renderizarTabelaAudienciasPanorama();
 }
 
 function celulaVaziaTabela(colspan, titulo) {
@@ -3490,6 +3979,45 @@ function abrirModalDetalheAOPanorama(idx) {
   var lista = getAtendimentosOnlinePanoramaFiltrados();
   var reg = lista[idx];
   if (reg) abrirModalDetalheAO(reg);
+}
+
+// Somente leitura (RN do documento: aprovacao/reprovacao so na aba propria
+// "Audiências (Estagiários)") — abrirModalDetalheAU(reg, true) suprime os
+// botoes de acao mesmo quando o registro esta Pendente.
+function renderizarTabelaAudienciasPanorama() {
+  var lista = getAudienciasPanoramaFiltradas();
+
+  document.getElementById('panoramaCabecalhoAudiencias').innerHTML =
+    '<tr>' +
+      '<th>ID</th><th>ESTAGIÁRIO(A)</th><th>DATA</th><th>TIPO</th>' +
+      '<th>VARA</th><th>PROCESSO</th><th>STATUS</th>' +
+    '</tr>';
+
+  var corpo = document.getElementById('panoramaCorpoAudiencias');
+  if (lista.length === 0) {
+    corpo.innerHTML = celulaVaziaTabela(7, 'Nenhuma audiência encontrada');
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(reg, idx) {
+    html += '<tr onclick="abrirModalDetalheAUPanorama(' + idx + ')">' +
+      '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.estagiario || '') + '</td>' +
+      '<td>' + (reg.data || '') + '</td>' +
+      '<td>' + (reg.tipo || '') + '</td>' +
+      '<td>' + (reg.vara || '') + '</td>' +
+      '<td class="td-processo">' + (reg.processo || '') + '</td>' +
+      '<td>' + badgeStatusAudiencia(reg.status) + '</td>' +
+    '</tr>';
+  });
+  corpo.innerHTML = html;
+}
+
+function abrirModalDetalheAUPanorama(idx) {
+  var lista = getAudienciasPanoramaFiltradas();
+  var reg = lista[idx];
+  if (reg) abrirModalDetalheAU(reg, true);
 }
 
 // --- Modal de Atendimento (somente leitura) ---

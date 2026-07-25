@@ -203,6 +203,222 @@ function enviarEmailAtendimentoOnlineReprovado(email, nomeAluno, idAtendimentoOn
   }
 }
 
+// --- Mensagens: Audiências do Estagiário (A-1 a A-4 — so e-mail, mesmo
+// espirito de Atendimento Online: sem versao de mural neste fluxo) ---
+// Chamadas por AudienciasEstagiario.js apos a escrita na planilha ja ter sido
+// feita — falha no envio nunca desfaz a decisao ja gravada (RN-12).
+
+// A-1: aprovacao de uma audiencia.
+function montarMensagemAudienciaAprovada(nomeAluno, idAudiencia, tipo, dataFormatada, vara, processo, progressoTexto) {
+  var linhas = [
+    primeiroNome(nomeAluno) + ', sua audiência ' + idAudiencia + ' (' + tipo + ' — ' + dataFormatada + ', ' + vara + ', processo ' + processo + ') foi APROVADA.',
+    '',
+    'Progresso atual em "' + tipo + '": ' + progressoTexto + '.'
+  ];
+  return linhas.join('\n');
+}
+
+function enviarEmailAudienciaAprovada(email, nomeAluno, idAudiencia, tipo, dataFormatada, vara, processo, progressoTexto) {
+  try {
+    var assunto = 'Audiência ' + idAudiencia + ' aprovada';
+    var texto = montarMensagemAudienciaAprovada(nomeAluno, idAudiencia, tipo, dataFormatada, vara, processo, progressoTexto);
+    enviarEmailIndividual(email, assunto, texto);
+    return null;
+  } catch (e) {
+    return e.message;
+  }
+}
+
+// A-2: reprovacao de uma audiencia.
+function montarMensagemAudienciaReprovada(nomeAluno, idAudiencia, tipo, dataFormatada, vara, processo, motivo) {
+  var linhas = [
+    primeiroNome(nomeAluno) + ', sua audiência ' + idAudiencia + ' (' + tipo + ' — ' + dataFormatada + ', ' + vara + ', processo ' + processo + ') foi REPROVADA.',
+    '',
+    'Motivo: ' + motivo,
+    '',
+    'Você pode corrigir e reenviar o mesmo registro pelo Painel Aluno, na tabela "Audiências".'
+  ];
+  return linhas.join('\n');
+}
+
+function enviarEmailAudienciaReprovada(email, nomeAluno, idAudiencia, tipo, dataFormatada, vara, processo, motivo) {
+  try {
+    var assunto = 'Audiência ' + idAudiencia + ' reprovada';
+    var texto = montarMensagemAudienciaReprovada(nomeAluno, idAudiencia, tipo, dataFormatada, vara, processo, motivo);
+    enviarEmailIndividual(email, assunto, texto);
+    return null;
+  } catch (e) {
+    return e.message;
+  }
+}
+
+// A-3: meta de UM tipo cumprida (disparada uma unica vez por tipo, por
+// estagiario, por semestre — controle de reenvio via nota de celula, ver
+// dispararAvisosMetaAudiencia mais abaixo).
+function montarMensagemMetaAudienciaCumprida(nomeAluno, tipo, meta) {
+  var linhas = [
+    primeiroNome(nomeAluno) + ', parabéns! Você atingiu a meta de ' + meta + ' audiência(s) do tipo "' + tipo + '".',
+    '',
+    'Audiências extras desse tipo continuam sendo registradas e aprovadas normalmente, mas a meta já está cumprida.'
+  ];
+  return linhas.join('\n');
+}
+
+function enviarEmailMetaAudienciaCumprida(email, nomeAluno, tipo, meta) {
+  var assunto = 'Meta de audiências cumprida — ' + tipo;
+  var texto = montarMensagemMetaAudienciaCumprida(nomeAluno, tipo, meta);
+  enviarEmailIndividual(email, assunto, texto);
+}
+
+// A-4: as TRES metas cumpridas (disparada uma unica vez por estagiario, por
+// semestre — mensagem de encerramento do requisito, distinta da A-3).
+function montarMensagemTodasMetasAudienciaCumpridas(nomeAluno) {
+  var linhas = [
+    primeiroNome(nomeAluno) + ', você cumpriu as três metas de audiências do estágio (Escritório Escola, Externas e Tribunal do Júri). Parabéns pelo empenho!',
+    '',
+    'Lembre-se: a validação de cada audiência depende do envio da ata ou declaração de presença por e-mail, conforme avisado no momento do registro.'
+  ];
+  return linhas.join('\n');
+}
+
+function enviarEmailTodasMetasAudienciaCumpridas(email, nomeAluno) {
+  var assunto = 'Todas as metas de audiências cumpridas';
+  var texto = montarMensagemTodasMetasAudienciaCumpridas(nomeAluno);
+  enviarEmailIndividual(email, assunto, texto);
+}
+
+// Localiza a linha exata de "estagiarios" (par NOME+SEMESTRE, ja que um mesmo
+// estagiario pode ter mais de uma linha — um por semestre) para gravar/ler a
+// nota de rastreio de A-3/A-4 na celula NOME (coluna B), mesma tecnica de
+// _avisoEncerramentoJaEnviado/_marcarAvisoEncerramentoEnviado (mais abaixo).
+function _linhaEstagiarioPorNomeSemestre(abaEstagiarios, nome, semestre) {
+  var ultimaLinha = abaEstagiarios.getLastRow();
+  if (ultimaLinha < 2) return null;
+
+  var dados = abaEstagiarios.getRange(2, 1, ultimaLinha - 1, 6).getValues();
+  var chaveNome = normalizarChave(nome);
+  for (var i = 0; i < dados.length; i++) {
+    var linhaNome = normalizarChave(dados[i][CONFIG.ESTAGIARIOS_COL.NOME]);
+    var linhaSemestre = normalizarSemestreLido(dados[i][CONFIG.ESTAGIARIOS_COL.SEMESTRE]);
+    if (linhaNome === chaveNome && linhaSemestre === semestre) return i + 2;
+  }
+  return null;
+}
+
+// Chamada por aprovarAudienciaEstagiario (AudienciasEstagiario.js) apos cada
+// aprovacao, ja com a contagem atualizada (contagens = contarAudienciasPorTipo).
+// Dispara A-3 para cada tipo recem-completado e A-4 quando os tres tipos
+// estiverem completos — cada um no maximo uma vez por estagiario+semestre,
+// controlado por nota na celula NOME (mesmo mecanismo de
+// _avisoEncerramentoJaEnviado/_marcarAvisoEncerramentoEnviado). Falha de
+// envio nunca interrompe o restante (RN-12) — erros sao concatenados e
+// devolvidos como aviso nao bloqueante.
+function dispararAvisosMetaAudiencia(nomeEstagiario, email, semestre, contagens) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var abaEstagiarios = ss.getSheetByName(CONFIG.SHEET_ESTAGIARIOS);
+  if (!abaEstagiarios) return null;
+
+  var linha = _linhaEstagiarioPorNomeSemestre(abaEstagiarios, nomeEstagiario, semestre);
+  if (!linha) return null;
+  var cellNome = abaEstagiarios.getRange(linha, CONFIG.ESTAGIARIOS_COL.NOME + 1);
+
+  var erros = [];
+  var lista = contagens || [];
+
+  lista.forEach(function(c) {
+    if (c.meta > 0 && c.realizado >= c.meta) {
+      var chaveTipo = 'AUDIENCIA_META_' + normalizarChave(c.tipo).toUpperCase();
+      if (!_avisoEncerramentoJaEnviado(cellNome, chaveTipo, semestre)) {
+        try {
+          enviarEmailMetaAudienciaCumprida(email, nomeEstagiario, c.tipo, c.meta);
+          _marcarAvisoEncerramentoEnviado(cellNome, chaveTipo, semestre);
+        } catch (e) {
+          erros.push(e.message);
+        }
+      }
+    }
+  });
+
+  var todasCumpridas = lista.length > 0 && lista.every(function(c) { return c.meta > 0 && c.realizado >= c.meta; });
+  if (todasCumpridas) {
+    var chaveTodas = 'AUDIENCIA_TODAS_METAS';
+    if (!_avisoEncerramentoJaEnviado(cellNome, chaveTodas, semestre)) {
+      try {
+        enviarEmailTodasMetasAudienciaCumpridas(email, nomeEstagiario);
+        _marcarAvisoEncerramentoEnviado(cellNome, chaveTodas, semestre);
+      } catch (e) {
+        erros.push(e.message);
+      }
+    }
+  }
+
+  return erros.length ? erros.join(' | ') : null;
+}
+
+// --- A-6: consolidado de pendencias de audiencias para Thales ---
+// Disparado pelo mesmo gatilho da Mensagem 4 (ver verificarEncerramentoEstagioAutomatico
+// mais abaixo) — um unico e-mail para Thales, com todos os estagiarios ativos
+// que ainda nao fecharam alguma meta de audiencia e o quanto falta em cada
+// tipo. Nao envia nada se ninguem tiver pendencia.
+function montarEmailConsolidadoPendenciasAudiencias(pendencias) {
+  var linhas = [];
+  pendencias.forEach(function(p) {
+    p.faltantes.forEach(function(f) {
+      linhas.push([p.nome, f.tipo, f.realizado + '/' + f.meta, f.faltante]);
+    });
+  });
+
+  var html = '<p style="font-family:Arial,sans-serif; font-size:14px;">'
+    + 'Estagiários ativos com metas de audiências ainda não cumpridas:</p>'
+    + '<table border="1" cellpadding="8" cellspacing="0" '
+    + 'style="border-collapse:collapse; font-family:Arial,sans-serif; '
+    + 'font-size:13px; min-width:500px;">'
+    + '<thead>'
+    + '<tr style="background:#3D6A61; color:#ffffff;">'
+    + '<th style="text-align:left; padding:10px 12px;">Estagiário(a)</th>'
+    + '<th style="text-align:left; padding:10px 12px;">Tipo</th>'
+    + '<th style="text-align:left; padding:10px 12px;">Realizado/Meta</th>'
+    + '<th style="text-align:left; padding:10px 12px;">Faltam</th>'
+    + '</tr>'
+    + '</thead>'
+    + '<tbody>';
+
+  for (var i = 0; i < linhas.length; i++) {
+    var bgRow = (i % 2 === 0) ? '#ffffff' : '#f4f8f6';
+    html += '<tr style="background:' + bgRow + ';">'
+      + '<td style="padding:8px 12px;">' + _escapeHtmlSecretaria(linhas[i][0]) + '</td>'
+      + '<td style="padding:8px 12px;">' + _escapeHtmlSecretaria(linhas[i][1]) + '</td>'
+      + '<td style="padding:8px 12px;">' + _escapeHtmlSecretaria(linhas[i][2]) + '</td>'
+      + '<td style="padding:8px 12px;">' + _escapeHtmlSecretaria(linhas[i][3]) + '</td>'
+      + '</tr>';
+  }
+
+  html += '</tbody></table>';
+  return html;
+}
+
+function enviarConsolidadoPendenciasAudiencias(estagiariosAtivos) {
+  var parametros = lerParametrosAudiencias(); // AudienciasEstagiario.js
+  var audienciasTodas = getTodasAudienciasEstagiario(); // AudienciasEstagiario.js
+
+  var pendencias = [];
+  (estagiariosAtivos || []).forEach(function(e) {
+    var contagens = contarAudienciasPorTipo(e.nome, e.semestre, audienciasTodas, parametros);
+    var faltantes = contagens.filter(function(c) { return c.meta > 0 && c.faltante > 0; });
+    if (faltantes.length) pendencias.push({ nome: e.nome, faltantes: faltantes });
+  });
+
+  if (!pendencias.length) return null;
+
+  var html = montarEmailConsolidadoPendenciasAudiencias(pendencias);
+  MailApp.sendEmail({
+    to: CONFIG.EMAIL_AUTORIZADO,
+    subject: 'Consolidado de pendências de audiências dos estagiários',
+    htmlBody: html
+  });
+  return null;
+}
+
 // --- Rastreio de avisos de cobranca ja enviados (nota de celula) ---
 // Mesma tecnica de marcarNotificacaoInicialEnviada/notificacaoInicialJaEnviada
 // (Classroom.js): guarda o dado tecnico como nota (comentario) de uma celula
@@ -472,6 +688,39 @@ function montarTabelaProducaoHtml(contagens) {
   return html;
 }
 
+// A-5: bloco de audiencias acrescentado a Mensagem 4 — mesmo formato visual
+// da tabela de producao acima, com realizado/meta/faltante por tipo (ver
+// contarAudienciasPorTipo, AudienciasEstagiario.js). Nao gera nenhuma tabela
+// quando nao ha tipo cadastrado em bd!X:Z (contagens.audiencias vazio).
+function montarTabelaAudienciasHtml(audiencias) {
+  if (!audiencias || !audiencias.length) return '';
+
+  var html = '<table border="1" cellpadding="8" cellspacing="0" '
+    + 'style="border-collapse:collapse; font-family:Arial,sans-serif; '
+    + 'font-size:13px; min-width:400px; margin-top:12px;">'
+    + '<thead>'
+    + '<tr style="background:#3D6A61; color:#ffffff;">'
+    + '<th style="text-align:left; padding:10px 12px;">Audiências</th>'
+    + '<th style="text-align:left; padding:10px 12px;">Realizado/Meta</th>'
+    + '<th style="text-align:left; padding:10px 12px;">Faltam</th>'
+    + '</tr>'
+    + '</thead>'
+    + '<tbody>';
+
+  for (var i = 0; i < audiencias.length; i++) {
+    var a = audiencias[i];
+    var bgRow = (i % 2 === 0) ? '#ffffff' : '#f4f8f6';
+    html += '<tr style="background:' + bgRow + ';">'
+      + '<td style="padding:8px 12px;">' + _escapeHtmlSecretaria(a.tipo) + '</td>'
+      + '<td style="padding:8px 12px;">' + _escapeHtmlSecretaria(a.realizado + '/' + a.meta) + '</td>'
+      + '<td style="padding:8px 12px;">' + _escapeHtmlSecretaria(a.faltante) + '</td>'
+      + '</tr>';
+  }
+
+  html += '</tbody></table>';
+  return html;
+}
+
 // Texto fixo definido por Thales. So os campos entre {} sao substituidos —
 // mesma convencao das demais mensagens deste arquivo.
 function montarEmailProducaoEstagio(nomeAluno, dataFinalizacaoFormatada, semestre, contagens) {
@@ -480,6 +729,7 @@ function montarEmailProducaoEstagio(nomeAluno, dataFinalizacaoFormatada, semestr
     + '<p style="font-family:Arial,sans-serif; font-size:14px;">'
     + 'Para que você tenha uma visão clara do seu desempenho neste semestre (' + semestre + '), segue um resumo da sua produção:</p>'
     + montarTabelaProducaoHtml(contagens)
+    + montarTabelaAudienciasHtml(contagens.audiencias)
     + '<p style="font-family:Arial,sans-serif; font-size:14px; margin-top:16px;">'
     + 'Fico à disposição caso queira conversar sobre esses números ou sobre o que ainda pode ser feito até o fim do período. Seguimos juntos até a reta final. 🙂</p>';
 
@@ -573,6 +823,29 @@ function _marcarAvisoEncerramentoEnviado(cellNome, chave, semestre) {
   cellNome.setNote(notaAtual ? notaAtual + '\n' + novaLinha : novaLinha);
 }
 
+// Guarda de duplicidade da A-6 (consolidado de pendencias de audiencias para
+// Thales) — nota na propria celula bd!P2 (DATA_FINALIZACAO_ESTAGIO), ja que
+// esse aviso e um unico e-mail agregado (nao ha uma linha de estagiario para
+// gravar a nota). Chave inclui a data de finalizacao formatada — se Thales
+// atualizar bd!P2 para um novo periodo, o aviso volta a disparar normalmente.
+function _consolidadoAudienciasJaEnviado(dataFinalizacaoFormatada) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName(CONFIG.SHEET_BD);
+  if (!aba) return false;
+  var nota = String(aba.getRange(CONFIG.BD_CELL.DATA_FINALIZACAO_ESTAGIO).getNote() || '');
+  return nota.indexOf('CONSOLIDADO_AUDIENCIAS: ' + dataFinalizacaoFormatada) !== -1;
+}
+
+function _marcarConsolidadoAudienciasEnviado(dataFinalizacaoFormatada) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName(CONFIG.SHEET_BD);
+  if (!aba) return;
+  var cell = aba.getRange(CONFIG.BD_CELL.DATA_FINALIZACAO_ESTAGIO);
+  var notaAtual = String(cell.getNote() || '');
+  var novaLinha = 'CONSOLIDADO_AUDIENCIAS: ' + dataFinalizacaoFormatada;
+  cell.setNote(notaAtual ? notaAtual + '\n' + novaLinha : novaLinha);
+}
+
 function verificarEncerramentoEstagioAutomatico() {
   var dataFinalizacao = _lerDataFinalizacaoEstagio();
   if (!dataFinalizacao) return;
@@ -587,6 +860,20 @@ function verificarEncerramentoEstagioAutomatico() {
   if (!abaEstagiarios) return;
 
   var estagiarios = getTodosEstagiariosCompletos().filter(function(e) { return !e.finalizado && e.email; });
+
+  // A-6: mesmo gatilho da Mensagem 4 (producao), mas um UNICO e-mail
+  // agregado para Thales — nao entra no loop por estagiario abaixo.
+  if (ehDiaAvisoProducao) {
+    var dataFinalizacaoFormatada = formatarData(dataFinalizacao);
+    if (!_consolidadoAudienciasJaEnviado(dataFinalizacaoFormatada)) {
+      try {
+        enviarConsolidadoPendenciasAudiencias(estagiarios);
+        _marcarConsolidadoAudienciasEnviado(dataFinalizacaoFormatada);
+      } catch (e) {
+        Logger.log('Erro ao enviar consolidado de pendencias de audiencias: ' + e.message);
+      }
+    }
+  }
 
   estagiarios.forEach(function(estagiario) {
     // Localiza a linha do estagiario na aba (para gravar a nota de rastreio).

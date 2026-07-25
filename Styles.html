@@ -405,6 +405,22 @@
     overflow: hidden; text-overflow: ellipsis;
   }
 
+  /* GRAFICOS — Audiências por estagiário (cada bloco tem sua propria meta,
+     por isso um wrapper de altura fixa por barra em vez do mini-barra puro —
+     ver renderizarGraficoAudiencias, Scripts.html) */
+  .grafico-coluna-audiencia { position: relative; height: 100%; display: flex; align-items: flex-end; }
+  .grafico-meta-linha {
+    position: absolute; left: -2px; right: -2px; height: 0;
+    border-top: 2px dashed var(--cor-atraso); pointer-events: none;
+  }
+  .grafico-barra-audiencia-1 { background: var(--cor-entregue); }
+  .grafico-barra-audiencia-2 { background: var(--cor-encaminhado); }
+  .grafico-barra-audiencia-3 { background: var(--cor-devolvida); }
+  .grafico-barra-audiencia-4 { background: var(--cor-sem-estagiario); }
+  .legenda-linha-meta {
+    width: 12px; height: 0; border-top: 2px dashed var(--cor-atraso); display: inline-block;
+  }
+
   /* CARDS DE RESUMO */
   .cards-grid {
     display: grid;
@@ -473,6 +489,66 @@
   .card-atraso .card-icone         { background: var(--fundo-atraso); }
   .card-sem-estagiario { color: var(--cor-sem-estagiario); }
   .card-sem-estagiario .card-icone { background: var(--fundo-sem-estagiario); }
+
+  /* CARD DE PROGRESSO — "Audiências" (Painel Aluno e Panorama): uma barra
+     horizontal por tipo, meta vinda de bd!X:Z (nunca fixa no HTML). */
+  .progresso-card {
+    background: var(--superficie);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--sombra);
+    margin-bottom: 28px;
+  }
+  .progresso-card-titulo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Google Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--texto-principal);
+    margin-bottom: 16px;
+  }
+  .progresso-lista { display: flex; flex-direction: column; gap: 14px; }
+  .progresso-item-cabecalho {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 12.5px;
+  }
+  .progresso-item-tipo { font-weight: 600; color: var(--texto-principal); }
+  .progresso-item-valor { font-weight: 700; color: var(--cinza-texto); font-variant-numeric: tabular-nums; }
+  .progresso-item-valor-excedente { color: var(--cor-concluido); }
+  .progresso-barra-trilho {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--cinza-fundo);
+    overflow: hidden;
+  }
+  .progresso-barra-preenchimento {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--azul-claro);
+    transition: width 0.25s;
+  }
+  .progresso-barra-preenchimento.progresso-completo { background: var(--cor-concluido); }
+
+  /* AVISO RN-13 — comprovante de audiencia enviado por e-mail (modal,
+     confirmacao e legenda da tabela do Painel Aluno). */
+  .aviso-comprovante-audiencia {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--fundo-sem-estagiario);
+    color: var(--cor-sem-estagiario);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.4;
+    margin-bottom: 14px;
+  }
 
   /* BARRA DE BUSCA */
   .barra-busca {

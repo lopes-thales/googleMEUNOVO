@@ -47,6 +47,10 @@
         <span class="material-symbols-outlined" style="font-size:18px;">support_agent</span>
         Atendimento Online
       </button>
+      <button class="btn-acao-aluno" id="btnRegistrarAudiencia" onclick="paAbrirModalNovaAudiencia()">
+        <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
+        Registrar Audiência
+      </button>
     </div>
   </div>
 
@@ -88,6 +92,30 @@
 
         <!-- CARDS RESUMO -->
         <div class="cards-grid cards-grid-panorama pa-cards-grid" id="paCardsGrid"></div>
+
+        <!-- CARD DE PROGRESSO: AUDIÊNCIAS (uma barra por tipo, vindo de bd!X:Z) -->
+        <div class="progresso-card" id="paProgressoAudienciasCard" style="display:none;">
+          <div class="progresso-card-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
+            Audiências
+          </div>
+          <div class="progresso-lista" id="paProgressoAudienciasLista"></div>
+        </div>
+
+        <!-- TABELA: AUDIÊNCIAS -->
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
+            Audiências
+          </div>
+          <div class="aviso-comprovante-audiencia" id="paAvisoComprovanteAudiencia" style="display:none;"></div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="paCabecalhoAudiencias"></thead>
+              <tbody id="paCorpoAudiencias"></tbody>
+            </table>
+          </div>
+        </div>
 
         <!-- TABELA: DILIGÊNCIAS -->
         <div class="panorama-tabela-bloco">
@@ -577,6 +605,192 @@
         <button class="btn btn-salvar" id="btnSalvarNovoAtendimentoOnline" onclick="paSalvarNovoAtendimentoOnline()">
           <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
           Enviar para aprovação
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AUDIÊNCIA (visualizacao; permite editar e reenviar se Pendente ou Reprovada) -->
+  <div class="modal-overlay" id="paModalAudienciaOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo" id="auViewIdLabel">AUDIÊNCIA</div>
+        <div class="modal-assistido" id="auViewTipo"></div>
+        <div id="auViewBadges"></div>
+        <button class="modal-fechar" onclick="paFecharModal('paModalAudienciaOverlay')">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao" id="auViewMotivoWrapper" style="display:none;">
+          <div class="modal-secao-titulo">Motivo da reprovação</div>
+          <div class="modal-campo-valor modal-campo-valor-secundario" id="auViewMotivo">—</div>
+        </div>
+
+        <!-- Somente leitura (Aprovada) -->
+        <div class="modal-secao" id="auViewSomenteLeitura">
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-valor" id="auViewData">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Hora</div>
+              <div class="modal-campo-valor" id="auViewHora">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Vara</div>
+              <div class="modal-campo-valor" id="auViewVara">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Processo</div>
+              <div class="modal-campo-valor modal-campo-valor-copiavel">
+                <span id="auViewProcesso">—</span>
+                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoAudiencia" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Partes</div>
+              <div class="modal-campo-valor" id="auViewPartes">—</div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Observações</div>
+              <div class="modal-campo-valor" id="auViewObs">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edicao (Pendente ou Reprovada) -->
+        <div class="modal-secao" id="auEditWrapper" style="display:none;">
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-editavel">
+                <input type="date" class="modal-select" id="auEditData">
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Hora</div>
+              <div class="modal-campo-editavel">
+                <input type="time" class="modal-select" id="auEditHora">
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Tipo</div>
+              <div class="modal-campo-editavel">
+                <select class="modal-select" id="auEditTipo">
+                  <option value="">— Selecione —</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Vara</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="auEditVara" placeholder="Vara ou órgão julgador">
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Processo</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="auEditProcesso" placeholder="Número do processo">
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Partes</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="auEditPartes" placeholder="Partes ou assistido(a)">
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Observações</div>
+              <div class="modal-campo-editavel">
+                <textarea class="modal-select" id="auEditObs" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="aviso-comprovante-audiencia" id="auEditAviso" style="margin-top:14px;"></div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="paFecharModal('paModalAudienciaOverlay')">Fechar</button>
+        <button class="btn btn-salvar" id="btnReenviarAudiencia" style="display:none;" onclick="paReenviarAudiencia()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span>
+          Reenviar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REGISTRAR AUDIÊNCIA -->
+  <div class="modal-overlay" id="paModalNovaAudienciaOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo">NOVA</div>
+        <div class="modal-assistido">Registrar Audiência</div>
+        <button class="modal-fechar" onclick="paFecharModalNovaAudiencia()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-editavel">
+                <input type="date" class="modal-select" id="auNovaData">
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Hora</div>
+              <div class="modal-campo-editavel">
+                <input type="time" class="modal-select" id="auNovaHora">
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Tipo</div>
+              <div class="modal-campo-editavel">
+                <select class="modal-select" id="auNovaTipo">
+                  <option value="">— Selecione —</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Vara</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="auNovaVara" placeholder="Vara ou órgão julgador">
+              </div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Processo</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="auNovaProcesso" placeholder="Número do processo">
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Partes</div>
+              <div class="modal-campo-editavel">
+                <input type="text" class="modal-select" id="auNovaPartes" placeholder="Partes ou assistido(a) (opcional)">
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Observações</div>
+              <div class="modal-campo-editavel">
+                <textarea class="modal-select" id="auNovaObs" rows="2" placeholder="Opcional"></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="aviso-comprovante-audiencia" id="auNovaAviso" style="margin-top:14px;"></div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="paFecharModalNovaAudiencia()">Cancelar</button>
+        <button class="btn btn-salvar" id="btnSalvarNovaAudiencia" onclick="paSalvarNovaAudiencia()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          Registrar
         </button>
       </div>
     </div>

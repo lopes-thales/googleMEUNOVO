@@ -64,6 +64,34 @@
 //(so conta na producao do estagiario — Panorama.js/Graficos.js — quando
 //STATUS = 'Aprovado'.)
 //
+//aba audiencias_estagiario (colunas A:N, base 0) — ver AudienciasEstagiario.js:
+//ID	DATA	HORA	ESTAGIARIO	EMAIL	TIPO	VARA	PROCESSO	PARTES	OBS	STATUS	OBS_APROVACAO	ALTERADO_EM	SEMESTRE
+//(modulo INDEPENDENTE da aba "audiencias" — pauta do escritorio, domínio
+//distinto, somente leitura, ver Audiencias.js — e que NUNCA deve ser lida ou
+//escrita por AudienciasEstagiario.js, nem vice-versa. Nao ha vinculo entre um
+//registro desta aba e uma linha da pauta: decisao de Thales, 24/07/2026, o
+//volume de audiencias na pauta tornaria o seletor inutilizavel — o estagiario
+//digita os dados livremente.)
+//(SEMESTRE aqui e ESTATICO — gravado uma unica vez na criacao a partir do
+//semestre do proprio estagiario, nunca recalculado a partir de DATA. Isso
+//permite registrar uma audiencia com data anterior ao semestre corrente sem
+//quebrar a contagem da meta do semestre em curso — decisao de Thales,
+//24/07/2026.)
+//(nao ha coluna de comprovante: a ata/declaracao de presenca continua sendo
+//enviada por e-mail e conferida manualmente por Thales — decisao de Thales,
+//24/07/2026, avaliado e descartado o upload para o Drive.)
+//(so conta para meta/progresso/graficos/Parcial de Horas quando STATUS =
+//'Aprovada' — Pendente e Reprovada aparecem nas tabelas mas nunca somam.)
+//
+//aba bd, bloco X:Z (picklist + parametros de audiencias_estagiario, ver
+//lerParametrosAudiencias em AudienciasEstagiario.js): X2:X = tipo de
+//audiencia (fonte unica da picklist do modal do estagiario), Y2:Y = meta
+//daquele tipo (inteiro), Z2:Z = quantas horas cada audiencia daquele tipo
+//vale no calculo de "Parcial de Horas" (aba Panorama). Linhas com X vazio sao
+//ignoradas. Nenhum tipo/meta/hora e codificado no JavaScript — se o bloco
+//estiver vazio, o modulo se comporta como se nao houvesse tipos cadastrados.
+//aa2: contador para numeracao AU-XXXX (Audiencia do Estagiario), mesmo padrao de i2/j2/k2/r2.
+//
 //OBS: onde tiver aluno, considere Estagiários, ou seja, aluno=estagiário
 
 //Diligências (classificarStatusPelaSubmission e call site em verificarEntregasClassroom):
@@ -171,7 +199,10 @@ var CONFIG = {
     INICIAIS: 'E',          // picklist de ESPECIE usado no modal "Criar Peticao Inicial" (Painel Aluno) - ver Iniciais.js
     ID_CLASS: 'F',          // celula unica: ID da turma no Google Classroom
     ID_PLANILHA_GERAL: 'G', // celula unica: nao usado neste desenvolvimento
-    COMPLEXAS: 'H'          // valores de ESPECIE (coluna D) que geram SUBESPECIE = "Complexa"
+    COMPLEXAS: 'H',         // valores de ESPECIE (coluna D) que geram SUBESPECIE = "Complexa"
+    AUDIENCIA_TIPO: 'X',    // picklist de TIPO de audiencia do estagiario — ver lerParametrosAudiencias, AudienciasEstagiario.js
+    AUDIENCIA_META: 'Y',    // meta (inteiro) de cada TIPO de audiencia (coluna X, mesma linha)
+    AUDIENCIA_HORAS: 'Z'    // horas que cada audiencia daquele TIPO vale no calculo de "Parcial de Horas" (coluna X, mesma linha)
   },
 
   // Celulas unicas (nao sao listas) dentro da aba bd.
@@ -188,6 +219,7 @@ var CONFIG = {
     ID_PASTA_ARQUIVO_ESTAGIARIOS: 'Q2', // ID da pasta no Drive para onde vao as pastas dos estagiarios finalizados, retiradas de bd!L2 — botao "Arquivar Pastas" (Drive.js)
     CONTROLE_AO: 'R2', // contador para numeracao AO-XXXX (Atendimento Online) — guarda apenas o numero inteiro atual, ver AtendimentoOnline.js
     ID_PASTA_ACOMPANHAMENTOS: 'W2', // ID da pasta no Drive com os PDFs de acompanhamentos recebidos, ainda soltos — botao "Organizar Pastas" (Drive.js). O destino continua sendo a MESMA pasta do estagiario usada pelas diligencias (estagiarios!G, dentro de bd!L2).
+    CONTROLE_AU: 'AA2', // contador para numeracao AU-XXXX (Audiencia do Estagiario) — guarda apenas o numero inteiro atual, ver AudienciasEstagiario.js
 
     // Pesos usados no calculo de "Parcial de Horas" da aba Panorama (ver
     // getPesosPontuacaoPanorama, Panorama.js). Cada celula guarda um unico
@@ -347,6 +379,44 @@ var CONFIG = {
   // presencial da aba "atendimentos" tambem fica de fora, pois aquela aba nao
   // tem ID unico por linha).
   TIPOS_ATIVIDADE_ATENDIMENTO_ONLINE: ['Diligência', 'Inicial'],
+
+  // --- Aba audiencias_estagiario (colunas A:N, base 0) ---
+  // Ver AudienciasEstagiario.js (unico arquivo com permissao de ler/escrever
+  // esta aba). Modulo independente da aba "audiencias" (pauta do escritorio,
+  // ver AUDIENCIAS_COL mais abaixo) — nao ha vinculo entre as duas.
+  SHEET_AUDIENCIAS_ESTAGIARIO: 'audiencias_estagiario',
+  AUDIENCIAS_ESTAGIARIO_COL: {
+    ID: 0,              // A  (AU-0001, ...)
+    DATA: 1,             // B  (data da audiencia, informada pelo estagiario — nunca futura, ver RN-08)
+    HORA: 2,             // C  (horario da audiencia — nao obrigatorio)
+    ESTAGIARIO: 3,        // D  (nome do estagiario — sempre resolvido no servidor, nunca do payload)
+    EMAIL: 4,             // E  (e-mail do estagiario logado — sempre resolvido no servidor, nunca do payload)
+    TIPO: 5,              // F  (valor da picklist bd!X2:X)
+    VARA: 6,              // G  (vara ou orgao julgador)
+    PROCESSO: 7,          // H  (numero do processo)
+    PARTES: 8,            // I  (partes ou assistido(a) — nao obrigatorio)
+    OBS: 9,               // J  (texto livre — nao obrigatorio)
+    STATUS: 10,           // K  ('Pendente' | 'Aprovada' | 'Reprovada')
+    OBS_APROVACAO: 11,    // L  (motivo informado por Thales ao reprovar — obrigatorio ao reprovar)
+    ALTERADO_EM: 12,      // M
+    SEMESTRE: 13          // N  (ESTATICO — gravado uma unica vez na criacao a partir do semestre do estagiario, nunca recalculado a partir de DATA, ver RN-02)
+  },
+  TOTAL_COLUNAS_AUDIENCIAS_ESTAGIARIO: 14, // A ate N
+
+  PREFIXO_AUDIENCIA_ESTAGIARIO: 'AU-',
+
+  STATUS_AUDIENCIA_ESTAGIARIO: {
+    PENDENTE: 'Pendente',
+    APROVADA: 'Aprovada',
+    REPROVADA: 'Reprovada'
+  },
+
+  // Texto fixo definido por Thales (24/07/2026) — exibido no modal de
+  // registro, na confirmacao de sucesso e como legenda da tabela do Painel
+  // Aluno enquanto houver registro pendente (ver RN-13). O e-mail de destino
+  // e sempre interpolado a partir de CONFIG.EMAIL_AUTORIZADO, nunca digitado
+  // fixo no HTML.
+  AVISO_COMPROVANTE_AUDIENCIA: 'Para que a audiência seja validada, é necessário enviar a ata ou a declaração de presença por e-mail para {EMAIL}. Enquanto o documento não for recebido e conferido, o registro permanecerá pendente.',
 
   // --- Aba audiencias (colunas A:J, base 0) ---
   // Somente leitura neste painel: todos os valores vem prontos da planilha

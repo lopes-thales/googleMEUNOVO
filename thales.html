@@ -56,6 +56,11 @@
         Atendimento Online
         <span class="nav-tab-contador" id="navContadorAO" style="display:none;">0</span>
       </div>
+      <div class="nav-tab" data-vista="audiencias_estagiario">
+        <span class="material-symbols-outlined nav-tab-icon">gavel</span>
+        Audiências (Estagiários)
+        <span class="nav-tab-contador" id="navContadorAU" style="display:none;">0</span>
+      </div>
       <div class="nav-tab" data-vista="panorama">
         <span class="material-symbols-outlined nav-tab-icon">dashboard</span>
         Panorama
@@ -420,6 +425,58 @@
 
       </div>
 
+      <!-- ABA: AUDIÊNCIAS (ESTAGIÁRIOS) (fila de aprovacao + historico) -->
+      <!-- Modulo independente da aba "Audiências" (pauta do escritorio, so leitura) -->
+      <div class="secao-vista" id="secaoAudienciasEstagiario" style="display:none;">
+
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">pending_actions</span>
+            Pendentes de aprovação
+            <span class="painel-semestre-separador"></span>
+            <button class="btn btn-salvar" id="btnAprovarSelecionadosAU" onclick="aprovarSelecionadosAudiencias()" disabled style="padding:6px 14px; font-size:12.5px;">
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">check_circle</span>
+              Aprovar selecionadas
+            </button>
+            <button class="btn btn-salvar" id="btnReprovarSelecionadosAU" onclick="abrirModalReprovarAUEmLote()" disabled style="padding:6px 14px; font-size:12.5px; background: var(--cor-atraso); margin-left:8px;">
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">cancel</span>
+              Reprovar selecionadas
+            </button>
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:34px;"><input type="checkbox" id="checkTodosAU" onchange="alternarTodosAudiencias(this.checked)"></th>
+                  <th>ID</th><th>ESTAGIÁRIO(A)</th><th>DATA</th><th>HORA</th><th>TIPO</th>
+                  <th>VARA</th><th>PROCESSO</th><th>PARTES</th>
+                </tr>
+              </thead>
+              <tbody id="corpoAudienciasPendentes"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">history</span>
+            Histórico recente (últimas decisões)
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th><th>ESTAGIÁRIO(A)</th><th>DATA</th><th>TIPO</th>
+                  <th>PROCESSO</th><th>STATUS</th><th>OBSERVAÇÃO</th>
+                </tr>
+              </thead>
+              <tbody id="corpoAudienciasHistorico"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
       <!-- ABA: PANORAMA -->
       <div class="secao-vista" id="secaoPanorama" style="display:none;">
 
@@ -513,6 +570,29 @@
           </div>
         </div>
 
+        <!-- CARD DE PROGRESSO: AUDIÊNCIAS (so aparece com UM aluno selecionado) -->
+        <div class="progresso-card" id="panoramaProgressoAudienciasCard" style="display:none;">
+          <div class="progresso-card-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
+            Audiências
+          </div>
+          <div class="progresso-lista" id="panoramaProgressoAudienciasLista"></div>
+        </div>
+
+        <!-- TABELA: AUDIÊNCIAS (somente leitura — aprovacao/reprovacao so na aba propria) -->
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
+            Audiências
+          </div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="panoramaCabecalhoAudiencias"></thead>
+              <tbody id="panoramaCorpoAudiencias"></tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
 
       <!-- ABA: GRAFICOS -->
@@ -556,6 +636,22 @@
             <div class="grafico-multi-eixo" id="graficosEixoAtendIniciais"></div>
             <div class="grafico-multi-scroll">
               <div class="grafico-multi-plot" id="graficosPlotAtendIniciais"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="graficos-card">
+          <div class="graficos-card-header">
+            <div class="graficos-card-titulo">
+              <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
+              Audiências por estagiário
+            </div>
+            <div class="legenda-cores" id="graficosLegendaAudiencias"></div>
+          </div>
+          <div class="grafico-multi-wrap">
+            <div class="grafico-multi-eixo" id="graficosEixoAudiencias"></div>
+            <div class="grafico-multi-scroll">
+              <div class="grafico-multi-plot" id="graficosPlotAudiencias"></div>
             </div>
           </div>
         </div>
@@ -1055,6 +1151,106 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="fecharModalReprovarAO()">Cancelar</button>
         <button class="btn btn-salvar" id="btnConfirmarReprovarAO" onclick="confirmarReprovarAtendimentoOnline()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span>
+          Reprovar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DETALHE AUDIÊNCIA (view completa + Aprovar/Reprovar quando aplicavel) -->
+  <div class="modal-overlay" id="modalDetalheAUOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo" id="dauIdLabel">AUDIÊNCIA</div>
+        <div class="modal-assistido" id="dauTipo"></div>
+        <div id="dauBadge"></div>
+        <button class="modal-fechar" onclick="fecharModalDetalheAU()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div>
+              <div class="modal-campo-label">Estagiário(a)</div>
+              <div class="modal-campo-valor" id="dauEstagiario">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Data</div>
+              <div class="modal-campo-valor" id="dauData">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Hora</div>
+              <div class="modal-campo-valor" id="dauHora">—</div>
+            </div>
+            <div>
+              <div class="modal-campo-label">Vara</div>
+              <div class="modal-campo-valor" id="dauVara">—</div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Processo</div>
+              <div class="modal-campo-valor" id="dauProcesso">—</div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Partes</div>
+              <div class="modal-campo-valor" id="dauPartes">—</div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Observações</div>
+              <div class="modal-campo-valor" id="dauObs">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-secao" id="dauMotivoWrapper" style="display:none;">
+          <div class="modal-secao-titulo">Observação da aprovação/reprovação</div>
+          <div class="modal-campo-valor modal-campo-valor-secundario" id="dauMotivo">—</div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalDetalheAU()">Fechar</button>
+        <button class="btn btn-salvar" id="btnDauReprovar" style="display:none; background: var(--cor-atraso);" onclick="reprovarAudienciaDoModal()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">cancel</span>
+          Reprovar
+        </button>
+        <button class="btn btn-salvar" id="btnDauAprovar" style="display:none;" onclick="aprovarAudienciaDoModal()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">check_circle</span>
+          Aprovar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REPROVAR AUDIÊNCIA -->
+  <div class="modal-overlay" id="modalReprovarAUOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo" id="rauIdLabel">AUDIÊNCIA</div>
+        <div class="modal-assistido">Reprovar</div>
+        <button class="modal-fechar" onclick="fecharModalReprovarAU()">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <div class="modal-grid">
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Motivo da reprovação</div>
+              <div class="modal-campo-editavel">
+                <textarea class="modal-select" id="rauMotivo" rows="3" placeholder="Explique por que esta audiência está sendo reprovada (o estagiário verá esta mensagem)"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalReprovarAU()">Cancelar</button>
+        <button class="btn btn-salvar" id="btnConfirmarReprovarAU" onclick="confirmarReprovarAudiencia()">
           <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span>
           Reprovar
         </button>

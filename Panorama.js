@@ -107,14 +107,19 @@ function getContagemProducaoEstagiario(nomeEstagiario, semestre) {
     getTodasIniciais(),
     getTodosAtendimentos(),
     getTodosAcompanhamentos(),
-    getTodosAtendimentosOnline() // AtendimentoOnline.js
+    getTodosAtendimentosOnline(), // AtendimentoOnline.js
+    getTodasAudienciasEstagiario(), // AudienciasEstagiario.js
+    lerParametrosAudiencias() // bd!X:Z — AudienciasEstagiario.js
   );
 }
 
 // atendimentosOnline: so os com STATUS = 'Aprovado' entram na contagem — ver
 // regra de negocio em AtendimentoOnline.js. Somam-se aos atendimentos
 // presenciais no MESMO total (qtdAtendimentos), decisao de Thales.
-function _contarProducaoComDados(nomeEstagiario, semestre, diligencias, iniciais, atendimentos, acompanhamentos, atendimentosOnline) {
+// audienciasEstagiario/parametrosAudiencias: contagem por tipo (RN-05, ver
+// AudienciasEstagiario.js) — baldes independentes, nunca somados ao total de
+// atendimentos nem entre si.
+function _contarProducaoComDados(nomeEstagiario, semestre, diligencias, iniciais, atendimentos, acompanhamentos, atendimentosOnline, audienciasEstagiario, parametrosAudiencias) {
   var chaveNome = normalizarChave(nomeEstagiario);
 
   function naoCancelada(reg) { return normalizarChave(reg.status) !== 'cancelada'; }
@@ -146,12 +151,18 @@ function _contarProducaoComDados(nomeEstagiario, semestre, diligencias, iniciais
     return normalizarChave(c.estagiario) === chaveNome && c.semestre === semestre && naoCancelada(c);
   }).length;
 
+  // audiencias: [{ tipo, meta, horas, realizado, faltante, percentual, excedente }],
+  // ver contarAudienciasPorTipo (AudienciasEstagiario.js) — baldes
+  // independentes por tipo, nunca somados a qtdAtendimentos.
+  var audiencias = contarAudienciasPorTipo(nomeEstagiario, semestre, audienciasEstagiario || [], parametrosAudiencias || []);
+
   return {
     qtdSimples: qtdSimples,
     qtdComplexas: qtdComplexas,
     qtdAtendimentos: qtdAtendimentos,
     qtdAcompanhamentos: qtdAcompanhamentos,
-    qtdIniciais: qtdIniciais
+    qtdIniciais: qtdIniciais,
+    audiencias: audiencias
   };
 }
 
@@ -168,9 +179,11 @@ function getProducaoPorEstagiarios(estagiarios) {
   var atendimentos = getTodosAtendimentos();
   var acompanhamentos = getTodosAcompanhamentos();
   var atendimentosOnline = getTodosAtendimentosOnline(); // AtendimentoOnline.js
+  var audienciasEstagiario = getTodasAudienciasEstagiario(); // AudienciasEstagiario.js
+  var parametrosAudiencias = lerParametrosAudiencias(); // bd!X:Z — AudienciasEstagiario.js
 
   return estagiarios.map(function(e) {
-    var contagens = _contarProducaoComDados(e.nome, e.semestre, diligencias, iniciais, atendimentos, acompanhamentos, atendimentosOnline);
+    var contagens = _contarProducaoComDados(e.nome, e.semestre, diligencias, iniciais, atendimentos, acompanhamentos, atendimentosOnline, audienciasEstagiario, parametrosAudiencias);
     contagens.nome = e.nome;
     return contagens;
   });
@@ -212,6 +225,8 @@ function getDadosPanorama() {
     atendimentos: getTodosAtendimentos(),
     acompanhamentos: getTodosAcompanhamentos(), // Acompanhamentos.js
     atendimentosOnline: getTodosAtendimentosOnline(), // AtendimentoOnline.js
+    audienciasEstagiario: getTodasAudienciasEstagiario(), // AudienciasEstagiario.js
+    parametrosAudiencias: lerParametrosAudiencias(), // bd!X:Z — tipo/meta/horas (AudienciasEstagiario.js)
     statusPicklist: lerColunaBd(CONFIG.BD_COL.STATUS),
     pesosPontuacao: getPesosPontuacaoPanorama()
   };
