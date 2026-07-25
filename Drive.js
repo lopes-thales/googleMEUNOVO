@@ -1,11 +1,15 @@
 // Drive.gs
-// Responsabilidade: organizacao dos PDFs de processos no Google Drive.
-// Competencia exclusiva deste arquivo: ler/mover/renomear arquivos e
-// criar/localizar pastas dentro da pasta configurada em bd!L2
-// (CONFIG.BD_CELL.ID_PASTA_PROCESSOS). Nenhum outro script deve mexer em
-// Drive/pastas — se precisar, a funcao deve ser adicionada aqui.
+// Responsabilidade: organizacao dos PDFs de processos e de acompanhamentos
+// no Google Drive. Competencia exclusiva deste arquivo: ler/mover/renomear
+// arquivos e criar/localizar pastas dentro das pastas configuradas em bd!L2
+// (CONFIG.BD_CELL.ID_PASTA_PROCESSOS) e bd!W2
+// (CONFIG.BD_CELL.ID_PASTA_ACOMPANHAMENTOS). Nenhum outro script deve mexer
+// em Drive/pastas — se precisar, a funcao deve ser adicionada aqui.
 //
-// Regra de negocio (acionada pelo botao "Organizar Pastas", aba Utilitarios):
+// Regra de negocio (acionada pelo botao "Organizar Pastas", aba Utilitarios
+// — ver organizarPastas() mais abaixo, que executa as duas partes a seguir):
+//
+// Parte 1 — diligencias (ver organizarPastasDiligencias()):
 //   1. Para cada estagiario com FINALIZADO vazio (nao finalizado) e sem
 //      pasta ainda cadastrada em estagiarios!G, localiza (por nome, dentro
 //      de bd!L2) ou cria a pasta do estagiario e grava o ID em estagiarios!G.
@@ -22,6 +26,15 @@
 //   5. Diligencias cujo processo nao tenha PDF correspondente ficam com
 //      DRIVE vazio (para serem tentadas novamente na proxima execucao) e
 //      aparecem no resumo final como "nao encontrados".
+//
+// Parte 2 — acompanhamentos (ver organizarPastasAcompanhamentos()):
+//   Mesma logica da Parte 1, mas os PDFs soltos ficam em bd!W2 (pasta
+//   separada, exclusiva de acompanhamentos) e o cruzamento e feito contra a
+//   aba acompanhamentos (STATUS "Encaminhado" e DRIVE, coluna N, diferente
+//   de 'S'). O destino, porem, e a MESMA pasta do estagiario usada pelas
+//   diligencias (estagiarios!G, dentro de bd!L2) — nao existe pasta separada
+//   por aluno para acompanhamentos, so a pasta de origem dos PDFs e que e
+//   diferente.
 //
 // Regra de negocio (acionada pelo botao "Arquivar Pastas", aba Utilitarios):
 //   Para cada estagiario com FINALIZADO = true (estagiarios!E) e ARQUIVADO
@@ -63,6 +76,38 @@ function _obterPastaProcessos() {
     return DriveApp.getFolderById(id);
   } catch (e) {
     throw new Error('Nao foi possivel abrir a pasta configurada em bd!' + CONFIG.BD_CELL.ID_PASTA_PROCESSOS + ' (ID: ' + id + ').');
+  }
+}
+
+// Retorna a URL da pasta de processos (bd!L2) — a mesma pasta onde ficam as
+// subpastas dos estagiarios. Usada nas descricoes das atividades do
+// Classroom (ver montarDescricaoAtividade e montarDescricaoAtividadeAcompanhamento,
+// Classroom.js), para que o link enviado ao aluno sempre reflita a pasta
+// configurada de fato, em vez de um link fixo que pode ficar desatualizado.
+// Lanca o mesmo erro de _obterPastaProcessos se a pasta nao estiver
+// configurada ou nao puder ser aberta.
+function obterUrlPastaProcessos() {
+  return _obterPastaProcessos().getUrl();
+}
+
+// Retorna a pasta configurada em bd!W2 (PDFs soltos de acompanhamentos,
+// ainda nao organizados), lancando erro claro se nao estiver configurada ou
+// nao puder ser aberta. Mesmo padrao de _obterPastaProcessos, mas para a
+// pasta de origem dos PDFs de acompanhamentos.
+function _obterPastaAcompanhamentos() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var abaBd = ss.getSheetByName(CONFIG.SHEET_BD);
+  if (!abaBd) throw new Error('Aba bd nao encontrada.');
+
+  var id = String(abaBd.getRange(CONFIG.BD_CELL.ID_PASTA_ACOMPANHAMENTOS).getValue() || '').trim();
+  if (!id) {
+    throw new Error('ID da pasta de acompanhamentos nao configurado em bd!' + CONFIG.BD_CELL.ID_PASTA_ACOMPANHAMENTOS + '.');
+  }
+
+  try {
+    return DriveApp.getFolderById(id);
+  } catch (e) {
+    throw new Error('Nao foi possivel abrir a pasta configurada em bd!' + CONFIG.BD_CELL.ID_PASTA_ACOMPANHAMENTOS + ' (ID: ' + id + ').');
   }
 }
 
@@ -470,5 +515,192 @@ function organizarPastasDiligencias() {
     naoEncontrados: naoEncontrados,
     ignorados: ignorados,
     avisos: avisos
+  };
+}
+
+// --- Funcao principal (acionada pelo botao "Organizar Pastas", parte acompanhamentos) ---
+//
+// Mesma logica de organizarPastasDiligencias, mas os PDFs soltos ficam na
+// pasta configurada em bd!W2 (ID_PASTA_ACOMPANHAMENTOS) em vez de bd!L2, e o
+// cruzamento e feito contra a aba acompanhamentos (STATUS "Encaminhado" e
+// DRIVE, coluna N, diferente de 'S'). O destino continua sendo a pasta do
+// estagiario dentro de bd!L2 (estagiarios!G) — a MESMA usada pelas
+// diligencias, nao ha pasta separada por aluno para acompanhamentos.
+function organizarPastasAcompanhamentos() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var pastaAcompanhamentos, pastaProcessos;
+  try {
+    pastaAcompanhamentos = _obterPastaAcompanhamentos();
+    pastaProcessos = _obterPastaProcessos();
+  } catch (e) {
+    return { sucesso: false, erro: e.message };
+  }
+
+  var abaAcompanhamentos = ss.getSheetByName(CONFIG.SHEET_ACOMPANHAMENTOS);
+  if (!abaAcompanhamentos) return { sucesso: false, erro: 'Aba acompanhamentos nao encontrada.' };
+
+  var infoEstagiarios = _lerEstagiariosParaDrive(ss);
+  var registrosEstagiarios = infoEstagiarios.registros;
+
+  // Mapa nome do estagiario -> registro, para lookup rapido durante o
+  // processamento dos acompanhamentos.
+  var mapaEstagiariosPorNome = {};
+  for (var i = 0; i < registrosEstagiarios.length; i++) {
+    mapaEstagiariosPorNome[registrosEstagiarios[i].nome] = registrosEstagiarios[i];
+  }
+
+  // Passo 1: garante pasta (dentro de bd!L2) para todo estagiario NAO
+  // finalizado que ainda nao tem ID de pasta gravado em G. Repete o mesmo
+  // passo de organizarPastasDiligencias para o caso desta funcao ser chamada
+  // isoladamente (fora de organizarPastas()).
+  var pastasCriadas = 0;
+  for (var j = 0; j < registrosEstagiarios.length; j++) {
+    var reg = registrosEstagiarios[j];
+    if (reg.finalizado) continue;
+    if (reg.driveId) continue;
+
+    var idAntesDaCriacao = reg.driveId;
+    reg.driveId = _obterOuCriarPastaEstagiario(pastaProcessos, reg.nome);
+    reg._alterado = true;
+    if (reg.driveId !== idAntesDaCriacao) pastasCriadas++;
+  }
+
+  // Passo 2: mapeia os PDFs soltos na pasta de acompanhamentos (bd!W2).
+  var mapaArquivos = _mapearPdfsPorProcesso(pastaAcompanhamentos);
+
+  // Passo 3: percorre acompanhamentos elegiveis (STATUS "Encaminhado" e
+  // DRIVE != 'S') e tenta mover o PDF correspondente para a pasta do
+  // estagiario (dentro de bd!L2).
+  var ultimaLinha = abaAcompanhamentos.getLastRow();
+  var movidos = 0;
+  var naoEncontrados = 0;
+  var ignorados = 0;
+  var avisos = [];
+
+  if (ultimaLinha >= 2) {
+    var numLinhas = ultimaLinha - 1;
+    var colMax = CONFIG.ACOMPANHAMENTOS_COL.DRIVE + 1; // coluna N
+    var dados = abaAcompanhamentos.getRange(2, 1, numLinhas, colMax).getValues();
+    var novosDrive = [];
+
+    for (var k = 0; k < dados.length; k++) {
+      var row = dados[k];
+      var status = String(row[CONFIG.ACOMPANHAMENTOS_COL.STATUS] || '').trim().toLowerCase();
+      var driveAtual = String(row[CONFIG.ACOMPANHAMENTOS_COL.DRIVE] || '').trim().toUpperCase();
+
+      var elegivel = (status === CONFIG.STATUS_VALORES[0].toLowerCase()) && (driveAtual !== CONFIG.DRIVE_ORGANIZADO);
+      if (!elegivel) {
+        novosDrive.push([row[CONFIG.ACOMPANHAMENTOS_COL.DRIVE]]);
+        continue;
+      }
+
+      var idAcompanhamento = String(row[CONFIG.ACOMPANHAMENTOS_COL.ID] || '').trim();
+      var processo = String(row[CONFIG.ACOMPANHAMENTOS_COL.PROCESSO] || '').trim();
+      var nomeEstagiario = String(row[CONFIG.ACOMPANHAMENTOS_COL.NOME] || '').trim();
+
+      if (!processo || !nomeEstagiario) {
+        novosDrive.push([row[CONFIG.ACOMPANHAMENTOS_COL.DRIVE]]);
+        ignorados++;
+        avisos.push((idAcompanhamento || '(sem ID)') + ': processo ou estagiario nao preenchido — ignorado.');
+        continue;
+      }
+
+      var chave = _normalizarChaveProcesso(processo);
+      var arquivo = mapaArquivos[chave];
+
+      if (!arquivo) {
+        novosDrive.push([row[CONFIG.ACOMPANHAMENTOS_COL.DRIVE]]);
+        naoEncontrados++;
+        continue;
+      }
+
+      // Resolve (ou cria na hora) a pasta do estagiario do acompanhamento —
+      // inclusive se ele estiver FINALIZADO ou nao constar em estagiarios —
+      // dentro de bd!L2, mesma pasta usada pelas diligencias.
+      var regEstagiario = mapaEstagiariosPorNome[nomeEstagiario];
+      if (!regEstagiario) {
+        regEstagiario = { linhaPlanilha: null, nome: nomeEstagiario, finalizado: true, driveId: '' };
+        mapaEstagiariosPorNome[nomeEstagiario] = regEstagiario;
+        avisos.push(idAcompanhamento + ': estagiario "' + nomeEstagiario + '" nao encontrado na aba estagiarios — pasta criada mesmo assim, mas cadastre-o na aba.');
+      }
+      if (!regEstagiario.driveId) {
+        regEstagiario.driveId = _obterOuCriarPastaEstagiario(pastaProcessos, nomeEstagiario);
+        regEstagiario._alterado = true;
+        if (regEstagiario.linhaPlanilha) pastasCriadas++;
+      }
+
+      try {
+        var pastaDestino = DriveApp.getFolderById(regEstagiario.driveId);
+        var novoNome = idAcompanhamento + ' - ' + arquivo.getName();
+        arquivo.moveTo(pastaDestino);
+        arquivo.setName(novoNome);
+
+        novosDrive.push([CONFIG.DRIVE_ORGANIZADO]);
+        movidos++;
+        delete mapaArquivos[chave]; // evita reaproveitar o mesmo arquivo em outra linha
+      } catch (e) {
+        novosDrive.push([row[CONFIG.ACOMPANHAMENTOS_COL.DRIVE]]);
+        avisos.push(idAcompanhamento + ': erro ao mover/renomear o arquivo — ' + e.message);
+      }
+    }
+
+    abaAcompanhamentos.getRange(2, CONFIG.ACOMPANHAMENTOS_COL.DRIVE + 1, numLinhas, 1).setValues(novosDrive);
+  }
+
+  // Passo 4: grava de volta os IDs de pasta novos/atualizados em estagiarios!G.
+  _gravarDriveIdsEstagiarios(infoEstagiarios.aba, registrosEstagiarios);
+  // Registros criados na hora para estagiarios sem linha na planilha (passo 3)
+  // nao sao gravados aqui, pois nao ha linha para gravar — ficam so no aviso.
+
+  var mensagem = movidos + ' arquivo(s) movido(s). ' +
+    pastasCriadas + ' pasta(s) criada(s). ' +
+    naoEncontrados + ' processo(s) sem PDF correspondente.';
+  if (ignorados > 0) mensagem += ' ' + ignorados + ' acompanhamento(s) ignorado(s) por falta de dados.';
+
+  return {
+    sucesso: true,
+    mensagem: mensagem,
+    movidos: movidos,
+    pastasCriadas: pastasCriadas,
+    naoEncontrados: naoEncontrados,
+    ignorados: ignorados,
+    avisos: avisos
+  };
+}
+
+// --- Ponto de entrada unico do botao "Organizar Pastas" ---
+//
+// Executa organizarPastasDiligencias() e, em seguida, organizarPastasAcompanhamentos(),
+// e devolve um resumo combinado. Se a pasta de processos (bd!L2) nao estiver
+// configurada, as duas partes dependem dela e o erro e devolvido de imediato.
+// Se so a parte de acompanhamentos falhar (ex.: bd!W2 nao configurado), o
+// resultado da parte de diligencias e mantido e o erro de acompanhamentos
+// aparece como aviso.
+function organizarPastas() {
+  var resDiligencias = organizarPastasDiligencias();
+  if (!resDiligencias.sucesso) return resDiligencias;
+
+  var resAcompanhamentos = organizarPastasAcompanhamentos();
+  if (!resAcompanhamentos.sucesso) {
+    return {
+      sucesso: true,
+      mensagem: 'Diligencias: ' + resDiligencias.mensagem + ' | Acompanhamentos: ERRO — ' + resAcompanhamentos.erro,
+      movidos: resDiligencias.movidos,
+      pastasCriadas: resDiligencias.pastasCriadas,
+      naoEncontrados: resDiligencias.naoEncontrados,
+      ignorados: resDiligencias.ignorados,
+      avisos: resDiligencias.avisos.concat(['Acompanhamentos: ' + resAcompanhamentos.erro])
+    };
+  }
+
+  return {
+    sucesso: true,
+    mensagem: 'Diligencias: ' + resDiligencias.mensagem + ' | Acompanhamentos: ' + resAcompanhamentos.mensagem,
+    movidos: (resDiligencias.movidos || 0) + (resAcompanhamentos.movidos || 0),
+    pastasCriadas: (resDiligencias.pastasCriadas || 0) + (resAcompanhamentos.pastasCriadas || 0),
+    naoEncontrados: (resDiligencias.naoEncontrados || 0) + (resAcompanhamentos.naoEncontrados || 0),
+    ignorados: (resDiligencias.ignorados || 0) + (resAcompanhamentos.ignorados || 0),
+    avisos: (resDiligencias.avisos || []).concat(resAcompanhamentos.avisos || [])
   };
 }

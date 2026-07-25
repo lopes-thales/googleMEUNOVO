@@ -167,6 +167,7 @@ function criarAcompanhamento(payload) {
   novaLinha[CONFIG.ACOMPANHAMENTOS_COL.CLASS] = '';
   novaLinha[CONFIG.ACOMPANHAMENTOS_COL.DI_CLASS] = '';
   novaLinha[CONFIG.ACOMPANHAMENTOS_COL.DF_CLASS] = '';
+  novaLinha[CONFIG.ACOMPANHAMENTOS_COL.DRIVE] = '';
 
   var proximaLinhaPlanilha = aba.getLastRow() + 1;
   // Forca a celula SEMESTRE como Texto simples antes de gravar — evita que o

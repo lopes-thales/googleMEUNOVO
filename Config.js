@@ -187,6 +187,7 @@ var CONFIG = {
     DATA_FINALIZACAO_ESTAGIO: 'P2', // data final do periodo de estagio corrente (mensageria — ver Mensagens.js)
     ID_PASTA_ARQUIVO_ESTAGIARIOS: 'Q2', // ID da pasta no Drive para onde vao as pastas dos estagiarios finalizados, retiradas de bd!L2 — botao "Arquivar Pastas" (Drive.js)
     CONTROLE_AO: 'R2', // contador para numeracao AO-XXXX (Atendimento Online) — guarda apenas o numero inteiro atual, ver AtendimentoOnline.js
+    ID_PASTA_ACOMPANHAMENTOS: 'W2', // ID da pasta no Drive com os PDFs de acompanhamentos recebidos, ainda soltos — botao "Organizar Pastas" (Drive.js). O destino continua sendo a MESMA pasta do estagiario usada pelas diligencias (estagiarios!G, dentro de bd!L2).
 
     // Pesos usados no calculo de "Parcial de Horas" da aba Panorama (ver
     // getPesosPontuacaoPanorama, Panorama.js). Cada celula guarda um unico
@@ -199,7 +200,6 @@ var CONFIG = {
 
   // --- Integracao Google Classroom ---
   CLASSROOM: {
-    PASTA_DRIVE_URL: 'https://drive.google.com/drive/folders/1LHjznEPH2515FD33m1llQlhAD8xpb3hp?usp=sharing',
     // ASSUNCAO A CONFIRMAR: pontuacao maxima padrao das atividades (necessaria
     // para que a atividade seja avaliavel/notavel no Classroom).
     PONTUACAO_MAXIMA: 100,
@@ -304,9 +304,10 @@ var CONFIG = {
     SEMESTRE: 9,               // J
     CLASS: 10,                 // K  ('S' quando a atividade ja foi criada no Classroom, senao vazio)
     DI_CLASS: 11,              // L  (data de criacao da atividade no Classroom — preenchida com o valor retornado pela API, nao com DATA/hoje)
-    DF_CLASS: 12               // M  (data de entrega/dueDate da atividade no Classroom — preenchida com o valor retornado pela API, nao com DATA_ENTREGA)
+    DF_CLASS: 12,              // M  (data de entrega/dueDate da atividade no Classroom — preenchida com o valor retornado pela API, nao com DATA_ENTREGA)
+    DRIVE: 13                  // N  ('S' quando o PDF do acompanhamento ja foi organizado na pasta do estagiario — ver Drive.js)
   },
-  TOTAL_COLUNAS_ACOMPANHAMENTOS: 13, // A ate M
+  TOTAL_COLUNAS_ACOMPANHAMENTOS: 14, // A ate N
 
   PREFIXO_ACOMPANHAMENTO: 'AC-',
 

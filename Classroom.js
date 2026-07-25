@@ -48,7 +48,7 @@ function montarDescricaoAtividade(reg, subespecie) {
     'Enviem a atividade em formato WORD (.doc, .docx) ou digitem diretamente na atividade.',
     'Não enviem em PDF, a não ser os anexos (documentos, memórias de cálculo etc.).',
     'Para acessar o processo, procure pelo número nesta pasta:',
-    CONFIG.CLASSROOM.PASTA_DRIVE_URL,
+    obterUrlPastaProcessos(),
     'Esta atividade foi criada automaticamente pelo sistema.'
   ];
   return linhas.join('\n');
@@ -768,8 +768,19 @@ function montarTituloAtividadeAcompanhamento(reg) {
 // estagiario(a) (coluna NOME da aba acompanhamentos, ver
 // coletarLinhasElegiveisAcompanhamentoParaEnvio abaixo) — primeiroNome()
 // (Mensagens.js) extrai o vocativo.
+// reg.idDiligenciaOrigem (opcional): quando informado, antepoe a linha
+// "Acompanhamento relativo à atividade ID {id}." — usado pela criacao em
+// massa de acompanhamentos originados de diligencias (ver
+// processarProvisorioAcompanhamentos, provisorio.js). Ausente no fluxo
+// normal (modal "Novo Acompanhamento" / botao "Enviar ao Classroom").
 function montarDescricaoAtividadeAcompanhamento(reg) {
-  var linhas = [
+  var linhas = [];
+
+  if (reg.idDiligenciaOrigem) {
+    linhas.push('Acompanhamento relativo à atividade ID ' + reg.idDiligenciaOrigem + '.', '');
+  }
+
+  linhas = linhas.concat([
     'Prezado(a) ' + primeiroNome(reg.estagiario) + ',',
     '',
     'Você deve elaborar um relatório de acompanhamento processual referente ao',
@@ -789,12 +800,12 @@ function montarDescricaoAtividadeAcompanhamento(reg) {
     '• Prazo para entrega: ' + formatarData(reg.dataEntregaRaw) + ';',
     '• Consulte o andamento processual antes de elaborar o relatório;',
     '• Envie o relatório em formato WORD (.doc ou .docx) ou, de preferência, no formato Google Docs. O processo encontra-se na pasta com seu nome no Google Drive. 📁',
-    CONFIG.CLASSROOM.PASTA_DRIVE_URL,
+    obterUrlPastaProcessos(),
     '',
     'Em caso de dúvidas, pode entrar em contato comigo. 🫱🏽‍🫲🏽',
     '',
     'Esta atividade foi criada automaticamente pelo sistema. 🤖'
-  ];
+  ]);
   return linhas.join('\n');
 }
 
