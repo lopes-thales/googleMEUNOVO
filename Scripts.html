@@ -2863,7 +2863,10 @@ function badgeStatusAudiencia(status) {
 function atualizarContadorAudienciasEstagiario() {
   google.script.run
     .withSuccessHandler(function(resultado) {
-      if (resultado.erro) return; // silencioso — nao e critico para o resto do painel
+      // resultado === null significa falha de serializacao no servidor (ver
+      // nota em formatarHora, Data.js) — nunca um retorno legitimo. Sem esta
+      // guarda o acesso a .erro estoura com TypeError e mata o handler.
+      if (!resultado || resultado.erro) return; // silencioso — nao e critico para o resto do painel
       var badge = document.getElementById('navContadorAU');
       var qtd = (resultado.pendentes || []).length;
       if (!badge) return;
@@ -2885,6 +2888,12 @@ function carregarAbaAudienciasEstagiario() {
   google.script.run
     .withSuccessHandler(function(resultado) {
       if (wrapper) wrapper.style.opacity = '1';
+      // resultado === null significa falha de serializacao no servidor (ver
+      // nota em formatarHora, Data.js) — nunca um retorno legitimo.
+      if (!resultado) {
+        mostrarToast('Falha ao carregar Audiências do Estagiário: resposta inválida do servidor.', 'erro');
+        return;
+      }
       if (resultado.erro) {
         mostrarToast(resultado.erro, 'erro');
         return;
@@ -3182,6 +3191,14 @@ function carregarAbaPanorama() {
   google.script.run
     .withSuccessHandler(function(resultado) {
       if (wrapper) wrapper.style.opacity = '1';
+      // resultado === null significa falha de serializacao no servidor (ver
+      // nota em formatarHora, Data.js) — nunca um retorno legitimo. Sem esta
+      // guarda o handler morria antes de popularSelectSemestrePanorama(), e o
+      // select ficava travado na opcao estatica "Nenhum semestre encontrado".
+      if (!resultado) {
+        mostrarToast('Falha ao carregar Panorama: resposta inválida do servidor.', 'erro');
+        return;
+      }
       if (resultado.erro) {
         mostrarToast(resultado.erro, 'erro');
         return;

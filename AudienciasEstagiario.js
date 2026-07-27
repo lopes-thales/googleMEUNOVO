@@ -35,7 +35,17 @@ function rowParaObjetoAudienciaEstagiario(row, indice) {
     _linha: indice + 2,
     id: row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.ID],
     data: formatarData(row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.DATA]),
-    hora: row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.HORA],
+    // HORA e gravada como string "HH:mm" (ver criar/reenviarAudienciaEstagiario),
+    // mas setValue() se comporta como digitacao do usuario: o Sheets converte
+    // "14:30" em valor de hora, e getValues() devolve um objeto Date. Devolver
+    // esse Date cru ao cliente quebrava a serializacao de google.script.run e
+    // fazia o successHandler receber null — bug diagnosticado em 27/07/2026,
+    // que derrubava de uma vez a aba Panorama, esta aba e o Painel Aluno
+    // inteiro (os tres unicos endpoints que enviam estes objetos ao frontend).
+    // Bastava UM registro com hora preenchida para invalidar todo o payload.
+    // A planilha continua guardando hora de verdade (ordenavel/filtravel);
+    // so a saida para o cliente e normalizada. Ver formatarHora em Data.js.
+    hora: formatarHora(row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.HORA]),
     estagiario: row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.ESTAGIARIO],
     email: String(row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.EMAIL] || '').trim(),
     tipo: row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.TIPO],

@@ -216,6 +216,14 @@ function paCarregarDados() {
   mostrarLoading(true);
   google.script.run
     .withSuccessHandler(function(resultado) {
+      // resultado === null significa falha de serializacao no servidor (ver
+      // nota em formatarHora, Data.js) — nunca um retorno legitimo. Sem esta
+      // guarda o handler morria antes de mostrarLoading(false), e a pagina
+      // ficava presa para sempre no spinner "Carregando dados...".
+      if (!resultado) {
+        paMostrarErroCarregamento('Resposta inválida do servidor.');
+        return;
+      }
       if (resultado.erro) {
         paMostrarErroCarregamento(resultado.erro);
         return;

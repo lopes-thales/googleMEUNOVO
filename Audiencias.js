@@ -4,22 +4,15 @@
 // formula a partir de DATA) vem prontas da planilha e nunca sao gravadas
 // por este painel.
 
-// Converte a coluna HORA (celula de hora do Sheets) em "HH:mm". Aceita tanto
-// um Date (caso normal) quanto texto solto, para nao quebrar se a celula
-// estiver formatada como texto.
-function formatarHoraAudiencia(val) {
-  if (val === '' || val === null || val === undefined) return '';
-  if (val instanceof Date && !isNaN(val.getTime())) {
-    try {
-      return Utilities.formatDate(val, CONFIG.TIMEZONE, 'HH:mm');
-    } catch (e) {
-      return '';
-    }
-  }
-  return String(val).trim();
-}
+// A conversao da coluna HORA para "HH:mm" mora em formatarHora (Data.js)
+// desde 27/07/2026 — antes era formatarHoraAudiencia, definida aqui. Motivo:
+// formatar hora e formatador generico (mesma familia de formatarData/
+// formatarDataHora) e passou a ser necessario tambem em AudienciasEstagiario.js;
+// manter duas copias abriria espaco para divergencia.
 
 // Minutos desde 00:00, usado apenas para ordenar audiencias no mesmo dia.
+// Continua aqui: e regra de EXIBICAO desta aba (ordenacao da pauta do dia),
+// nao formatacao de valor.
 function _minutosDoDiaAudiencia(val) {
   if (val instanceof Date && !isNaN(val.getTime())) {
     return val.getHours() * 60 + val.getMinutes();
@@ -56,7 +49,7 @@ function getTodasAudiencias() {
       id: row[CONFIG.AUDIENCIAS_COL.ID],
       data: formatarData(dataVal),
       dia: String(row[CONFIG.AUDIENCIAS_COL.DIA] || '').trim(),
-      hora: formatarHoraAudiencia(row[CONFIG.AUDIENCIAS_COL.HORA]),
+      hora: formatarHora(row[CONFIG.AUDIENCIAS_COL.HORA]),
       vara: row[CONFIG.AUDIENCIAS_COL.VARA],
       adv: row[CONFIG.AUDIENCIAS_COL.ADV],
       tipo: row[CONFIG.AUDIENCIAS_COL.TIPO],
@@ -136,7 +129,7 @@ function getAudienciasDaSemana(inicioTs, fimTs) {
       ts: ts,
       data: formatarData(dataVal),
       diaSemana: DIAS_SEMANA_PAUTA_AUDIENCIAS[diaTrunc.getDay() - 1] || '',
-      hora: formatarHoraAudiencia(row[CONFIG.AUDIENCIAS_COL.HORA]),
+      hora: formatarHora(row[CONFIG.AUDIENCIAS_COL.HORA]),
       vara: String(row[CONFIG.AUDIENCIAS_COL.VARA] || '').trim(),
       adv: String(row[CONFIG.AUDIENCIAS_COL.ADV] || '').trim(),
       tipo: String(row[CONFIG.AUDIENCIAS_COL.TIPO] || '').trim()

@@ -139,6 +139,34 @@ function formatarDataHora(val) {
   }
 }
 
+// Converte uma celula de HORA do Sheets em texto "HH:mm". Aceita tanto um
+// Date (caso normal: celula formatada como hora, que getValues() devolve como
+// objeto Date de 30/12/1899) quanto texto solto, para nao quebrar se a celula
+// estiver formatada como texto.
+//
+// Formatador GENERICO, promovido para ca em 27/07/2026 (antes vivia apenas em
+// Audiencias.js como formatarHoraAudiencia). Motivo: formatar hora nao e
+// competencia da pauta do escritorio — e a mesma familia de formatarData/
+// formatarDataHora, e passou a ser necessario tambem em AudienciasEstagiario.js.
+//
+// IMPORTANTE (nao remover esta chamada de nenhum objeto enviado ao cliente):
+// google.script.run NAO serializa objetos Date no retorno. Devolver uma celula
+// de hora crua ao frontend faz o successHandler receber null silenciosamente —
+// sem acionar o failureHandler e sem cair no try/catch dos wrappers de Code.js.
+// Foi exatamente essa a causa da quebra do Panorama, da aba Audiencias
+// (Estagiarios) e do Painel Aluno diagnosticada em 27/07/2026.
+function formatarHora(val) {
+  if (val === '' || val === null || val === undefined) return '';
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    try {
+      return Utilities.formatDate(val, CONFIG.TIMEZONE, 'HH:mm');
+    } catch (e) {
+      return '';
+    }
+  }
+  return String(val).trim();
+}
+
 function getTodasDiligencias() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName(CONFIG.SHEET_DILIGENCIAS);
