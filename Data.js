@@ -45,6 +45,27 @@ function normalizarChave(valor) {
     .toLowerCase();
 }
 
+// Retorna true quando o registro ainda pode receber uma atividade no
+// Classroom: ainda nao foi enviado (CLASS != "S") e o STATUS nao esta em
+// CONFIG.STATUS_FINAIS (Ok/Protocolado/Cancelada). Helper compartilhado,
+// criado em 27/07/2026 para unificar coletarLinhasElegiveisParaEnvio
+// (Classroom.js) e getRegistrosParaDistribuir (Distribuicao.js), que
+// aplicavam este mesmo teste de forma duplicada - o de Classroom.js so
+// checava CLASS, deixando diligencias ja em status final (sem estagiario e/ou
+// executadas pelo proprio Thales) entrarem na fila de envio e estourar erro
+// de "estagiario nao encontrado". Recebe os valores brutos (nao a linha
+// inteira) porque diligencias e acompanhamentos tem indices de coluna
+// diferentes para CLASS/STATUS.
+function registroEmAbertoParaClassroom(valorClass, valorStatus) {
+  var jaEnviado = String(valorClass).trim().toUpperCase() === CONFIG.CLASS_ENVIADO;
+  if (jaEnviado) return false;
+
+  var statusNorm = normalizarChave(valorStatus);
+  if (CONFIG.STATUS_FINAIS.indexOf(statusNorm) !== -1) return false;
+
+  return true;
+}
+
 function formatarData(val) {
   if (!val || val === '') return '';
   var d = (val instanceof Date) ? val : new Date(val);

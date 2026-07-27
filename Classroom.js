@@ -457,29 +457,63 @@ function verificarEntregasIniciais() {
   return { sucesso: true, atualizados: atualizados, notificados: notificados, erros: erros };
 }
 
-// --- Leitura das linhas elegiveis (CLASS != "S") ---
+// --- Leitura das linhas elegiveis (registroEmAbertoParaClassroom, ver Data.js) ---
 
+// Retorna { elegiveis: [], ignorados: [] }. Antes de 27/07/2026 este coletor
+// so testava CLASS != "S", diferente de getRegistrosParaDistribuir
+// (Distribuicao.js), que ja aplicava tambem o teste de STATUS final — isso
+// fazia diligencias ja em Ok/Protocolado/Cancelada (por exemplo, executadas
+// pelo proprio Thales, sem estagiario) entrarem na fila de envio e estourar
+// "Estagiario "" nao encontrado na aba estagiarios" em
+// criarCourseWorkParaRegistro. Corrigido usando o mesmo helper
+// (registroEmAbertoParaClassroom, Data.js) dos dois lados. CLASS = "S" e o
+// caminho normal (ja enviado) e nao entra em "ignorados" — so status final
+// sem envio e sem estagiario atribuido, que sao os casos realmente dignos de
+// aviso a Thales.
 function coletarLinhasElegiveisParaEnvio() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName(CONFIG.SHEET_DILIGENCIAS);
-  if (!aba) return [];
+  if (!aba) return { elegiveis: [], ignorados: [] };
 
   var ultimaLinha = aba.getLastRow();
-  if (ultimaLinha < 2) return [];
+  if (ultimaLinha < 2) return { elegiveis: [], ignorados: [] };
 
   var dados = aba.getRange(2, 1, ultimaLinha - 1, CONFIG.TOTAL_COLUNAS_DILIGENCIAS).getValues();
-  var lista = [];
+  var elegiveis = [];
+  var ignorados = [];
 
   for (var i = 0; i < dados.length; i++) {
     var row = dados[i];
-    if (!row[CONFIG.COL.ID] && !row[CONFIG.COL.PROCESSO]) continue;
+    var linha = i + 2;
+    var id = row[CONFIG.COL.ID];
+    if (!id && !row[CONFIG.COL.PROCESSO]) continue;
 
-    var jaEnviado = String(row[CONFIG.COL.CLASS] || '').trim().toUpperCase() === CONFIG.CLASS_ENVIADO;
-    if (jaEnviado) continue;
+    if (!registroEmAbertoParaClassroom(row[CONFIG.COL.CLASS], row[CONFIG.COL.STATUS])) {
+      var jaEnviado = String(row[CONFIG.COL.CLASS] || '').trim().toUpperCase() === CONFIG.CLASS_ENVIADO;
+      if (!jaEnviado) {
+        ignorados.push({
+          linha: linha,
+          id: id,
+          origem: 'diligencias',
+          motivo: 'status final (' + row[CONFIG.COL.STATUS] + ')'
+        });
+      }
+      continue;
+    }
 
-    lista.push({
-      _linha: i + 2,
-      id: row[CONFIG.COL.ID],
+    if (!String(row[CONFIG.COL.ESTAGIARIO] || '').trim()) {
+      ignorados.push({
+        linha: linha,
+        id: id,
+        origem: 'diligencias',
+        motivo: 'sem estagiario atribuido'
+      });
+      continue;
+    }
+
+    elegiveis.push({
+      _linha: linha,
+      id: id,
       processo: row[CONFIG.COL.PROCESSO],
       assistido: row[CONFIG.COL.ASSISTIDO],
       diligencia: row[CONFIG.COL.DILIGENCIA],
@@ -489,7 +523,7 @@ function coletarLinhasElegiveisParaEnvio() {
       dfRaw: row[CONFIG.COL.DF]
     });
   }
-  return lista;
+  return { elegiveis: elegiveis, ignorados: ignorados };
 }
 
 // --- Gatilho de edicao (onEdit) — marca CLASS quando STATUS vira "Ok" ---
@@ -524,15 +558,18 @@ function enviarDiligenciasAoClassroom() {
   var aba = ss.getSheetByName(CONFIG.SHEET_DILIGENCIAS);
   if (!aba) return { sucesso: false, erro: 'Aba diligencias nao encontrada.' };
 
-  var elegiveis;
+  var coletado;
   try {
-    elegiveis = coletarLinhasElegiveisParaEnvio();
+    coletado = coletarLinhasElegiveisParaEnvio();
   } catch (e) {
     return { sucesso: false, erro: 'Erro ao ler diligencias: ' + e.message };
   }
 
+  var elegiveis = coletado.elegiveis;
+  var ignorados = coletado.ignorados;
+
   if (elegiveis.length === 0) {
-    return { sucesso: true, enviados: [], erros: [], mensagem: 'Nenhuma diligencia pendente de envio ao Classroom.' };
+    return { sucesso: true, enviados: [], erros: [], ignorados: ignorados, mensagem: 'Nenhuma diligencia pendente de envio ao Classroom.' };
   }
 
   var agora = new Date();
@@ -565,7 +602,7 @@ function enviarDiligenciasAoClassroom() {
     }
   });
 
-  return { sucesso: true, enviados: enviados, erros: erros };
+  return { sucesso: true, enviados: enviados, erros: erros, ignorados: ignorados };
 }
 
 // --- Verificar Entregas ---
@@ -859,36 +896,66 @@ function criarCourseWorkParaAcompanhamento(reg) {
   };
 }
 
-// --- Leitura das linhas elegiveis (CLASS != "S") ---
+// --- Leitura das linhas elegiveis (registroEmAbertoParaClassroom, ver Data.js) ---
 
+// Mesmo tratamento de coletarLinhasElegiveisParaEnvio (diligencias) acima,
+// corrigido em 27/07/2026 pelo mesmo motivo: so testar CLASS != "S" deixava
+// acompanhamentos ja em status final entrarem na fila de envio. Aqui nao ha
+// coluna ESTAGIARIO separada — NOME/EMAIL vazios (aba acompanhamentos ja
+// grava os dois diretamente na linha) e que impedem o envio.
 function coletarLinhasElegiveisAcompanhamentoParaEnvio() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName(CONFIG.SHEET_ACOMPANHAMENTOS);
-  if (!aba) return [];
+  if (!aba) return { elegiveis: [], ignorados: [] };
 
   var ultimaLinha = aba.getLastRow();
-  if (ultimaLinha < 2) return [];
+  if (ultimaLinha < 2) return { elegiveis: [], ignorados: [] };
 
   var dados = aba.getRange(2, 1, ultimaLinha - 1, CONFIG.TOTAL_COLUNAS_ACOMPANHAMENTOS).getValues();
-  var lista = [];
+  var elegiveis = [];
+  var ignorados = [];
 
   for (var i = 0; i < dados.length; i++) {
     var row = dados[i];
-    if (!row[CONFIG.ACOMPANHAMENTOS_COL.ID] && !row[CONFIG.ACOMPANHAMENTOS_COL.PROCESSO]) continue;
+    var linha = i + 2;
+    var id = row[CONFIG.ACOMPANHAMENTOS_COL.ID];
+    if (!id && !row[CONFIG.ACOMPANHAMENTOS_COL.PROCESSO]) continue;
 
-    var jaEnviado = String(row[CONFIG.ACOMPANHAMENTOS_COL.CLASS] || '').trim().toUpperCase() === CONFIG.CLASS_ENVIADO;
-    if (jaEnviado) continue;
+    if (!registroEmAbertoParaClassroom(row[CONFIG.ACOMPANHAMENTOS_COL.CLASS], row[CONFIG.ACOMPANHAMENTOS_COL.STATUS])) {
+      var jaEnviado = String(row[CONFIG.ACOMPANHAMENTOS_COL.CLASS] || '').trim().toUpperCase() === CONFIG.CLASS_ENVIADO;
+      if (!jaEnviado) {
+        ignorados.push({
+          linha: linha,
+          id: id,
+          origem: 'acompanhamentos',
+          motivo: 'status final (' + row[CONFIG.ACOMPANHAMENTOS_COL.STATUS] + ')'
+        });
+      }
+      continue;
+    }
 
-    lista.push({
-      _linha: i + 2,
-      id: row[CONFIG.ACOMPANHAMENTOS_COL.ID],
+    var nome = String(row[CONFIG.ACOMPANHAMENTOS_COL.NOME] || '').trim();
+    var email = String(row[CONFIG.ACOMPANHAMENTOS_COL.EMAIL] || '').trim();
+    if (!nome || !email) {
+      ignorados.push({
+        linha: linha,
+        id: id,
+        origem: 'acompanhamentos',
+        motivo: 'sem estagiario atribuido (nome ou e-mail vazio)'
+      });
+      continue;
+    }
+
+    elegiveis.push({
+      _linha: linha,
+      id: id,
       processo: row[CONFIG.ACOMPANHAMENTOS_COL.PROCESSO],
-      estagiario: String(row[CONFIG.ACOMPANHAMENTOS_COL.NOME] || '').trim(),
-      email: String(row[CONFIG.ACOMPANHAMENTOS_COL.EMAIL] || '').trim(),
+      estagiario: nome,
+      email: email,
       dataEntregaRaw: row[CONFIG.ACOMPANHAMENTOS_COL.DATA_ENTREGA]
     });
   }
-  return lista;
+  return { elegiveis: elegiveis, ignorados: ignorados };
 }
 
 // --- Orquestracao (chamada pelo frontend via google.script.run) ---
@@ -902,15 +969,18 @@ function enviarAcompanhamentosAoClassroom() {
   var aba = ss.getSheetByName(CONFIG.SHEET_ACOMPANHAMENTOS);
   if (!aba) return { sucesso: false, erro: 'Aba acompanhamentos nao encontrada.' };
 
-  var elegiveis;
+  var coletado;
   try {
-    elegiveis = coletarLinhasElegiveisAcompanhamentoParaEnvio();
+    coletado = coletarLinhasElegiveisAcompanhamentoParaEnvio();
   } catch (e) {
     return { sucesso: false, erro: 'Erro ao ler acompanhamentos: ' + e.message };
   }
 
+  var elegiveis = coletado.elegiveis;
+  var ignorados = coletado.ignorados;
+
   if (elegiveis.length === 0) {
-    return { sucesso: true, enviados: [], erros: [], mensagem: 'Nenhum acompanhamento pendente de envio ao Classroom.' };
+    return { sucesso: true, enviados: [], erros: [], ignorados: ignorados, mensagem: 'Nenhum acompanhamento pendente de envio ao Classroom.' };
   }
 
   var agora = new Date();
@@ -939,7 +1009,7 @@ function enviarAcompanhamentosAoClassroom() {
     }
   });
 
-  return { sucesso: true, enviados: enviados, erros: erros };
+  return { sucesso: true, enviados: enviados, erros: erros, ignorados: ignorados };
 }
 
 // --- Verificar Entregas ---
@@ -1070,16 +1140,24 @@ function verificarEntregasAcompanhamentos() {
 // encontrada), o erro correspondente e adicionado a lista de erros, sem
 // impedir o processamento da outra aba.
 
+// Concatena tambem "ignorados" das duas origens (ver
+// coletarLinhasElegiveisParaEnvio/coletarLinhasElegiveisAcompanhamentoParaEnvio)
+// desde 27/07/2026 — a mensagem de "nada pendente" so se aplica quando
+// enviados, erros E ignorados estiverem todos vazios; havendo apenas
+// ignorados, a mensagem passa a informar quantos foram ignorados, para nao
+// dar a falsa impressao de que nao havia nada na fila.
 function enviarPendentesAoClassroom() {
   var resDiligencias = enviarDiligenciasAoClassroom();
   var resAcompanhamentos = enviarAcompanhamentosAoClassroom();
 
   var enviados = [];
   var erros = [];
+  var ignorados = [];
 
   if (resDiligencias.sucesso) {
     enviados = enviados.concat(resDiligencias.enviados || []);
     erros = erros.concat(resDiligencias.erros || []);
+    ignorados = ignorados.concat(resDiligencias.ignorados || []);
   } else {
     erros.push({ origem: 'diligencias', erro: resDiligencias.erro });
   }
@@ -1087,15 +1165,19 @@ function enviarPendentesAoClassroom() {
   if (resAcompanhamentos.sucesso) {
     enviados = enviados.concat(resAcompanhamentos.enviados || []);
     erros = erros.concat(resAcompanhamentos.erros || []);
+    ignorados = ignorados.concat(resAcompanhamentos.ignorados || []);
   } else {
     erros.push({ origem: 'acompanhamentos', erro: resAcompanhamentos.erro });
   }
 
-  var mensagem = (enviados.length === 0 && erros.length === 0)
-    ? 'Nenhuma diligência ou acompanhamento pendente de envio ao Classroom.'
-    : undefined;
+  var mensagem;
+  if (enviados.length === 0 && erros.length === 0) {
+    mensagem = ignorados.length === 0
+      ? 'Nenhuma diligência ou acompanhamento pendente de envio ao Classroom.'
+      : ignorados.length + ' registro(s) ignorado(s) (sem estagiário atribuído ou em status final) — nenhum enviado ao Classroom.';
+  }
 
-  return { sucesso: true, enviados: enviados, erros: erros, mensagem: mensagem };
+  return { sucesso: true, enviados: enviados, erros: erros, ignorados: ignorados, mensagem: mensagem };
 }
 
 function verificarTodasEntregasClassroom() {

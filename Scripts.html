@@ -588,16 +588,32 @@ function acaoGerenciarEnviarClassroom() {
 
       var totalEnviados = (res.enviados || []).length;
       var totalErros = (res.erros || []).length;
+      // res.ignorados: registros descartados do envio por ja estarem em
+      // status final (sem CLASS = "S") ou sem estagiario atribuido — ver
+      // coletarLinhasElegiveisParaEnvio/coletarLinhasElegiveisAcompanhamentoParaEnvio
+      // (Classroom.js). Adicionado em 27/07/2026 junto com a correcao do bug
+      // de diligencias sem estagiario/ja finalizadas entrando na fila.
+      var totalIgnorados = (res.ignorados || []).length;
+
+      if (totalIgnorados > 0) {
+        console.info('Ignorados ao enviar ao Classroom:', res.ignorados);
+      }
 
       if (totalEnviados === 0 && totalErros === 0) {
         mostrarToast(res.mensagem || 'Nenhuma diligência ou acompanhamento pendente de envio.', '');
       } else if (totalErros === 0) {
-        mostrarToast(totalEnviados + ' atividade(s) enviada(s) ao Classroom com sucesso!', 'sucesso');
+        var textoSucesso = totalEnviados + ' atividade(s) enviada(s) ao Classroom com sucesso!';
+        if (totalIgnorados > 0) textoSucesso += ', ' + totalIgnorados + ' ignorada(s)';
+        mostrarToast(textoSucesso, 'sucesso');
       } else if (totalEnviados === 0) {
-        mostrarToast('Falha ao enviar ' + totalErros + ' registro(s). Veja o console para detalhes.', 'erro');
+        var textoFalha = 'Falha ao enviar ' + totalErros + ' registro(s). Veja o console para detalhes.';
+        if (totalIgnorados > 0) textoFalha += ', ' + totalIgnorados + ' ignorada(s)';
+        mostrarToast(textoFalha, 'erro');
         console.error('Erros ao enviar ao Classroom:', res.erros);
       } else {
-        mostrarToast(totalEnviados + ' enviada(s), ' + totalErros + ' com erro. Veja o console.', '');
+        var textoMisto = totalEnviados + ' enviada(s), ' + totalErros + ' com erro. Veja o console.';
+        if (totalIgnorados > 0) textoMisto += ', ' + totalIgnorados + ' ignorada(s)';
+        mostrarToast(textoMisto, '');
         console.error('Erros ao enviar ao Classroom:', res.erros);
       }
 
@@ -1400,6 +1416,14 @@ function mostrarLoading(show) {
   if (conteudo) conteudo.style.display = show ? 'none' : 'block';
 }
 
+// Spinner exibido sobre uma aba enquanto seus dados sao (re)carregados via
+// google.script.run — ver overlayCarregando* em thales.html e cada
+// carregarAba*() abaixo.
+function alternarOverlayCarregando(idOverlay, mostrar) {
+  var el = document.getElementById(idOverlay);
+  if (el) el.classList.toggle('visivel', mostrar);
+}
+
 // === TOAST ===
 function mostrarToast(msg, tipo) {
   var el = document.getElementById('toast');
@@ -1641,12 +1665,11 @@ var APP_INICIAIS = {
 // do servidor, pois o cruzamento com a aba protocolos (ver Iniciais.js) e
 // refeito a cada chamada.
 function carregarAbaIniciais() {
-  var wrapper = document.getElementById('secaoIniciais');
-  if (wrapper) wrapper.style.opacity = '0.5';
+  alternarOverlayCarregando('overlayCarregandoIniciais', true);
 
   google.script.run
     .withSuccessHandler(function(resultado) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoIniciais', false);
       if (resultado.erro) {
         mostrarToast(resultado.erro, 'erro');
         return;
@@ -1658,7 +1681,7 @@ function carregarAbaIniciais() {
       renderizarTabelaIniciais();
     })
     .withFailureHandler(function(err) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoIniciais', false);
       mostrarToast('Erro ao carregar Iniciais: ' + err.message, 'erro');
     })
     .carregarDadosAbaIniciais();
@@ -2082,12 +2105,11 @@ var APP_ACOMPANHAMENTOS = {
 // Chamada toda vez que a aba "Acompanhamentos" e aberta — sempre busca
 // dados novos do servidor.
 function carregarAbaAcompanhamentos() {
-  var wrapper = document.getElementById('secaoAcompanhamentos');
-  if (wrapper) wrapper.style.opacity = '0.5';
+  alternarOverlayCarregando('overlayCarregandoAcompanhamentos', true);
 
   google.script.run
     .withSuccessHandler(function(resultado) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoAcompanhamentos', false);
       if (resultado.erro) {
         mostrarToast(resultado.erro, 'erro');
         return;
@@ -2099,7 +2121,7 @@ function carregarAbaAcompanhamentos() {
       renderizarTabelaAcompanhamentos();
     })
     .withFailureHandler(function(err) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoAcompanhamentos', false);
       mostrarToast('Erro ao carregar Acompanhamentos: ' + err.message, 'erro');
     })
     .carregarDadosAbaAcompanhamentos();
@@ -2488,7 +2510,10 @@ var APP_ATENDIMENTO_ONLINE = {
   historico: [],
   selecionados: {}, // { linha: true }
   linhasEmReprovacao: [], // sempre um array — 1 item (via modal de detalhe) ou N (lote)
-  registroDetalheAtual: null // registro aberto no modal de detalhe (Aprovar/Reprovar de dentro dele)
+  registroDetalheAtual: null, // registro aberto no modal de detalhe (Aprovar/Reprovar de dentro dele)
+  itensPorPagina: 20,
+  paginaAtualPendentes: 1,
+  paginaAtualHistorico: 1
 };
 
 // Badge de status reaproveitando as classes definidas em Styles.html
@@ -2524,12 +2549,11 @@ function atualizarContadorAtendimentoOnline() {
 }
 
 function carregarAbaAtendimentoOnline() {
-  var wrapper = document.getElementById('secaoAtendimentoOnline');
-  if (wrapper) wrapper.style.opacity = '0.5';
+  alternarOverlayCarregando('overlayCarregandoAO', true);
 
   google.script.run
     .withSuccessHandler(function(resultado) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoAO', false);
       if (resultado.erro) {
         mostrarToast(resultado.erro, 'erro');
         return;
@@ -2537,6 +2561,8 @@ function carregarAbaAtendimentoOnline() {
       APP_ATENDIMENTO_ONLINE.pendentes = resultado.pendentes || [];
       APP_ATENDIMENTO_ONLINE.historico = resultado.historico || [];
       APP_ATENDIMENTO_ONLINE.selecionados = {};
+      APP_ATENDIMENTO_ONLINE.paginaAtualPendentes = 1;
+      APP_ATENDIMENTO_ONLINE.paginaAtualHistorico = 1;
       renderizarFilaAtendimentoOnline();
       renderizarHistoricoAtendimentoOnline();
       atualizarBotoesLoteAO();
@@ -2549,7 +2575,7 @@ function carregarAbaAtendimentoOnline() {
       }
     })
     .withFailureHandler(function(err) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoAO', false);
       mostrarToast('Erro ao carregar Atendimento Online: ' + err.message, 'erro');
     })
     .carregarDadosAprovacaoAtendimentoOnline();
@@ -2560,11 +2586,18 @@ function carregarAbaAtendimentoOnline() {
 function renderizarFilaAtendimentoOnline() {
   var corpo = document.getElementById('corpoAtendimentoOnlinePendentes');
   var lista = APP_ATENDIMENTO_ONLINE.pendentes;
+  var total = lista.length;
 
   var checkTodos = document.getElementById('checkTodosAO');
   if (checkTodos) checkTodos.checked = false;
 
-  if (!lista.length) {
+  var totalPags = Math.max(1, Math.ceil(total / APP_ATENDIMENTO_ONLINE.itensPorPagina));
+  if (APP_ATENDIMENTO_ONLINE.paginaAtualPendentes > totalPags) APP_ATENDIMENTO_ONLINE.paginaAtualPendentes = totalPags;
+  var inicio = (APP_ATENDIMENTO_ONLINE.paginaAtualPendentes - 1) * APP_ATENDIMENTO_ONLINE.itensPorPagina;
+  var fim = Math.min(inicio + APP_ATENDIMENTO_ONLINE.itensPorPagina, total);
+  var pagina = lista.slice(inicio, fim);
+
+  if (!total) {
     corpo.innerHTML =
       '<tr><td colspan="9">' +
         '<div class="estado-vazio">' +
@@ -2572,11 +2605,12 @@ function renderizarFilaAtendimentoOnline() {
           '<div class="estado-vazio-titulo">Nenhum atendimento online pendente</div>' +
         '</div>' +
       '</td></tr>';
+    renderizarPaginacaoAOPendentes(0, 1);
     return;
   }
 
   var html = '';
-  lista.forEach(function(reg) {
+  pagina.forEach(function(reg) {
     var processo = (reg.contexto && reg.contexto.processo) || '<span class="celula-vazio">—</span>';
     var assistido = (reg.contexto && reg.contexto.assistido) || '<span class="celula-vazio">—</span>';
     var marcado = APP_ATENDIMENTO_ONLINE.selecionados[reg._linha] ? ' checked' : '';
@@ -2593,6 +2627,43 @@ function renderizarFilaAtendimentoOnline() {
     '</tr>';
   });
   corpo.innerHTML = html;
+  renderizarPaginacaoAOPendentes(total, totalPags);
+}
+
+function renderizarPaginacaoAOPendentes(total, totalPags) {
+  var p = APP_ATENDIMENTO_ONLINE.paginaAtualPendentes;
+  var inicio = (p - 1) * APP_ATENDIMENTO_ONLINE.itensPorPagina + 1;
+  var fim = Math.min(p * APP_ATENDIMENTO_ONLINE.itensPorPagina, total);
+
+  var html = '';
+  if (total > 0) html += '<span class="pag-info">' + inicio + '–' + fim + ' de ' + total + '</span>';
+
+  html += '<button class="btn-pag" onclick="irPaginaAOPendentes(' + (p - 1) + ')" ' + (p <= 1 ? 'disabled' : '') + '>' +
+    '<span class="material-symbols-outlined">' + ICONES.paginaAnterior + '</span> Ant.' +
+  '</button>';
+
+  var range = pagRange(p, totalPags);
+  range.forEach(function(n) {
+    if (n === '...') {
+      html += '<span class="pag-info">…</span>';
+    } else {
+      html += '<button class="btn-pag' + (n === p ? ' pag-ativo' : '') + '" onclick="irPaginaAOPendentes(' + n + ')">' + n + '</button>';
+    }
+  });
+
+  html += '<button class="btn-pag" onclick="irPaginaAOPendentes(' + (p + 1) + ')" ' + (p >= totalPags ? 'disabled' : '') + '>' +
+    'Próx. <span class="material-symbols-outlined">' + ICONES.paginaProxima + '</span>' +
+  '</button>';
+
+  document.getElementById('paginacaoAOPendentes').innerHTML = html;
+}
+
+function irPaginaAOPendentes(n) {
+  var total = APP_ATENDIMENTO_ONLINE.pendentes.length;
+  var totalPags = Math.max(1, Math.ceil(total / APP_ATENDIMENTO_ONLINE.itensPorPagina));
+  if (n < 1 || n > totalPags) return;
+  APP_ATENDIMENTO_ONLINE.paginaAtualPendentes = n;
+  renderizarFilaAtendimentoOnline();
 }
 
 function alternarSelecaoAtendimentoOnline(linha, marcado) {
@@ -2622,15 +2693,23 @@ function atualizarBotoesLoteAO() {
 function renderizarHistoricoAtendimentoOnline() {
   var corpo = document.getElementById('corpoAtendimentoOnlineHistorico');
   var lista = APP_ATENDIMENTO_ONLINE.historico;
+  var total = lista.length;
 
-  if (!lista.length) {
+  var totalPags = Math.max(1, Math.ceil(total / APP_ATENDIMENTO_ONLINE.itensPorPagina));
+  if (APP_ATENDIMENTO_ONLINE.paginaAtualHistorico > totalPags) APP_ATENDIMENTO_ONLINE.paginaAtualHistorico = totalPags;
+  var inicio = (APP_ATENDIMENTO_ONLINE.paginaAtualHistorico - 1) * APP_ATENDIMENTO_ONLINE.itensPorPagina;
+  var fim = Math.min(inicio + APP_ATENDIMENTO_ONLINE.itensPorPagina, total);
+  var pagina = lista.slice(inicio, fim);
+
+  if (!total) {
     corpo.innerHTML = '<tr><td colspan="7"><div class="estado-vazio"><span class="material-symbols-outlined">' + ICONES.historico + '</span><div class="estado-vazio-titulo">Nenhuma decisão registrada ainda</div></div></td></tr>';
+    renderizarPaginacaoAOHistorico(0, 1);
     return;
   }
 
   var html = '';
-  lista.forEach(function(reg, idx) {
-    html += '<tr onclick="abrirModalDetalheAOHistorico(' + idx + ')">' +
+  pagina.forEach(function(reg, idx) {
+    html += '<tr onclick="abrirModalDetalheAOHistorico(' + (inicio + idx) + ')">' +
       '<td class="td-numero">' + (reg.id || '') + '</td>' +
       '<td class="td-assistido">' + (reg.estagiario || '') + '</td>' +
       '<td>' + (reg.tipoAtividade || '') + ' ' + (reg.idAtividade || '') + '</td>' +
@@ -2641,6 +2720,43 @@ function renderizarHistoricoAtendimentoOnline() {
     '</tr>';
   });
   corpo.innerHTML = html;
+  renderizarPaginacaoAOHistorico(total, totalPags);
+}
+
+function renderizarPaginacaoAOHistorico(total, totalPags) {
+  var p = APP_ATENDIMENTO_ONLINE.paginaAtualHistorico;
+  var inicio = (p - 1) * APP_ATENDIMENTO_ONLINE.itensPorPagina + 1;
+  var fim = Math.min(p * APP_ATENDIMENTO_ONLINE.itensPorPagina, total);
+
+  var html = '';
+  if (total > 0) html += '<span class="pag-info">' + inicio + '–' + fim + ' de ' + total + '</span>';
+
+  html += '<button class="btn-pag" onclick="irPaginaAOHistorico(' + (p - 1) + ')" ' + (p <= 1 ? 'disabled' : '') + '>' +
+    '<span class="material-symbols-outlined">' + ICONES.paginaAnterior + '</span> Ant.' +
+  '</button>';
+
+  var range = pagRange(p, totalPags);
+  range.forEach(function(n) {
+    if (n === '...') {
+      html += '<span class="pag-info">…</span>';
+    } else {
+      html += '<button class="btn-pag' + (n === p ? ' pag-ativo' : '') + '" onclick="irPaginaAOHistorico(' + n + ')">' + n + '</button>';
+    }
+  });
+
+  html += '<button class="btn-pag" onclick="irPaginaAOHistorico(' + (p + 1) + ')" ' + (p >= totalPags ? 'disabled' : '') + '>' +
+    'Próx. <span class="material-symbols-outlined">' + ICONES.paginaProxima + '</span>' +
+  '</button>';
+
+  document.getElementById('paginacaoAOHistorico').innerHTML = html;
+}
+
+function irPaginaAOHistorico(n) {
+  var total = APP_ATENDIMENTO_ONLINE.historico.length;
+  var totalPags = Math.max(1, Math.ceil(total / APP_ATENDIMENTO_ONLINE.itensPorPagina));
+  if (n < 1 || n > totalPags) return;
+  APP_ATENDIMENTO_ONLINE.paginaAtualHistorico = n;
+  renderizarHistoricoAtendimentoOnline();
 }
 
 function abrirModalDetalheAOHistorico(idx) {
@@ -2834,7 +2950,10 @@ var APP_AUDIENCIAS_ESTAGIARIO = {
   historico: [],
   selecionados: {}, // { linha: true }
   linhasEmReprovacao: [],
-  registroDetalheAtual: null
+  registroDetalheAtual: null,
+  itensPorPagina: 20,
+  paginaAtualPendentes: 1,
+  paginaAtualHistorico: 1
 };
 
 // Badge de status reaproveitando as classes ja definidas em Styles.html
@@ -2869,12 +2988,11 @@ function atualizarContadorAudienciasEstagiario() {
 }
 
 function carregarAbaAudienciasEstagiario() {
-  var wrapper = document.getElementById('secaoAudienciasEstagiario');
-  if (wrapper) wrapper.style.opacity = '0.5';
+  alternarOverlayCarregando('overlayCarregandoAU', true);
 
   google.script.run
     .withSuccessHandler(function(resultado) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoAU', false);
       // resultado === null significa falha de serializacao no servidor (ver
       // nota em formatarHora, Data.js) — nunca um retorno legitimo.
       if (!resultado) {
@@ -2888,6 +3006,8 @@ function carregarAbaAudienciasEstagiario() {
       APP_AUDIENCIAS_ESTAGIARIO.pendentes = resultado.pendentes || [];
       APP_AUDIENCIAS_ESTAGIARIO.historico = resultado.historico || [];
       APP_AUDIENCIAS_ESTAGIARIO.selecionados = {};
+      APP_AUDIENCIAS_ESTAGIARIO.paginaAtualPendentes = 1;
+      APP_AUDIENCIAS_ESTAGIARIO.paginaAtualHistorico = 1;
       renderizarFilaAudiencias();
       renderizarHistoricoAudiencias();
       atualizarBotoesLoteAU();
@@ -2900,7 +3020,7 @@ function carregarAbaAudienciasEstagiario() {
       }
     })
     .withFailureHandler(function(err) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoAU', false);
       mostrarToast('Erro ao carregar Audiências do Estagiário: ' + err.message, 'erro');
     })
     .carregarDadosAprovacaoAudiencias();
@@ -2911,11 +3031,18 @@ function carregarAbaAudienciasEstagiario() {
 function renderizarFilaAudiencias() {
   var corpo = document.getElementById('corpoAudienciasPendentes');
   var lista = APP_AUDIENCIAS_ESTAGIARIO.pendentes;
+  var total = lista.length;
 
   var checkTodos = document.getElementById('checkTodosAU');
   if (checkTodos) checkTodos.checked = false;
 
-  if (!lista.length) {
+  var totalPags = Math.max(1, Math.ceil(total / APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina));
+  if (APP_AUDIENCIAS_ESTAGIARIO.paginaAtualPendentes > totalPags) APP_AUDIENCIAS_ESTAGIARIO.paginaAtualPendentes = totalPags;
+  var inicio = (APP_AUDIENCIAS_ESTAGIARIO.paginaAtualPendentes - 1) * APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina;
+  var fim = Math.min(inicio + APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina, total);
+  var pagina = lista.slice(inicio, fim);
+
+  if (!total) {
     corpo.innerHTML =
       '<tr><td colspan="9">' +
         '<div class="estado-vazio">' +
@@ -2923,11 +3050,12 @@ function renderizarFilaAudiencias() {
           '<div class="estado-vazio-titulo">Nenhuma audiência pendente</div>' +
         '</div>' +
       '</td></tr>';
+    renderizarPaginacaoAUPendentes(0, 1);
     return;
   }
 
   var html = '';
-  lista.forEach(function(reg) {
+  pagina.forEach(function(reg) {
     var marcado = APP_AUDIENCIAS_ESTAGIARIO.selecionados[reg._linha] ? ' checked' : '';
     html += '<tr>' +
       '<td onclick="event.stopPropagation();"><input type="checkbox" data-linha="' + reg._linha + '"' + marcado + ' onchange="alternarSelecaoAudiencia(' + reg._linha + ', this.checked)"></td>' +
@@ -2942,6 +3070,43 @@ function renderizarFilaAudiencias() {
     '</tr>';
   });
   corpo.innerHTML = html;
+  renderizarPaginacaoAUPendentes(total, totalPags);
+}
+
+function renderizarPaginacaoAUPendentes(total, totalPags) {
+  var p = APP_AUDIENCIAS_ESTAGIARIO.paginaAtualPendentes;
+  var inicio = (p - 1) * APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina + 1;
+  var fim = Math.min(p * APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina, total);
+
+  var html = '';
+  if (total > 0) html += '<span class="pag-info">' + inicio + '–' + fim + ' de ' + total + '</span>';
+
+  html += '<button class="btn-pag" onclick="irPaginaAUPendentes(' + (p - 1) + ')" ' + (p <= 1 ? 'disabled' : '') + '>' +
+    '<span class="material-symbols-outlined">' + ICONES.paginaAnterior + '</span> Ant.' +
+  '</button>';
+
+  var range = pagRange(p, totalPags);
+  range.forEach(function(n) {
+    if (n === '...') {
+      html += '<span class="pag-info">…</span>';
+    } else {
+      html += '<button class="btn-pag' + (n === p ? ' pag-ativo' : '') + '" onclick="irPaginaAUPendentes(' + n + ')">' + n + '</button>';
+    }
+  });
+
+  html += '<button class="btn-pag" onclick="irPaginaAUPendentes(' + (p + 1) + ')" ' + (p >= totalPags ? 'disabled' : '') + '>' +
+    'Próx. <span class="material-symbols-outlined">' + ICONES.paginaProxima + '</span>' +
+  '</button>';
+
+  document.getElementById('paginacaoAUPendentes').innerHTML = html;
+}
+
+function irPaginaAUPendentes(n) {
+  var total = APP_AUDIENCIAS_ESTAGIARIO.pendentes.length;
+  var totalPags = Math.max(1, Math.ceil(total / APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina));
+  if (n < 1 || n > totalPags) return;
+  APP_AUDIENCIAS_ESTAGIARIO.paginaAtualPendentes = n;
+  renderizarFilaAudiencias();
 }
 
 function alternarSelecaoAudiencia(linha, marcado) {
@@ -2971,15 +3136,23 @@ function atualizarBotoesLoteAU() {
 function renderizarHistoricoAudiencias() {
   var corpo = document.getElementById('corpoAudienciasHistorico');
   var lista = APP_AUDIENCIAS_ESTAGIARIO.historico;
+  var total = lista.length;
 
-  if (!lista.length) {
+  var totalPags = Math.max(1, Math.ceil(total / APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina));
+  if (APP_AUDIENCIAS_ESTAGIARIO.paginaAtualHistorico > totalPags) APP_AUDIENCIAS_ESTAGIARIO.paginaAtualHistorico = totalPags;
+  var inicio = (APP_AUDIENCIAS_ESTAGIARIO.paginaAtualHistorico - 1) * APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina;
+  var fim = Math.min(inicio + APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina, total);
+  var pagina = lista.slice(inicio, fim);
+
+  if (!total) {
     corpo.innerHTML = '<tr><td colspan="7"><div class="estado-vazio"><span class="material-symbols-outlined">' + ICONES.historico + '</span><div class="estado-vazio-titulo">Nenhuma decisão registrada ainda</div></div></td></tr>';
+    renderizarPaginacaoAUHistorico(0, 1);
     return;
   }
 
   var html = '';
-  lista.forEach(function(reg, idx) {
-    html += '<tr onclick="abrirModalDetalheAUHistorico(' + idx + ')">' +
+  pagina.forEach(function(reg, idx) {
+    html += '<tr onclick="abrirModalDetalheAUHistorico(' + (inicio + idx) + ')">' +
       '<td class="td-numero">' + (reg.id || '') + '</td>' +
       '<td class="td-assistido">' + (reg.estagiario || '') + '</td>' +
       '<td>' + (reg.data || '') + '</td>' +
@@ -2990,6 +3163,43 @@ function renderizarHistoricoAudiencias() {
     '</tr>';
   });
   corpo.innerHTML = html;
+  renderizarPaginacaoAUHistorico(total, totalPags);
+}
+
+function renderizarPaginacaoAUHistorico(total, totalPags) {
+  var p = APP_AUDIENCIAS_ESTAGIARIO.paginaAtualHistorico;
+  var inicio = (p - 1) * APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina + 1;
+  var fim = Math.min(p * APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina, total);
+
+  var html = '';
+  if (total > 0) html += '<span class="pag-info">' + inicio + '–' + fim + ' de ' + total + '</span>';
+
+  html += '<button class="btn-pag" onclick="irPaginaAUHistorico(' + (p - 1) + ')" ' + (p <= 1 ? 'disabled' : '') + '>' +
+    '<span class="material-symbols-outlined">' + ICONES.paginaAnterior + '</span> Ant.' +
+  '</button>';
+
+  var range = pagRange(p, totalPags);
+  range.forEach(function(n) {
+    if (n === '...') {
+      html += '<span class="pag-info">…</span>';
+    } else {
+      html += '<button class="btn-pag' + (n === p ? ' pag-ativo' : '') + '" onclick="irPaginaAUHistorico(' + n + ')">' + n + '</button>';
+    }
+  });
+
+  html += '<button class="btn-pag" onclick="irPaginaAUHistorico(' + (p + 1) + ')" ' + (p >= totalPags ? 'disabled' : '') + '>' +
+    'Próx. <span class="material-symbols-outlined">' + ICONES.paginaProxima + '</span>' +
+  '</button>';
+
+  document.getElementById('paginacaoAUHistorico').innerHTML = html;
+}
+
+function irPaginaAUHistorico(n) {
+  var total = APP_AUDIENCIAS_ESTAGIARIO.historico.length;
+  var totalPags = Math.max(1, Math.ceil(total / APP_AUDIENCIAS_ESTAGIARIO.itensPorPagina));
+  if (n < 1 || n > totalPags) return;
+  APP_AUDIENCIAS_ESTAGIARIO.paginaAtualHistorico = n;
+  renderizarHistoricoAudiencias();
 }
 
 function abrirModalDetalheAUHistorico(idx) {
@@ -3172,12 +3382,11 @@ var APP_PANORAMA = {
 // outras abas, e a aba Iniciais refaz o cruzamento com protocolos a cada
 // carga — ver Iniciais.js).
 function carregarAbaPanorama() {
-  var wrapper = document.getElementById('secaoPanorama');
-  if (wrapper) wrapper.style.opacity = '0.5';
+  alternarOverlayCarregando('overlayCarregandoPanorama', true);
 
   google.script.run
     .withSuccessHandler(function(resultado) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoPanorama', false);
       // resultado === null significa falha de serializacao no servidor (ver
       // nota em formatarHora, Data.js) — nunca um retorno legitimo. Sem esta
       // guarda o handler morria antes de popularSelectSemestrePanorama(), e o
@@ -3209,7 +3418,7 @@ function carregarAbaPanorama() {
       renderizarPanorama();
     })
     .withFailureHandler(function(err) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoPanorama', false);
       mostrarToast('Erro ao carregar Panorama: ' + err.message, 'erro');
     })
     .carregarDadosPanorama();
@@ -4384,12 +4593,11 @@ var _audienciasCarregado = false;
 function carregarAbaAudiencias() {
   if (_audienciasCarregado) return; // ja carregado — so recarrega via botao de refresh
 
-  var wrapper = document.getElementById('secaoAudiencias');
-  if (wrapper) wrapper.style.opacity = '0.5';
+  alternarOverlayCarregando('overlayCarregandoAudiencias', true);
 
   google.script.run
     .withSuccessHandler(function(resultado) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoAudiencias', false);
       if (resultado.erro) {
         mostrarToast(resultado.erro, 'erro');
         return;
@@ -4399,7 +4607,7 @@ function carregarAbaAudiencias() {
       renderizarTabelaAudiencias();
     })
     .withFailureHandler(function(err) {
-      if (wrapper) wrapper.style.opacity = '1';
+      alternarOverlayCarregando('overlayCarregandoAudiencias', false);
       mostrarToast('Erro ao carregar Audiências: ' + err.message, 'erro');
     })
     .carregarDadosAbaAudiencias();

@@ -158,6 +158,29 @@ function mostrarToast(msg, tipo) {
   PA._toastTimer = setTimeout(function() { el.classList.remove('visivel'); }, 3200);
 }
 
+// === MENU REGISTRAR (dropdown) ===
+function paAlternarMenuRegistrar() {
+  var menu = document.getElementById('paMenuRegistrar');
+  var btn = document.getElementById('btnPaRegistrar');
+  var abrindo = !menu.classList.contains('visivel');
+  menu.classList.toggle('visivel', abrindo);
+  btn.classList.toggle('aberto', abrindo);
+}
+
+function paFecharMenuRegistrar() {
+  document.getElementById('paMenuRegistrar').classList.remove('visivel');
+  document.getElementById('btnPaRegistrar').classList.remove('aberto');
+}
+
+document.addEventListener('click', function(e) {
+  var dropdown = document.getElementById('paDropdownRegistrar');
+  if (dropdown && !dropdown.contains(e.target)) paFecharMenuRegistrar();
+});
+
+function paAcaoRegistrarEmBreve(nomeAcao) {
+  mostrarToast(nomeAcao + ' — funcionalidade ainda em desenvolvimento.', '');
+}
+
 // === ESTADO GLOBAL ===
 var PA = {
   tipo: '',

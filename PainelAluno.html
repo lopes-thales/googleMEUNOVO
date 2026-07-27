@@ -28,29 +28,36 @@
     </div>
   </header>
 
-  <!-- BARRA DE ACOES (substitui o "Gerenciar" do Painel de Thales) -->
+  <!-- BARRA DE ACOES (menu "Registrar", no mesmo padrão do "Gerenciar" do Painel de Thales) -->
   <div class="nav-bar">
     <div class="pa-nav-titulo">
       <span class="material-symbols-outlined"><?= ICONES.meusRegistros ?></span>
       Meus Registros
     </div>
-    <div class="pa-acoes">
-      <button class="btn-acao-aluno" id="btnCriarPeticaoInicial" onclick="paAbrirModalPeticao()">
-        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.novaPeticao ?></span>
-        Criar Petição Inicial
+    <div class="dropdown-gerenciar" id="paDropdownRegistrar">
+      <button class="btn-gerenciar" id="btnPaRegistrar" onclick="paAlternarMenuRegistrar()">
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.gerenciar ?></span>
+        Registrar
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.dropdown ?></span>
       </button>
-      <button class="btn-acao-aluno desabilitado" id="btnSolicitarDiligencia" disabled title="Em breve">
-        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.solicitarDiligencia ?></span>
-        Solicitar Diligência
-      </button>
-      <button class="btn-acao-aluno" id="btnNovoAtendimentoOnline" onclick="paAbrirModalNovoAtendimentoOnline()">
-        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.atendimentos ?></span>
-        Atendimento Online
-      </button>
-      <button class="btn-acao-aluno" id="btnRegistrarAudiencia" onclick="paAbrirModalNovaAudiencia()">
-        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.audiencias ?></span>
-        Registrar Audiência
-      </button>
+      <div class="menu-gerenciar" id="paMenuRegistrar">
+        <div class="menu-gerenciar-item" id="btnCriarPeticaoInicial" onclick="paFecharMenuRegistrar(); paAbrirModalPeticao()">
+          <span class="material-symbols-outlined"><?= ICONES.novaPeticao ?></span>
+          Criar Petição Inicial
+        </div>
+        <div class="menu-gerenciar-item menu-gerenciar-item-stub" id="btnSolicitarDiligencia" title="Em breve" onclick="paFecharMenuRegistrar(); paAcaoRegistrarEmBreve('Solicitar Diligência')">
+          <span class="material-symbols-outlined"><?= ICONES.solicitarDiligencia ?></span>
+          Solicitar Diligência
+        </div>
+        <div class="menu-gerenciar-item" id="btnNovoAtendimentoOnline" onclick="paFecharMenuRegistrar(); paAbrirModalNovoAtendimentoOnline()">
+          <span class="material-symbols-outlined"><?= ICONES.atendimentos ?></span>
+          Atendimento Online
+        </div>
+        <div class="menu-gerenciar-item" id="btnRegistrarAudiencia" onclick="paFecharMenuRegistrar(); paAbrirModalNovaAudiencia()">
+          <span class="material-symbols-outlined"><?= ICONES.audiencias ?></span>
+          Registrar Audiência
+        </div>
+      </div>
     </div>
   </div>
 

@@ -267,6 +267,7 @@
 
     <!-- ABA: INICIAIS -->
     <div class="secao-vista" id="secaoIniciais" style="display:none;">
+      <div class="overlay-carregando-aba" id="overlayCarregandoIniciais"><div class="spinner-aba"></div></div>
       <div class="cards-grid" id="cardsGridIniciais"></div>
       <div class="barra-busca">
         <span class="material-symbols-outlined busca-icon"><?= ICONES.buscar ?></span>
@@ -312,6 +313,7 @@
 
       <!-- ABA: ACOMPANHAMENTOS -->
       <div class="secao-vista" id="secaoAcompanhamentos" style="display:none;">
+        <div class="overlay-carregando-aba" id="overlayCarregandoAcompanhamentos"><div class="spinner-aba"></div></div>
         <div class="cards-grid" id="cardsGridAcompanhamentos"></div>
 
         <div class="barra-busca">
@@ -360,6 +362,7 @@
 
       <!-- ABA: ATENDIMENTO ONLINE (fila de aprovacao + historico) -->
       <div class="secao-vista" id="secaoAtendimentoOnline" style="display:none;">
+        <div class="overlay-carregando-aba" id="overlayCarregandoAO"><div class="spinner-aba"></div></div>
 
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
@@ -386,6 +389,7 @@
               </thead>
               <tbody id="corpoAtendimentoOnlinePendentes"></tbody>
             </table>
+            <div class="paginacao" id="paginacaoAOPendentes"></div>
           </div>
         </div>
 
@@ -404,6 +408,7 @@
               </thead>
               <tbody id="corpoAtendimentoOnlineHistorico"></tbody>
             </table>
+            <div class="paginacao" id="paginacaoAOHistorico"></div>
           </div>
         </div>
 
@@ -412,6 +417,7 @@
       <!-- ABA: AUDIÊNCIAS (ESTAGIÁRIOS) (fila de aprovacao + historico) -->
       <!-- Modulo independente da aba "Audiências" (pauta do escritorio, so leitura) -->
       <div class="secao-vista" id="secaoAudienciasEstagiario" style="display:none;">
+        <div class="overlay-carregando-aba" id="overlayCarregandoAU"><div class="spinner-aba"></div></div>
 
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
@@ -438,6 +444,7 @@
               </thead>
               <tbody id="corpoAudienciasPendentes"></tbody>
             </table>
+            <div class="paginacao" id="paginacaoAUPendentes"></div>
           </div>
         </div>
 
@@ -456,6 +463,7 @@
               </thead>
               <tbody id="corpoAudienciasHistorico"></tbody>
             </table>
+            <div class="paginacao" id="paginacaoAUHistorico"></div>
           </div>
         </div>
 
@@ -463,6 +471,7 @@
 
       <!-- ABA: PANORAMA -->
       <div class="secao-vista" id="secaoPanorama" style="display:none;">
+        <div class="overlay-carregando-aba" id="overlayCarregandoPanorama"><div class="spinner-aba"></div></div>
 
         <!-- SELETORES DE SEMESTRE E ALUNO -->
         <div class="painel-semestre-panorama">
@@ -573,6 +582,7 @@
       <!-- ABA: GRAFICOS -->
       <!-- ABA: AUDIENCIAS -->
       <div class="secao-vista" id="secaoAudiencias" style="display:none;">
+        <div class="overlay-carregando-aba" id="overlayCarregandoAudiencias"><div class="spinner-aba"></div></div>
         <div class="barra-busca">
           <span class="material-symbols-outlined busca-icon"><?= ICONES.buscar ?></span>
           <input

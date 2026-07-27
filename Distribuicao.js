@@ -6,9 +6,14 @@
 // Classroom na mesma acao. Nenhum outro arquivo deve duplicar este filtro.
 
 // Regra de elegibilidade (confirmada por Thales):
-//   - CLASS (coluna T) != "S"            -> ainda nao foi enviado ao Classroom
-//   - STATUS fora de CONFIG.STATUS_FINAIS -> nao esta Ok / Protocolado / Cancelada
+//   - CLASS (coluna T) != "S" e STATUS fora de CONFIG.STATUS_FINAIS -> mesmo
+//     teste de "registro em aberto para o Classroom" usado no envio (ver
+//     registroEmAbertoParaClassroom, Data.js; unificado em 27/07/2026 —
+//     antes o coletor do envio ao Classroom so testava CLASS, causando
+//     divergencia com esta fila)
 //   - ESTAGIARIO (coluna I) vazio         -> ainda sem estagiario distribuido
+//     (teste INVERTIDO em relacao ao envio ao Classroom, que exige
+//     ESTAGIARIO preenchido — permanece local, pois e especifico desta fila)
 function getRegistrosParaDistribuir() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName(CONFIG.SHEET_DILIGENCIAS);
@@ -24,11 +29,7 @@ function getRegistrosParaDistribuir() {
     var row = dados[i];
     if (!row[CONFIG.COL.ID] && !row[CONFIG.COL.PROCESSO]) continue;
 
-    var classEnviado = String(row[CONFIG.COL.CLASS] || '').trim().toUpperCase() === CONFIG.CLASS_ENVIADO;
-    if (classEnviado) continue;
-
-    var statusNorm = normalizarChave(row[CONFIG.COL.STATUS]);
-    if (CONFIG.STATUS_FINAIS.indexOf(statusNorm) !== -1) continue; // Ok / Protocolado / Cancelada
+    if (!registroEmAbertoParaClassroom(row[CONFIG.COL.CLASS], row[CONFIG.COL.STATUS])) continue;
 
     var estagiarioAtual = String(row[CONFIG.COL.ESTAGIARIO] || '').trim();
     if (estagiarioAtual) continue; // ja distribuido

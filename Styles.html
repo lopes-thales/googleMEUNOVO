@@ -11,6 +11,7 @@
     --texto-principal: #0D1B4B;
     --superficie: #FFFFFF;
     --superficie-alt: #F8FAFC;
+    --overlay-carregando: rgba(255,255,255,0.75);
 
     /* Fluxo de status */
     --cor-encaminhado: #2563EB;
@@ -47,6 +48,7 @@
     --texto-principal: #E7ECFB;
     --superficie: #161D31;
     --superficie-alt: #1C2440;
+    --overlay-carregando: rgba(22,29,49,0.75);
 
     --cor-encaminhado: #6D97F0;
     --fundo-encaminhado: rgba(109,151,240,0.16);
@@ -969,6 +971,19 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-texto { color: var(--cinza-texto); font-size: 13px; margin-top: 8px; }
 
+  /* OVERLAY DE CARREGAMENTO (abas carregadas sob demanda via google.script.run) */
+  .secao-vista { position: relative; }
+  .overlay-carregando-aba {
+    position: absolute; inset: 0; z-index: 5;
+    display: none; align-items: center; justify-content: center;
+    background: var(--overlay-carregando); border-radius: var(--radius);
+  }
+  .overlay-carregando-aba.visivel { display: flex; }
+  .spinner-aba {
+    width: 30px; height: 30px; border: 3px solid var(--cinza-borda); border-top-color: var(--azul-claro);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+
   .modal-resultado-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin-bottom: 4px; }
   .modal-resultado-stat { background: var(--superficie-alt); border-radius: var(--radius-sm); padding: 10px 12px; }
   .modal-resultado-stat-valor { font-size: 20px; font-weight: 700; color: var(--azul-escuro); line-height: 1.1; }
@@ -1179,31 +1194,6 @@
     min-width: 0;
   }
   .pa-nav-titulo .material-symbols-outlined { font-size: 18px; opacity: 0.75; }
-  .pa-acoes { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-  .btn-acao-aluno {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 9px 16px;
-    border-radius: 20px;
-    border: none;
-    background: var(--azul-medio);
-    color: #fff;
-    font-family: 'Google Sans', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s;
-    white-space: nowrap;
-  }
-  .btn-acao-aluno:hover:not(:disabled) { background: var(--azul-escuro); }
-  .btn-acao-aluno.desabilitado,
-  .btn-acao-aluno:disabled {
-    background: var(--cinza-fundo);
-    color: var(--cinza-texto);
-    cursor: not-allowed;
-    border: 1.5px solid var(--cinza-borda);
-  }
 
   .pa-cards-grid { grid-template-columns: repeat(5, 1fr); }
 
