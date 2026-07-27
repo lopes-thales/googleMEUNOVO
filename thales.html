@@ -19,10 +19,10 @@
     </div>
     <div class="header-acoes">
       <button class="btn-tema" id="btnAlternarTema" onclick="alternarTema()" title="Alternar tema claro/escuro">
-        <span class="material-symbols-outlined" id="iconeTema" style="font-size:19px;">dark_mode</span>
+        <span class="material-symbols-outlined" id="iconeTema" style="font-size:19px;"><?= ICONES.temaEscuro ?></span>
       </button>
       <div class="header-user">
-        <span class="material-symbols-outlined" style="font-size:18px;">owl</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.usuarioThales ?></span>
         <span id="saudacaoUsuario">Olá, <strong><?= nomeUsuario ?></strong></span>
       </div>
     </div>
@@ -32,79 +32,79 @@
   <div class="nav-bar">
     <nav class="nav-tabs">
       <div class="nav-tab" data-vista="geral">
-        <span class="material-symbols-outlined nav-tab-icon">pending_actions</span>
+        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.pendencias ?></span>
         Geral
       </div>
       <div class="nav-tab ativo" data-vista="diligencias">
-        <span class="material-symbols-outlined nav-tab-icon">assignment</span>
+        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.diligencias ?></span>
         Diligências
       </div>
       <div class="nav-tab" data-vista="distribuicao">
-        <span class="material-symbols-outlined nav-tab-icon">assignment_ind</span>
+        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.distribuicao ?></span>
         Distribuição
       </div>
       <div class="nav-tab" data-vista="iniciais">
-        <span class="material-symbols-outlined nav-tab-icon">description</span>
+        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.iniciais ?></span>
         Iniciais
       </div>
       <div class="nav-tab" data-vista="acompanhamentos">
-        <span class="material-symbols-outlined nav-tab-icon">timeline</span>
+        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.acompanhamentos ?></span>
         Acompanhamentos
       </div>
       <div class="nav-tab" data-vista="atendimento_online">
-        <span class="material-symbols-outlined nav-tab-icon">forum</span>
+        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.atendimentoOnline ?></span>
         Atendimento Online
         <span class="nav-tab-contador" id="navContadorAO" style="display:none;">0</span>
       </div>
       <div class="nav-tab" data-vista="audiencias_estagiario">
-        <span class="material-symbols-outlined nav-tab-icon">gavel</span>
+        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.audiencias ?></span>
         Audiências (Estagiários)
         <span class="nav-tab-contador" id="navContadorAU" style="display:none;">0</span>
       </div>
       <div class="nav-tab" data-vista="panorama">
-        <span class="material-symbols-outlined nav-tab-icon">dashboard</span>
+        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.panorama ?></span>
         Panorama
       </div>
       <div class="nav-tab" data-vista="graficos">
-        <span class="material-symbols-outlined nav-tab-icon">bar_chart</span>
+        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.graficos ?></span>
         Gráficos
       </div>
       <div class="nav-tab" data-vista="audiencias">
-        <span class="material-symbols-outlined nav-tab-icon">calendar_month</span>
+        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.audienciasSecretaria ?></span>
         Audiências
       </div>
       <div class="nav-tab" data-vista="utilitarios">
-        <span class="material-symbols-outlined nav-tab-icon">build</span>
+        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.utilitarios ?></span>
         Utilitários
       </div>
     </nav>
 
     <div class="dropdown-gerenciar" id="dropdownGerenciar">
       <button class="btn-gerenciar" id="btnGerenciar" onclick="alternarMenuGerenciar()">
-        <span class="material-symbols-outlined" style="font-size:18px;">tune</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.gerenciar ?></span>
         Gerenciar
-        <span class="material-symbols-outlined" style="font-size:18px;">arrow_drop_down</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.dropdown ?></span>
       </button>
       <div class="menu-gerenciar" id="menuGerenciar">
         <div class="menu-gerenciar-item" onclick="acaoGerenciarEnviarClassroom()">
-          <span class="material-symbols-outlined">send</span>
+          <span class="material-symbols-outlined"><?= ICONES.enviar ?></span>
           Enviar ao Classroom
         </div>
         <div class="menu-gerenciar-item" onclick="acaoGerenciarVerificarEntregas()">
-          <span class="material-symbols-outlined">move_to_inbox</span>
+          <span class="material-symbols-outlined"><?= ICONES.verificarEntregas ?></span>
           Verificar Entregas
         </div>
         <div class="menu-gerenciar-separador"></div>
         <div class="menu-gerenciar-item" onclick="abrirModalNovoPedido()">
-          <span class="material-symbols-outlined">post_add</span>
+          <span class="material-symbols-outlined"><?= ICONES.novoPedido ?></span>
           Novo Pedido
         </div>
         <div class="menu-gerenciar-item" onclick="abrirModalNovoAcompanhamento()">
-          <span class="material-symbols-outlined">timeline</span>
+          <span class="material-symbols-outlined"><?= ICONES.acompanhamentos ?></span>
           Pedido de Acompanhamento
         </div>
         <div class="menu-gerenciar-item menu-gerenciar-item-stub" onclick="acaoGerenciarEmBreve('Aprovar Petições')">
-          <span class="material-symbols-outlined">gavel</span>
+          <span class="material-symbols-outlined"><?= ICONES.aprovarPeticoes ?></span>
           Aprovar Petições
         </div>
       </div>
@@ -130,7 +130,7 @@
         <!-- TABELA: DILIGÊNCIAS -->
         <div class="panorama-tabela-bloco" id="blocoGeralDiligencias">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">assignment</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.diligencias ?></span>
             Diligências
           </div>
           <div class="tabela-wrapper">
@@ -144,7 +144,7 @@
         <!-- TABELA: INICIAIS -->
         <div class="panorama-tabela-bloco" id="blocoGeralIniciais">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">description</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.iniciais ?></span>
             Iniciais
           </div>
           <div class="tabela-wrapper">
@@ -158,7 +158,7 @@
         <!-- TABELA: ACOMPANHAMENTOS -->
         <div class="panorama-tabela-bloco" id="blocoGeralAcompanhamentos">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">timeline</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.acompanhamentos ?></span>
             Acompanhamentos
           </div>
           <div class="tabela-wrapper">
@@ -180,7 +180,7 @@
 
         <!-- BARRA DE BUSCA -->
         <div class="barra-busca">
-          <span class="material-symbols-outlined busca-icon">search</span>
+          <span class="material-symbols-outlined busca-icon"><?= ICONES.buscar ?></span>
           <input
             type="text"
             id="inputBusca"
@@ -188,13 +188,13 @@
             placeholder="Buscar por processo, assistido, diligência, estagiário, vara..."
           >
           <div class="busca-separador"></div>
-          <span class="material-symbols-outlined busca-icon" style="font-size:18px;">date_range</span>
+          <span class="material-symbols-outlined busca-icon" style="font-size:18px;"><?= ICONES.filtroData ?></span>
           <span class="busca-label">DF de</span>
           <input type="date" id="inputDfDe" class="input-data">
           <span class="busca-sep">até</span>
           <input type="date" id="inputDfAte" class="input-data">
           <button class="btn-limpar-datas" id="btnLimparDatas" onclick="limparFiltroDatas()" title="Limpar filtro de datas" style="display:none;">
-            <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+            <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.limpar ?></span>
           </button>
         </div>
 
@@ -204,7 +204,7 @@
             <span id="tabelaInfo"></span>
             <div id="tabelaHeaderDireita">
               <div class="seletor-semestre" id="seletorSemestre">
-                <span class="material-symbols-outlined" style="font-size:16px;">event</span>
+                <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.semestre ?></span>
                 <select id="selectSemestre" class="select-semestre" onchange="mudarSemestre(this.value)">
                   <option value="">— Todos os semestres —</option>
                 </select>
@@ -251,11 +251,11 @@
           <span class="distribuicao-contagem" id="distribuicaoContagemSelecionados"></span>
           <div class="distribuicao-botoes">
             <button class="btn btn-salvar" id="btnSalvarDistribuicao" onclick="acaoSalvarDistribuicaoClique(false)" disabled>
-              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
               Salvar
             </button>
             <button class="btn btn-enviar" id="btnSalvarEnviarDistribuicao" onclick="acaoSalvarDistribuicaoClique(true)" disabled>
-              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span>
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.enviar ?></span>
               Salvar e Enviar
             </button>
           </div>
@@ -266,7 +266,7 @@
         <div class="graficos-card distribuicao-grafico">
           <div class="graficos-card-header">
             <div class="graficos-card-titulo">
-              <span class="material-symbols-outlined" style="font-size:18px;">stacked_bar_chart</span>
+              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.graficoBarras ?></span>
               Complexas, simples e acompanhamentos por estagiário
             </div>
             <div class="legenda-cores" id="distribuicaoLegendaPecas"></div>
@@ -285,16 +285,16 @@
     <div class="secao-vista" id="secaoIniciais" style="display:none;">
       <div class="cards-grid" id="cardsGridIniciais"></div>
       <div class="barra-busca">
-        <span class="material-symbols-outlined busca-icon">search</span>
+        <span class="material-symbols-outlined busca-icon"><?= ICONES.buscar ?></span>
         <input type="text" id="inputBuscaIniciais" class="input-busca" placeholder="Buscar por assistido(a) ou estagiário(a)...">
         <div class="busca-separador"></div>
-        <span class="material-symbols-outlined busca-icon" style="font-size:18px;">date_range</span>
+        <span class="material-symbols-outlined busca-icon" style="font-size:18px;"><?= ICONES.filtroData ?></span>
         <span class="busca-label">DF de</span>
         <input type="date" id="inputDfDeIniciais" class="input-data">
         <span class="busca-sep">até</span>
         <input type="date" id="inputDfAteIniciais" class="input-data">
         <button class="btn-limpar-datas" id="btnLimparDatasIniciais" onclick="limparFiltroDatasIniciais()" title="Limpar filtro de datas" style="display:none;">
-          <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.limpar ?></span>
         </button>
       </div>
 
@@ -303,7 +303,7 @@
           <span id="tabelaInfoIniciais"></span>
           <div id="tabelaHeaderDireitaIniciais">
             <div class="seletor-semestre" id="seletorSemestreIniciais">
-              <span class="material-symbols-outlined" style="font-size:16px;">event</span>
+              <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.semestre ?></span>
               <select id="selectSemestreIniciais" class="select-semestre" onchange="mudarSemestreIniciais(this.value)">
                 <option value="">— Todos os semestres —</option>
               </select>
@@ -331,16 +331,16 @@
         <div class="cards-grid" id="cardsGridAcompanhamentos"></div>
 
         <div class="barra-busca">
-          <span class="material-symbols-outlined busca-icon">search</span>
+          <span class="material-symbols-outlined busca-icon"><?= ICONES.buscar ?></span>
           <input type="text" id="inputBuscaAcompanhamentos" class="input-busca" placeholder="Buscar por processo ou estagiário(a)...">
           <div class="busca-separador"></div>
-          <span class="material-symbols-outlined busca-icon" style="font-size:18px;">date_range</span>
+          <span class="material-symbols-outlined busca-icon" style="font-size:18px;"><?= ICONES.filtroData ?></span>
           <span class="busca-label">Entrega de</span>
           <input type="date" id="inputDfDeAcompanhamentos" class="input-data">
           <span class="busca-sep">até</span>
           <input type="date" id="inputDfAteAcompanhamentos" class="input-data">
           <button class="btn-limpar-datas" id="btnLimparDatasAcompanhamentos" onclick="limparFiltroDatasAcompanhamentos()" title="Limpar filtro de datas" style="display:none;">
-            <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+            <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.limpar ?></span>
           </button>
         </div>
 
@@ -349,7 +349,7 @@
             <span id="tabelaInfoAcompanhamentos"></span>
             <div id="tabelaHeaderDireitaAcompanhamentos">
               <div class="seletor-semestre" id="seletorSemestreAcompanhamentos">
-                <span class="material-symbols-outlined" style="font-size:16px;">event</span>
+                <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.semestre ?></span>
                 <select id="selectSemestreAcompanhamentos" class="select-semestre" onchange="mudarSemestreAcompanhamentos(this.value)">
                   <option value="">— Todos os semestres —</option>
                 </select>
@@ -379,15 +379,15 @@
 
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">pending_actions</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.pendencias ?></span>
             Pendentes de aprovação
             <span class="painel-semestre-separador"></span>
             <button class="btn btn-salvar" id="btnAprovarSelecionadosAO" onclick="aprovarSelecionadosAtendimentoOnline()" disabled style="padding:6px 14px; font-size:12.5px;">
-              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">check_circle</span>
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.aprovar ?></span>
               Aprovar selecionados
             </button>
             <button class="btn btn-salvar" id="btnReprovarSelecionadosAO" onclick="abrirModalReprovarAOEmLote()" disabled style="padding:6px 14px; font-size:12.5px; background: var(--cor-atraso); margin-left:8px;">
-              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">cancel</span>
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.reprovar ?></span>
               Reprovar selecionados
             </button>
           </div>
@@ -407,7 +407,7 @@
 
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">history</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.historico ?></span>
             Histórico recente (últimas decisões)
           </div>
           <div class="tabela-wrapper">
@@ -431,15 +431,15 @@
 
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">pending_actions</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.pendencias ?></span>
             Pendentes de aprovação
             <span class="painel-semestre-separador"></span>
             <button class="btn btn-salvar" id="btnAprovarSelecionadosAU" onclick="aprovarSelecionadosAudiencias()" disabled style="padding:6px 14px; font-size:12.5px;">
-              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">check_circle</span>
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.aprovar ?></span>
               Aprovar selecionadas
             </button>
             <button class="btn btn-salvar" id="btnReprovarSelecionadosAU" onclick="abrirModalReprovarAUEmLote()" disabled style="padding:6px 14px; font-size:12.5px; background: var(--cor-atraso); margin-left:8px;">
-              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">cancel</span>
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.reprovar ?></span>
               Reprovar selecionadas
             </button>
           </div>
@@ -459,7 +459,7 @@
 
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">history</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.historico ?></span>
             Histórico recente (últimas decisões)
           </div>
           <div class="tabela-wrapper">
@@ -482,7 +482,7 @@
 
         <!-- SELETORES DE SEMESTRE E ALUNO -->
         <div class="painel-semestre-panorama">
-          <span class="material-symbols-outlined" style="font-size:18px;">event</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.semestre ?></span>
           <span class="busca-label">Semestre</span>
           <select id="selectSemestrePanorama" class="select-semestre" onchange="mudarSemestrePanorama(this.value)">
             <option value="">— Nenhum semestre encontrado —</option>
@@ -490,7 +490,7 @@
 
           <span class="painel-semestre-separador"></span>
 
-          <span class="material-symbols-outlined" style="font-size:18px;">school</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.aluno ?></span>
           <span class="busca-label">Aluno</span>
           <select id="selectAlunoPanorama" class="select-semestre" onchange="mudarAlunoPanorama(this.value)">
             <option value="">— Todos os alunos —</option>
@@ -503,7 +503,7 @@
         <!-- TABELA: DILIGÊNCIAS -->
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">assignment</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.diligencias ?></span>
             Diligências
           </div>
           <div class="tabela-wrapper">
@@ -517,7 +517,7 @@
         <!-- TABELA: INICIAIS -->
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">description</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.iniciais ?></span>
             Iniciais
           </div>
           <div class="tabela-wrapper">
@@ -531,7 +531,7 @@
         <!-- TABELA: ACOMPANHAMENTOS -->
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">timeline</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.acompanhamentos ?></span>
             Acompanhamentos
           </div>
           <div class="tabela-wrapper">
@@ -545,7 +545,7 @@
         <!-- TABELA: ATENDIMENTOS -->
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">support_agent</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.atendimentos ?></span>
             Atendimentos
           </div>
           <div class="tabela-wrapper">
@@ -559,7 +559,7 @@
         <!-- TABELA: ATENDIMENTOS ONLINE -->
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">forum</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.atendimentoOnline ?></span>
             Atendimentos Online
           </div>
           <div class="tabela-wrapper">
@@ -570,19 +570,10 @@
           </div>
         </div>
 
-        <!-- CARD DE PROGRESSO: AUDIÊNCIAS (so aparece com UM aluno selecionado) -->
-        <div class="progresso-card" id="panoramaProgressoAudienciasCard" style="display:none;">
-          <div class="progresso-card-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
-            Audiências
-          </div>
-          <div class="progresso-lista" id="panoramaProgressoAudienciasLista"></div>
-        </div>
-
         <!-- TABELA: AUDIÊNCIAS (somente leitura — aprovacao/reprovacao so na aba propria) -->
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.audiencias ?></span>
             Audiências
           </div>
           <div class="tabela-wrapper">
@@ -600,7 +591,7 @@
         <div class="graficos-card">
           <div class="graficos-card-header">
             <div class="graficos-card-titulo">
-              <span class="material-symbols-outlined" style="font-size:18px;">bar_chart</span>
+              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.graficoProducao ?></span>
               Produção dos alunos ativos
             </div>
             <span class="graficos-card-subtitulo" id="graficosSubtitulo"></span>
@@ -611,7 +602,7 @@
         <div class="graficos-card">
           <div class="graficos-card-header">
             <div class="graficos-card-titulo">
-              <span class="material-symbols-outlined" style="font-size:18px;">stacked_bar_chart</span>
+              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.graficoBarras ?></span>
               Complexas, simples e acompanhamentos por estagiário
             </div>
             <div class="legenda-cores" id="graficosLegendaPecas"></div>
@@ -627,7 +618,7 @@
         <div class="graficos-card">
           <div class="graficos-card-header">
             <div class="graficos-card-titulo">
-              <span class="material-symbols-outlined" style="font-size:18px;">stacked_bar_chart</span>
+              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.graficoBarras ?></span>
               Atendimentos e iniciais por estagiário
             </div>
             <div class="legenda-cores" id="graficosLegendaAtendIniciais"></div>
@@ -643,7 +634,7 @@
         <div class="graficos-card">
           <div class="graficos-card-header">
             <div class="graficos-card-titulo">
-              <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
+              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.audiencias ?></span>
               Audiências por estagiário
             </div>
             <div class="legenda-cores" id="graficosLegendaAudiencias"></div>
@@ -660,7 +651,7 @@
       <!-- ABA: AUDIENCIAS -->
       <div class="secao-vista" id="secaoAudiencias" style="display:none;">
         <div class="barra-busca">
-          <span class="material-symbols-outlined busca-icon">search</span>
+          <span class="material-symbols-outlined busca-icon"><?= ICONES.buscar ?></span>
           <input
             type="text"
             id="inputBuscaAudiencias"
@@ -669,11 +660,11 @@
           >
           <div class="busca-separador"></div>
           <button class="btn-toggle-passadas" id="btnTogglePassadasAudiencias" onclick="alternarPassadasAudiencias()">
-            <span class="material-symbols-outlined" style="font-size:16px;">history</span>
+            <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.todasAudiencias ?></span>
             Todas audiências
           </button>
           <button class="audiencias-btn-atualizar" id="audienciasBtnAtualizar" onclick="recarregarAbaAudiencias()" title="Recarregar audiências">
-            <span class="material-symbols-outlined" style="font-size:18px;">refresh</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.atualizar ?></span>
           </button>
         </div>
 
@@ -708,19 +699,19 @@
           <!-- Secao: Sistema -->
           <div class="utilitarios-secao">
             <div class="utilitarios-secao-titulo">
-              <span class="material-symbols-outlined">settings</span>
+              <span class="material-symbols-outlined"><?= ICONES.sistema ?></span>
               Sistema
             </div>
             <div class="utilitarios-cards">
               <div class="util-card" id="cardPreencherSemestre" onclick="acaoPreencherSemestre()">
                 <div class="util-card-icone">
-                  <span class="material-symbols-outlined">event_repeat</span>
+                  <span class="material-symbols-outlined"><?= ICONES.preencherSemestre ?></span>
                 </div>
                 <div class="util-card-label">Preencher Semestre</div>
               </div>
               <div class="util-card" id="cardPreencherDfFinal" onclick="acaoPreencherDfFinal()">
                 <div class="util-card-icone">
-                  <span class="material-symbols-outlined">edit_calendar</span>
+                  <span class="material-symbols-outlined"><?= ICONES.preencherDfFinal ?></span>
                 </div>
                 <div class="util-card-label">Preencher DF Final</div>
               </div>
@@ -737,25 +728,25 @@
               </div>
               <div class="util-card" id="cardSincronizarGeral" onclick="acaoSincronizarGeral()">
                 <div class="util-card-icone">
-                  <span class="material-symbols-outlined">sync</span>
+                  <span class="material-symbols-outlined"><?= ICONES.sincronizar ?></span>
                 </div>
                 <div class="util-card-label">Sincronizar com GERAL</div>
               </div>
               <div class="util-card" id="cardGerenciarEstagiarios" onclick="abrirModalGerenciarEstagiarios()">
                 <div class="util-card-icone">
-                  <span class="material-symbols-outlined">groups</span>
+                  <span class="material-symbols-outlined"><?= ICONES.estagiarios ?></span>
                 </div>
                 <div class="util-card-label">Gerenciar Estagiários</div>
               </div>
               <div class="util-card" id="cardVerificarProtocolos" onclick="acaoVerificarProtocolosIniciais()">
                 <div class="util-card-icone">
-                  <span class="material-symbols-outlined">fact_check</span>
+                  <span class="material-symbols-outlined"><?= ICONES.verificarProtocolos ?></span>
                 </div>
                 <div class="util-card-label">Verificar Protocolos</div>
               </div>
               <div class="util-card" id="cardCalcularDiaUtil" onclick="abrirModalCalcularDiaUtil()">
                 <div class="util-card-icone">
-                  <span class="material-symbols-outlined">event_available</span>
+                  <span class="material-symbols-outlined"><?= ICONES.calcularDiaUtil ?></span>
                 </div>
                 <div class="util-card-label">Calcular Dia Útil</div>
               </div>
@@ -766,25 +757,25 @@
           <div class="utilitarios-linha">
             <div class="utilitarios-secao" data-cor="classroom">
               <div class="utilitarios-secao-titulo">
-                <span class="material-symbols-outlined">school</span>
+                <span class="material-symbols-outlined"><?= ICONES.classroom ?></span>
                 Classroom
               </div>
               <div class="utilitarios-cards">
                 <div class="util-card" id="cardEnviarCobrancas" onclick="acaoGerenciarEnviarCobrancas()">
                   <div class="util-card-icone">
-                    <span class="material-symbols-outlined">campaign</span>
+                    <span class="material-symbols-outlined"><?= ICONES.cobrancas ?></span>
                   </div>
                   <div class="util-card-label">Enviar Cobranças</div>
                 </div>
                 <div class="util-card" id="cardTransferirAtividade" onclick="abrirModalTransferirBusca()">
                   <div class="util-card-icone">
-                    <span class="material-symbols-outlined">swap_horiz</span>
+                    <span class="material-symbols-outlined"><?= ICONES.transferir ?></span>
                   </div>
                   <div class="util-card-label">Transferir Atividade</div>
                 </div>
                 <div class="util-card" id="cardPublicarPautaSemana" onclick="acaoPublicarPautaSemanal()" title="Publicar a pauta da semana (segunda a sexta) no mural do Classroom">
                   <div class="util-card-icone">
-                    <span class="material-symbols-outlined">event_upcoming</span>
+                    <span class="material-symbols-outlined"><?= ICONES.muralSemana ?></span>
                   </div>
                   <div class="util-card-label">Publicar Pauta da Semana</div>
                 </div>
@@ -794,19 +785,19 @@
             <!-- Secao: Drive -->
             <div class="utilitarios-secao" data-cor="drive">
               <div class="utilitarios-secao-titulo">
-                <span class="material-symbols-outlined">folder_open</span>
+                <span class="material-symbols-outlined"><?= ICONES.drive ?></span>
                 Drive
               </div>
               <div class="utilitarios-cards">
                 <div class="util-card" id="cardOrganizarPastas" onclick="acaoOrganizarPastas()">
                   <div class="util-card-icone">
-                    <span class="material-symbols-outlined">drive_file_move</span>
+                    <span class="material-symbols-outlined"><?= ICONES.organizarPastas ?></span>
                   </div>
                   <div class="util-card-label">Organizar Pastas</div>
                 </div>
                 <div class="util-card" id="cardArquivarPastas" onclick="acaoArquivarPastas()">
                   <div class="util-card-icone">
-                    <span class="material-symbols-outlined">archive</span>
+                    <span class="material-symbols-outlined"><?= ICONES.arquivarPastas ?></span>
                   </div>
                   <div class="util-card-label">Arquivar Pastas</div>
                 </div>
@@ -818,13 +809,13 @@
           <div class="utilitarios-linha">
             <div class="utilitarios-secao" data-cor="fia">
               <div class="utilitarios-secao-titulo">
-                <span class="material-symbols-outlined">account_balance</span>
+                <span class="material-symbols-outlined"><?= ICONES.fia ?></span>
                 FIA
               </div>
               <div class="utilitarios-cards">
                 <div class="util-card" id="cardPreencherFIA" onclick="abrirModalFIA()">
                   <div class="util-card-icone">
-                    <span class="material-symbols-outlined">rule</span>
+                    <span class="material-symbols-outlined"><?= ICONES.preencherFIA ?></span>
                   </div>
                   <div class="util-card-label">Preencher FIA</div>
                 </div>
@@ -834,7 +825,7 @@
             <!-- Secao: Relatorio -->
             <div class="utilitarios-secao" data-cor="relatorio">
               <div class="utilitarios-secao-titulo">
-                <span class="material-symbols-outlined">bar_chart</span>
+                <span class="material-symbols-outlined"><?= ICONES.relatorio ?></span>
                 Relatório
               </div>
               <div class="utilitarios-cards"></div>
@@ -856,12 +847,12 @@
         <div class="modal-assistido" id="modalAssistido"></div>
         <div id="modalBadges"></div>
         <button class="modal-fechar" onclick="fecharModal()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
       <div class="modal-alerta-atraso" id="modalAlertaAtraso" style="display:none;">
-        <span class="material-symbols-outlined" style="font-size:18px;">warning</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.alerta ?></span>
         Esta diligência está em atraso.
       </div>
 
@@ -880,7 +871,7 @@
                 <div class="modal-campo-label">Processo N°</div>
                 <div class="modal-campo-valor modal-campo-valor-copiavel">
                   <span id="mProcesso"></span>
-                  <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcesso" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+                  <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcesso" title="Copiar processo" role="button" tabindex="0"><?= ICONES.copiar ?></span>
                 </div>
               </div>
               <div style="grid-column: 1 / -1;">
@@ -989,7 +980,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="fecharModal()">Fechar</button>
         <button class="btn btn-salvar" id="btnSalvar" onclick="salvarModal()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
           Salvar
         </button>
       </div>
@@ -1007,7 +998,7 @@
         <div class="modal-processo">GERENCIAR</div>
         <div class="modal-assistido">Novo Pedido</div>
         <button class="modal-fechar" onclick="fecharModalNovoPedido()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -1055,7 +1046,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="fecharModalNovoPedido()">Cancelar</button>
         <button class="btn btn-salvar" id="btnSalvarNovoPedido" onclick="salvarNovoPedido()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
           Salvar
         </button>
       </div>
@@ -1070,7 +1061,7 @@
         <div class="modal-assistido" id="daoAtendido"></div>
         <div id="daoBadge"></div>
         <button class="modal-fechar" onclick="fecharModalDetalheAO()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -1113,11 +1104,11 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="fecharModalDetalheAO()">Fechar</button>
         <button class="btn btn-salvar" id="btnDaoReprovar" style="display:none; background: var(--cor-atraso);" onclick="reprovarAtendimentoOnlineDoModal()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">cancel</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.reprovar ?></span>
           Reprovar
         </button>
         <button class="btn btn-salvar" id="btnDaoAprovar" style="display:none;" onclick="aprovarAtendimentoOnlineDoModal()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">check_circle</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.aprovar ?></span>
           Aprovar
         </button>
       </div>
@@ -1131,7 +1122,7 @@
         <div class="modal-processo" id="raoIdLabel">ATENDIMENTO ONLINE</div>
         <div class="modal-assistido">Reprovar</div>
         <button class="modal-fechar" onclick="fecharModalReprovarAO()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -1151,7 +1142,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="fecharModalReprovarAO()">Cancelar</button>
         <button class="btn btn-salvar" id="btnConfirmarReprovarAO" onclick="confirmarReprovarAtendimentoOnline()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.reprovar ?></span>
           Reprovar
         </button>
       </div>
@@ -1166,7 +1157,7 @@
         <div class="modal-assistido" id="dauTipo"></div>
         <div id="dauBadge"></div>
         <button class="modal-fechar" onclick="fecharModalDetalheAU()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -1213,11 +1204,11 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="fecharModalDetalheAU()">Fechar</button>
         <button class="btn btn-salvar" id="btnDauReprovar" style="display:none; background: var(--cor-atraso);" onclick="reprovarAudienciaDoModal()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">cancel</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.reprovar ?></span>
           Reprovar
         </button>
         <button class="btn btn-salvar" id="btnDauAprovar" style="display:none;" onclick="aprovarAudienciaDoModal()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">check_circle</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.aprovar ?></span>
           Aprovar
         </button>
       </div>
@@ -1231,7 +1222,7 @@
         <div class="modal-processo" id="rauIdLabel">AUDIÊNCIA</div>
         <div class="modal-assistido">Reprovar</div>
         <button class="modal-fechar" onclick="fecharModalReprovarAU()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -1251,7 +1242,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="fecharModalReprovarAU()">Cancelar</button>
         <button class="btn btn-salvar" id="btnConfirmarReprovarAU" onclick="confirmarReprovarAudiencia()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.reprovar ?></span>
           Reprovar
         </button>
       </div>
@@ -1265,7 +1256,7 @@
         <div class="modal-processo">GERENCIAR</div>
         <div class="modal-assistido">Pedido de Acompanhamento</div>
         <button class="modal-fechar" onclick="fecharModalNovoAcompanhamento()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -1299,7 +1290,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="fecharModalNovoAcompanhamento()">Cancelar</button>
         <button class="btn btn-salvar" id="btnSalvarNovoAcompanhamento" onclick="salvarNovoAcompanhamento()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
           Salvar
         </button>
       </div>
@@ -1313,7 +1304,7 @@
         <div class="modal-processo">GERENCIAR</div>
         <div class="modal-assistido">Transferir Atividade</div>
         <button class="modal-fechar" onclick="fecharModalTransferirBusca()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -1344,7 +1335,7 @@
         <div class="modal-processo" id="mtProcesso">GERENCIAR</div>
         <div class="modal-assistido">Transferir Atividade</div>
         <button class="modal-fechar" onclick="fecharModalTransferirDetalhe()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -1399,12 +1390,12 @@
         <div class="modal-processo">SISTEMA</div>
         <div class="modal-assistido">Calcular Dia Útil</div>
         <button class="modal-fechar" onclick="fecharModalCalcularDiaUtil()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
       <div class="fia-aviso-nao-salva">
-        <span class="material-symbols-outlined" style="font-size:16px;">info</span>
+        <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.info ?></span>
         Este calculador não salva nenhum dado.
       </div>
 
@@ -1435,7 +1426,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="fecharModalCalcularDiaUtil()">Fechar</button>
         <button class="btn btn-salvar" id="btnCalcularDiaUtil" onclick="executarCalcularDiaUtil()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">calculate</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.calcular ?></span>
           Calcular
         </button>
       </div>
@@ -1449,7 +1440,7 @@
         <div class="modal-processo">SISTEMA</div>
         <div class="modal-assistido">Gerenciar Estagiários</div>
         <button class="modal-fechar" onclick="fecharModalGerenciarEstagiarios()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -1467,7 +1458,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="fecharModalGerenciarEstagiarios()">Cancelar</button>
         <button class="btn btn-salvar" id="btnSalvarGerenciarEstagiarios" onclick="salvarGerenciarEstagiarios()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
           Salvar
         </button>
       </div>
@@ -1483,12 +1474,12 @@
         <div class="modal-assistido" id="acEstagiarioNome"></div>
         <div id="acBadges"></div>
         <button class="modal-fechar" onclick="fecharModalAcompanhamento()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
       <div class="modal-alerta-atraso" id="acAlertaAtraso" style="display:none;">
-        <span class="material-symbols-outlined" style="font-size:18px;">warning</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.alerta ?></span>
         Este acompanhamento está em atraso.
       </div>
 
@@ -1508,7 +1499,7 @@
               <div class="modal-campo-label">Processo N°</div>
               <div class="modal-campo-valor modal-campo-valor-copiavel">
                 <span id="acProcesso"></span>
-                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoAcompanhamento" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoAcompanhamento" title="Copiar processo" role="button" tabindex="0"><?= ICONES.copiar ?></span>
               </div>
             </div>
           </div>
@@ -1561,7 +1552,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="fecharModalAcompanhamento()">Fechar</button>
         <button class="btn btn-salvar" id="btnSalvarAcompanhamento" onclick="salvarModalAcompanhamento()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
           Salvar
         </button>
       </div>
@@ -1578,12 +1569,12 @@
       <div class="modal-assistido" id="miAssistido"></div>
       <div id="miBadges"></div>
       <button class="modal-fechar" onclick="fecharModalIniciais()">
-        <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
       </button>
     </div>
 
     <div class="modal-alerta-atraso" id="miAlertaAtraso" style="display:none;">
-      <span class="material-symbols-outlined" style="font-size:18px;">warning</span>
+      <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.alerta ?></span>
       Esta inicial está em atraso.
     </div>
 
@@ -1637,7 +1628,7 @@
               <div class="modal-campo-label">Processo N°</div>
               <div class="modal-campo-valor modal-campo-valor-copiavel">
                 <span id="miProcesso">—</span>
-                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoIniciais" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoIniciais" title="Copiar processo" role="button" tabindex="0"><?= ICONES.copiar ?></span>
               </div>
             </div>
             <div>
@@ -1693,7 +1684,7 @@
     <div class="modal-rodape">
       <button class="btn btn-cancelar" onclick="fecharModalIniciais()">Fechar</button>
       <button class="btn btn-salvar" id="btnSalvarIniciais" onclick="salvarModalIniciais()">
-        <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+        <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
         Salvar
       </button>
     </div>
@@ -1709,7 +1700,7 @@
         <div class="modal-processo">UTILITÁRIOS</div>
         <div class="modal-assistido" id="mrTitulo">Resultado</div>
         <button class="modal-fechar" onclick="fecharModalResultado()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
       <div class="modal-corpo">
@@ -1734,7 +1725,7 @@
         <div class="modal-processo">ATENDIMENTO</div>
         <div class="modal-assistido" id="maNome"></div>
         <button class="modal-fechar" onclick="fecharModalAtendimento()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -1788,7 +1779,7 @@
         <div class="modal-processo">AUDIÊNCIA</div>
         <div class="modal-assistido" id="auAssistido"></div>
         <button class="modal-fechar" onclick="fecharModalAudiencia()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -1819,7 +1810,7 @@
               <div class="modal-campo-label">Processo N°</div>
               <div class="modal-campo-valor modal-campo-valor-copiavel">
                 <span id="auProcesso">—</span>
-                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoAudiencia" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoAudiencia" title="Copiar processo" role="button" tabindex="0"><?= ICONES.copiar ?></span>
               </div>
             </div>
             <div style="grid-column: 1 / -1;">
@@ -1845,12 +1836,12 @@
         <div class="modal-processo">FIA</div>
         <div class="modal-assistido">Ficha Individual de Avaliação</div>
         <button class="modal-fechar" onclick="fecharModalFIA()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
       <div class="fia-aviso-nao-salva">
-        <span class="material-symbols-outlined" style="font-size:16px;">info</span>
+        <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.info ?></span>
         Esta ficha é apenas uma calculadora. Nenhum valor é salvo.
       </div>
 
@@ -1871,13 +1862,22 @@
         </div>
         <button class="btn btn-cancelar" onclick="fecharModalFIA()">Fechar</button>
         <button class="btn btn-salvar" onclick="recalcularFIA()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">calculate</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.calcular ?></span>
           Recalcular
         </button>
       </div>
 
     </div>
   </div>
+
+  <!-- Mapa de icones (fonte unica: Icones.js). Injetado ANTES do include, para
+       que Scripts/AlunoScripts encontrem a global ICONES ja definida.
+       A saida abaixo e NAO escapada de proposito; a versao escapada
+       converteria as aspas do JSON e quebraria o script. Ver Icones.js.
+       Decisao de 25/07/2026. -->
+  <script>
+    var ICONES = <?!= obterMapaIcones() ?>;
+  </script>
 
   <?!= include('Scripts') ?>
 </body>

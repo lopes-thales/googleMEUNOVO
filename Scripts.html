@@ -7,7 +7,7 @@ function temaPreferidoSistema() {
 function aplicarTema(tema) {
   document.documentElement.setAttribute('data-theme', tema);
   var icone = document.getElementById('iconeTema');
-  if (icone) icone.textContent = tema === 'dark' ? 'light_mode' : 'dark_mode';
+  if (icone) icone.textContent = tema === 'dark' ? ICONES.temaClaro : ICONES.temaEscuro;
 }
 
 function inicializarTema() {
@@ -118,17 +118,17 @@ var APP_AUDIENCIAS = {
 };
 
 var CARD_ICONES = {
-  total: 'folder_open',
-  encaminhado: 'send',
-  entregue: 'move_to_inbox',
-  devolvida: 'undo',
-  concluido: 'check_circle',
-  cancelada: 'block',
-  atraso: 'warning',
-  sem_estagiario: 'person_off'
+  total: ICONES.cardTotal,
+  encaminhado: ICONES.cardEncaminhado,
+  entregue: ICONES.cardEntregue,
+  devolvida: ICONES.cardDevolvida,
+  concluido: ICONES.cardConcluido,
+  cancelada: ICONES.cardCancelada,
+  atraso: ICONES.cardAtraso,
+  sem_estagiario: ICONES.cardSemEstagiario
 };
 
-var TOAST_ICONES = { sucesso: 'check_circle', erro: 'error', alerta: 'warning', '': 'info' };
+var TOAST_ICONES = { sucesso: ICONES.sucesso, erro: ICONES.erro, alerta: ICONES.alerta, '': ICONES.info };
 
 // === INICIALIZACAO ===
 document.addEventListener('DOMContentLoaded', function() {
@@ -233,12 +233,12 @@ function salvarNovoPedido() {
 
   var btn = document.getElementById('btnSalvarNovoPedido');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Salvando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.salvar + '</span> Salvar';
 
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao criar pedido.', 'erro');
@@ -251,7 +251,7 @@ function salvarNovoPedido() {
     })
     .withFailureHandler(function(err) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.salvar + '</span> Salvar';
       mostrarToast('Erro ao criar pedido: ' + err.message, 'erro');
     })
     .acaoCriarPedidoAluno(payload);
@@ -291,12 +291,12 @@ function salvarNovoAcompanhamento() {
 
   var btn = document.getElementById('btnSalvarNovoAcompanhamento');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Salvando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.salvar + '</span> Salvar';
 
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao criar acompanhamento.', 'erro');
@@ -309,7 +309,7 @@ function salvarNovoAcompanhamento() {
     })
     .withFailureHandler(function(err) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.salvar + '</span> Salvar';
       mostrarToast('Erro ao criar acompanhamento: ' + err.message, 'erro');
     })
     .acaoCriarAcompanhamento(payload);
@@ -415,7 +415,7 @@ function confirmarTransferencia() {
 
   var btn = document.getElementById('btnConfirmarTransferir');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Transferindo...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Transferindo...';
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -455,7 +455,7 @@ function acaoGerenciarVerificarEntregas() {
   var btn = document.getElementById('btnGerenciar');
   var textoOriginal = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">hourglass_top</span> Verificando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">' + ICONES.carregando + '</span> Verificando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -578,7 +578,7 @@ function acaoGerenciarEnviarClassroom() {
   var btn = document.getElementById('btnGerenciar');
   var textoOriginal = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">hourglass_top</span> Enviando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">' + ICONES.carregando + '</span> Enviando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -978,7 +978,7 @@ function renderizarCards() {
   var html = '';
   cards.forEach(function(card) {
     var ativo = APP.filtroCard === card.id ? ' ativo' : '';
-    var icone = CARD_ICONES[card.id] || 'folder';
+    var icone = CARD_ICONES[card.id] || ICONES.cardPadrao;
     html += '<div class="card-resumo ' + card.classe + ativo + '" onclick="filtrarCard(\'' + card.id + '\')">' +
       '<div class="card-icone"><span class="material-symbols-outlined">' + icone + '</span></div>' +
       '<div class="card-info">' +
@@ -1002,7 +1002,7 @@ function renderizarCelulaEstagiario(reg) {
   var est = String(reg.estagiario || '').trim();
   if (est) return est;
   if (ehSemEstagiario(reg)) {
-    return '<span class="estagiario-celula-vazio"><span class="material-symbols-outlined sem-estagiario-indicador">person_off</span></span>';
+    return '<span class="estagiario-celula-vazio"><span class="material-symbols-outlined sem-estagiario-indicador">' + ICONES.semEstagiario + '</span></span>';
   }
   return '<span class="celula-vazio">—</span>';
 }
@@ -1040,7 +1040,7 @@ function badgeGatilho(reg) {
   var info = mapa[reg.gatilho];
   if (!info) return '';
   return '<span class="badge-gatilho ' + info.classe + '" title="' + info.titulo + '">' +
-    '<span class="material-symbols-outlined" style="font-size:13px;">schedule</span>' +
+    '<span class="material-symbols-outlined" style="font-size:13px;">' + ICONES.prazoProximo + '</span>' +
   '</span>';
 }
 
@@ -1085,7 +1085,7 @@ function renderizarTabela() {
     document.getElementById('tabelaCorpo').innerHTML =
       '<tr><td colspan="10">' +
         '<div class="estado-vazio">' +
-          '<span class="material-symbols-outlined">search_off</span>' +
+          '<span class="material-symbols-outlined">' + ICONES.semResultado + '</span>' +
           '<div class="estado-vazio-titulo">Nenhum registro encontrado</div>' +
           '<div class="estado-vazio-desc">Tente ajustar o filtro ou a busca.</div>' +
         '</div>' +
@@ -1123,7 +1123,7 @@ function renderizarPaginacao(total, totalPags) {
   if (total > 0) html += '<span class="pag-info">' + inicio + '–' + fim + ' de ' + total + '</span>';
 
   html += '<button class="btn-pag" onclick="irPagina(' + (p - 1) + ')" ' + (p <= 1 ? 'disabled' : '') + '>' +
-    '<span class="material-symbols-outlined">chevron_left</span> Ant.' +
+    '<span class="material-symbols-outlined">' + ICONES.paginaAnterior + '</span> Ant.' +
   '</button>';
 
   var range = pagRange(p, totalPags);
@@ -1136,7 +1136,7 @@ function renderizarPaginacao(total, totalPags) {
   });
 
   html += '<button class="btn-pag" onclick="irPagina(' + (p + 1) + ')" ' + (p >= totalPags ? 'disabled' : '') + '>' +
-    'Próx. <span class="material-symbols-outlined">chevron_right</span>' +
+    'Próx. <span class="material-symbols-outlined">' + ICONES.paginaProxima + '</span>' +
   '</button>';
 
   document.getElementById('paginacao').innerHTML = html;
@@ -1351,12 +1351,12 @@ function salvarModal() {
 
   var btnSalvar = document.getElementById('btnSalvar');
   btnSalvar.disabled = true;
-  btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+  btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Salvando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btnSalvar.disabled = false;
-      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.salvar + '</span> Salvar';
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao salvar.', 'erro');
         return;
@@ -1391,7 +1391,7 @@ function salvarModal() {
     })
     .withFailureHandler(function(err) {
       btnSalvar.disabled = false;
-      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.salvar + '</span> Salvar';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .salvarRegistro(payload);
@@ -1408,7 +1408,7 @@ function mostrarLoading(show) {
 // === TOAST ===
 function mostrarToast(msg, tipo) {
   var el = document.getElementById('toast');
-  var icone = TOAST_ICONES[tipo || ''] || 'info';
+  var icone = TOAST_ICONES[tipo || ''] || ICONES.info;
   el.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">' + icone + '</span> ' + msg;
   el.className = 'toast ' + (tipo || '');
   el.classList.add('visivel');
@@ -1479,7 +1479,7 @@ function renderizarTabelaDistribuicao() {
     corpo.innerHTML =
       '<tr><td colspan="10">' +
         '<div class="estado-vazio">' +
-          '<span class="material-symbols-outlined">task_alt</span>' +
+          '<span class="material-symbols-outlined">' + ICONES.semPendencias + '</span>' +
           '<div class="estado-vazio-titulo">Nenhum registro pendente</div>' +
           '<div class="estado-vazio-desc">Todas as diligências já foram distribuídas ou enviadas ao Classroom.</div>' +
         '</div>' +
@@ -1571,9 +1571,9 @@ function acaoSalvarDistribuicaoClique(enviar) {
   btnSalvar.disabled = true;
   btnEnviar.disabled = true;
   if (enviar) {
-    btnEnviar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">hourglass_top</span> Enviando...';
+    btnEnviar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.carregando + '</span> Enviando...';
   } else {
-    btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">hourglass_top</span> Salvando...';
+    btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.carregando + '</span> Salvando...';
   }
 
   google.script.run
@@ -1736,7 +1736,7 @@ function renderizarCardsIniciais() {
   var html = '';
   cards.forEach(function(card) {
     var ativo = APP_INICIAIS.filtroCard === card.id ? ' ativo' : '';
-    var icone = CARD_ICONES[card.id] || 'folder';
+    var icone = CARD_ICONES[card.id] || ICONES.cardPadrao;
     html += '<div class="card-resumo ' + card.classe + ativo + '" onclick="filtrarCardIniciais(\'' + card.id + '\')">' +
       '<div class="card-icone"><span class="material-symbols-outlined">' + icone + '</span></div>' +
       '<div class="card-info">' +
@@ -1815,7 +1815,7 @@ function renderizarTabelaIniciais() {
     document.getElementById('tabelaCorpoIniciais').innerHTML =
       '<tr><td colspan="8">' +
         '<div class="estado-vazio">' +
-          '<span class="material-symbols-outlined">search_off</span>' +
+          '<span class="material-symbols-outlined">' + ICONES.semResultado + '</span>' +
           '<div class="estado-vazio-titulo">Nenhum registro encontrado</div>' +
           '<div class="estado-vazio-desc">Tente ajustar o filtro ou a busca.</div>' +
         '</div>' +
@@ -1850,7 +1850,7 @@ function renderizarPaginacaoIniciais(total, totalPags) {
   if (total > 0) html += '<span class="pag-info">' + inicio + '–' + fim + ' de ' + total + '</span>';
 
   html += '<button class="btn-pag" onclick="irPaginaIniciais(' + (p - 1) + ')" ' + (p <= 1 ? 'disabled' : '') + '>' +
-    '<span class="material-symbols-outlined">chevron_left</span> Ant.' +
+    '<span class="material-symbols-outlined">' + ICONES.paginaAnterior + '</span> Ant.' +
   '</button>';
 
   var range = pagRange(p, totalPags);
@@ -1863,7 +1863,7 @@ function renderizarPaginacaoIniciais(total, totalPags) {
   });
 
   html += '<button class="btn-pag" onclick="irPaginaIniciais(' + (p + 1) + ')" ' + (p >= totalPags ? 'disabled' : '') + '>' +
-    'Próx. <span class="material-symbols-outlined">chevron_right</span>' +
+    'Próx. <span class="material-symbols-outlined">' + ICONES.paginaProxima + '</span>' +
   '</button>';
 
   document.getElementById('paginacaoIniciais').innerHTML = html;
@@ -2049,12 +2049,12 @@ function salvarModalIniciais() {
 
   var btnSalvar = document.getElementById('btnSalvarIniciais');
   btnSalvar.disabled = true;
-  btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+  btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Salvando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btnSalvar.disabled = false;
-      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.salvar + '</span> Salvar';
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao salvar.', 'erro');
         return;
@@ -2067,7 +2067,7 @@ function salvarModalIniciais() {
     })
     .withFailureHandler(function(err) {
       btnSalvar.disabled = false;
-      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.salvar + '</span> Salvar';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .salvarRegistroInicial(payload);
@@ -2180,7 +2180,7 @@ function renderizarCardsAcompanhamentos() {
   var html = '';
   cards.forEach(function(card) {
     var ativo = APP_ACOMPANHAMENTOS.filtroCard === card.id ? ' ativo' : '';
-    var icone = CARD_ICONES[card.id] || 'folder';
+    var icone = CARD_ICONES[card.id] || ICONES.cardPadrao;
     html += '<div class="card-resumo ' + card.classe + ativo + '" onclick="filtrarCardAcompanhamentos(\'' + card.id + '\')">' +
       '<div class="card-icone"><span class="material-symbols-outlined">' + icone + '</span></div>' +
       '<div class="card-info">' +
@@ -2257,7 +2257,7 @@ function renderizarTabelaAcompanhamentos() {
     document.getElementById('tabelaCorpoAcompanhamentos').innerHTML =
       '<tr><td colspan="6">' +
         '<div class="estado-vazio">' +
-          '<span class="material-symbols-outlined">search_off</span>' +
+          '<span class="material-symbols-outlined">' + ICONES.semResultado + '</span>' +
           '<div class="estado-vazio-titulo">Nenhum registro encontrado</div>' +
           '<div class="estado-vazio-desc">Tente ajustar o filtro ou a busca.</div>' +
         '</div>' +
@@ -2290,7 +2290,7 @@ function renderizarPaginacaoAcompanhamentos(total, totalPags) {
   if (total > 0) html += '<span class="pag-info">' + inicio + '–' + fim + ' de ' + total + '</span>';
 
   html += '<button class="btn-pag" onclick="irPaginaAcompanhamentos(' + (p - 1) + ')" ' + (p <= 1 ? 'disabled' : '') + '>' +
-    '<span class="material-symbols-outlined">chevron_left</span> Ant.' +
+    '<span class="material-symbols-outlined">' + ICONES.paginaAnterior + '</span> Ant.' +
   '</button>';
 
   var range = pagRange(p, totalPags);
@@ -2303,7 +2303,7 @@ function renderizarPaginacaoAcompanhamentos(total, totalPags) {
   });
 
   html += '<button class="btn-pag" onclick="irPaginaAcompanhamentos(' + (p + 1) + ')" ' + (p >= totalPags ? 'disabled' : '') + '>' +
-    'Próx. <span class="material-symbols-outlined">chevron_right</span>' +
+    'Próx. <span class="material-symbols-outlined">' + ICONES.paginaProxima + '</span>' +
   '</button>';
 
   document.getElementById('paginacaoAcompanhamentos').innerHTML = html;
@@ -2471,12 +2471,12 @@ function salvarModalAcompanhamento() {
 
   var btnSalvar = document.getElementById('btnSalvarAcompanhamento');
   btnSalvar.disabled = true;
-  btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+  btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Salvando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btnSalvar.disabled = false;
-      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.salvar + '</span> Salvar';
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao salvar.', 'erro');
         return;
@@ -2489,7 +2489,7 @@ function salvarModalAcompanhamento() {
     })
     .withFailureHandler(function(err) {
       btnSalvar.disabled = false;
-      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">save</span> Salvar';
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.salvar + '</span> Salvar';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .salvarRegistroAcompanhamento(payload);
@@ -2581,7 +2581,7 @@ function renderizarFilaAtendimentoOnline() {
     corpo.innerHTML =
       '<tr><td colspan="9">' +
         '<div class="estado-vazio">' +
-          '<span class="material-symbols-outlined">task_alt</span>' +
+          '<span class="material-symbols-outlined">' + ICONES.semPendencias + '</span>' +
           '<div class="estado-vazio-titulo">Nenhum atendimento online pendente</div>' +
         '</div>' +
       '</td></tr>';
@@ -2637,7 +2637,7 @@ function renderizarHistoricoAtendimentoOnline() {
   var lista = APP_ATENDIMENTO_ONLINE.historico;
 
   if (!lista.length) {
-    corpo.innerHTML = '<tr><td colspan="7"><div class="estado-vazio"><span class="material-symbols-outlined">history</span><div class="estado-vazio-titulo">Nenhuma decisão registrada ainda</div></div></td></tr>';
+    corpo.innerHTML = '<tr><td colspan="7"><div class="estado-vazio"><span class="material-symbols-outlined">' + ICONES.historico + '</span><div class="estado-vazio-titulo">Nenhuma decisão registrada ainda</div></div></td></tr>';
     return;
   }
 
@@ -2808,12 +2808,12 @@ function confirmarReprovarAtendimentoOnline() {
 
   var btn = document.getElementById('btnConfirmarReprovarAO');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Reprovando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Reprovando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span> Reprovar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.reprovar + '</span> Reprovar';
 
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao reprovar.', 'erro');
@@ -2832,7 +2832,7 @@ function confirmarReprovarAtendimentoOnline() {
     })
     .withFailureHandler(function(err) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span> Reprovar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.reprovar + '</span> Reprovar';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .acaoReprovarAtendimentosOnlineEmLote(linhas, motivo);
@@ -2923,7 +2923,7 @@ function renderizarFilaAudiencias() {
     corpo.innerHTML =
       '<tr><td colspan="9">' +
         '<div class="estado-vazio">' +
-          '<span class="material-symbols-outlined">task_alt</span>' +
+          '<span class="material-symbols-outlined">' + ICONES.semPendencias + '</span>' +
           '<div class="estado-vazio-titulo">Nenhuma audiência pendente</div>' +
         '</div>' +
       '</td></tr>';
@@ -2977,7 +2977,7 @@ function renderizarHistoricoAudiencias() {
   var lista = APP_AUDIENCIAS_ESTAGIARIO.historico;
 
   if (!lista.length) {
-    corpo.innerHTML = '<tr><td colspan="7"><div class="estado-vazio"><span class="material-symbols-outlined">history</span><div class="estado-vazio-titulo">Nenhuma decisão registrada ainda</div></div></td></tr>';
+    corpo.innerHTML = '<tr><td colspan="7"><div class="estado-vazio"><span class="material-symbols-outlined">' + ICONES.historico + '</span><div class="estado-vazio-titulo">Nenhuma decisão registrada ainda</div></div></td></tr>';
     return;
   }
 
@@ -3132,12 +3132,12 @@ function confirmarReprovarAudiencia() {
 
   var btn = document.getElementById('btnConfirmarReprovarAU');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Reprovando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Reprovando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span> Reprovar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.reprovar + '</span> Reprovar';
 
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao reprovar.', 'erro');
@@ -3156,7 +3156,7 @@ function confirmarReprovarAudiencia() {
     })
     .withFailureHandler(function(err) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span> Reprovar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.reprovar + '</span> Reprovar';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .acaoReprovarAudienciasEmLote(linhas, motivo);
@@ -3217,11 +3217,11 @@ function carregarAbaPanorama() {
 // semestre/aluno nesta aba (decisao de Thales): e sempre o total corrente.
 
 var GRAFICOS_CATEGORIAS = [
-  { chave: 'complexas',       label: 'Complexas',       icone: 'gavel',          classe: 'grafico-barra-complexas' },
-  { chave: 'simples',         label: 'Simples',         icone: 'description',    classe: 'grafico-barra-simples' },
-  { chave: 'acompanhamentos', label: 'Acompanhamentos', icone: 'timeline',       classe: 'grafico-barra-acompanhamentos' },
-  { chave: 'atendimentos',    label: 'Atendimentos',    icone: 'support_agent',  classe: 'grafico-barra-atendimentos' },
-  { chave: 'iniciais',        label: 'Iniciais',        icone: 'history_edu',    classe: 'grafico-barra-iniciais' }
+  { chave: 'complexas',       label: 'Complexas',       icone: ICONES.complexas, classe: 'grafico-barra-complexas' },
+  { chave: 'simples',         label: 'Simples',         icone: ICONES.simples,   classe: 'grafico-barra-simples' },
+  { chave: 'acompanhamentos', label: 'Acompanhamentos', icone: ICONES.acompanhamentos, classe: 'grafico-barra-acompanhamentos' },
+  { chave: 'atendimentos',    label: 'Atendimentos',    icone: ICONES.atendimentos, classe: 'grafico-barra-atendimentos' },
+  { chave: 'iniciais',        label: 'Iniciais',        icone: ICONES.iniciais,  classe: 'grafico-barra-iniciais' }
 ];
 
 function carregarAbaGraficos() {
@@ -3276,7 +3276,7 @@ function renderizarGraficos() {
   if (!totalAtivos) {
     container.innerHTML =
       '<div class="estado-vazio">' +
-        '<span class="material-symbols-outlined">group_off</span>' +
+        '<span class="material-symbols-outlined">' + ICONES.semAlunos + '</span>' +
         '<div class="estado-vazio-titulo">Nenhum aluno ativo encontrado</div>' +
         '<div class="estado-vazio-desc">Os totais aparecem aqui assim que houver estagiários não finalizados.</div>' +
       '</div>';
@@ -3356,7 +3356,7 @@ function renderizarGraficoAudiencias(parametrosAudiencias, porEstagiario) {
     eixoEl.innerHTML = '';
     plotEl.innerHTML =
       '<div class="estado-vazio">' +
-        '<span class="material-symbols-outlined">group_off</span>' +
+        '<span class="material-symbols-outlined">' + ICONES.semAlunos + '</span>' +
         '<div class="estado-vazio-titulo">Nenhum tipo de audiência cadastrado ou nenhum aluno ativo</div>' +
       '</div>';
     return;
@@ -3432,7 +3432,7 @@ function renderizarGraficoPorEstagiario(idLegenda, idEixo, idPlot, categorias, p
     eixoEl.innerHTML = '';
     plotEl.innerHTML =
       '<div class="estado-vazio">' +
-        '<span class="material-symbols-outlined">group_off</span>' +
+        '<span class="material-symbols-outlined">' + ICONES.semAlunos + '</span>' +
         '<div class="estado-vazio-titulo">Nenhum aluno ativo encontrado</div>' +
       '</div>';
     return;
@@ -3521,38 +3521,7 @@ function mudarSemestrePanorama(valor) {
 function renderizarPanorama() {
   popularSelectAlunoPanorama();
   renderizarCardsPanorama();
-  renderizarProgressoAudienciasPanorama();
   renderizarTabelasPanorama();
-}
-
-// Card de progresso "Audiências" (uma barra por tipo) — so aparece com UM
-// aluno selecionado, mesmo criterio do card "Parcial de Horas" acima.
-function renderizarProgressoAudienciasPanorama() {
-  var card = document.getElementById('panoramaProgressoAudienciasCard');
-  var lista = document.getElementById('panoramaProgressoAudienciasLista');
-  if (!card || !lista) return;
-
-  var parametros = APP.dados.parametrosAudiencias || [];
-  if (!APP_PANORAMA.alunoSelecionado || !parametros.length) {
-    card.style.display = 'none';
-    return;
-  }
-  card.style.display = 'block';
-
-  var contagens = contarAudienciasPorTipoCliente(getAudienciasPanoramaFiltradas());
-  var html = '';
-  contagens.forEach(function(c) {
-    html += '<div class="progresso-item">' +
-      '<div class="progresso-item-cabecalho">' +
-        '<span class="progresso-item-tipo">' + c.tipo + '</span>' +
-        '<span class="progresso-item-valor' + (c.excedente ? ' progresso-item-valor-excedente' : '') + '">' + c.realizado + '/' + c.meta + '</span>' +
-      '</div>' +
-      '<div class="progresso-barra-trilho">' +
-        '<div class="progresso-barra-preenchimento' + (c.percentual >= 100 ? ' progresso-completo' : '') + '" style="width:' + c.percentual + '%"></div>' +
-      '</div>' +
-    '</div>';
-  });
-  lista.innerHTML = html;
 }
 
 // --- Alunos do semestre escolhido ---
@@ -3726,6 +3695,12 @@ function renderizarCardsPanorama() {
     return normalizarChave(r.status) === 'aprovado';
   });
   var acompanhamentos = getAcompanhamentosPanoramaFiltrados().filter(naoEhCancelada);
+  // Audiências: card mostra so o TOTAL realizado (Aprovada), independente do
+  // tipo — o detalhamento por tipo/meta fica na tabela e no Parcial de Horas
+  // abaixo (RN-05: so Aprovada conta).
+  var audienciasAprovadas = getAudienciasPanoramaFiltradas().filter(function(r) {
+    return normalizarChave(r.status) === 'aprovada';
+  });
 
   var complexasDiligencias = diligencias.filter(function(r) {
     return normalizarChave(r.subespecie) === 'complexa';
@@ -3741,11 +3716,12 @@ function renderizarCardsPanorama() {
   var totalAtendimentos = atendimentos.length + atendimentosOnlineAprovados.length;
 
   var cards = [
-    { label: 'TOTAL',          num: total,                   classe: 'card-total',       icone: 'folder_open' },
-    { label: 'COMPLEXAS',      num: complexas,               classe: 'card-entregue',    icone: 'gavel' },
-    { label: 'SIMPLES',        num: simples,                 classe: 'card-encaminhado', icone: 'description' },
-    { label: 'ACOMPANHAMENTOS', num: acompanhamentos.length, classe: 'card-devolvida',   icone: 'timeline' },
-    { label: 'ATENDIMENTOS',   num: totalAtendimentos,       classe: 'card-concluido',   icone: 'support_agent' }
+    { label: 'TOTAL',          num: total,                   classe: 'card-total',       icone: ICONES.cardTotal },
+    { label: 'COMPLEXAS',      num: complexas,               classe: 'card-entregue',    icone: ICONES.complexas },
+    { label: 'SIMPLES',        num: simples,                 classe: 'card-encaminhado', icone: ICONES.simples },
+    { label: 'ACOMPANHAMENTOS', num: acompanhamentos.length, classe: 'card-devolvida',   icone: ICONES.acompanhamentos },
+    { label: 'ATENDIMENTOS',   num: totalAtendimentos,       classe: 'card-concluido',   icone: ICONES.atendimentos },
+    { label: 'AUDIÊNCIAS',     num: audienciasAprovadas.length, classe: 'card-cancelada', icone: ICONES.audiencias }
   ];
 
   // "Parcial de Horas": pontuacao de conferencia (bd!S2:V2, CONFIG.BD_CELL —
@@ -3771,7 +3747,7 @@ function renderizarCardsPanorama() {
       label: 'PARCIAL DE HORAS',
       num: pontuacao.toFixed(1).replace('.', ','),
       classe: 'card-sem-estagiario',
-      icone: 'military_tech'
+      icone: ICONES.parcialHoras
     });
   }
 
@@ -3803,7 +3779,7 @@ function renderizarTabelasPanorama() {
 function celulaVaziaTabela(colspan, titulo) {
   return '<tr><td colspan="' + colspan + '">' +
     '<div class="estado-vazio">' +
-      '<span class="material-symbols-outlined">search_off</span>' +
+      '<span class="material-symbols-outlined">' + ICONES.semResultado + '</span>' +
       '<div class="estado-vazio-titulo">' + titulo + '</div>' +
     '</div>' +
   '</td></tr>';
@@ -4157,10 +4133,10 @@ function renderizarCardsGeral() {
   // scrollId = bloco da tabela correspondente na propria aba Geral; null =
   // rola para o topo da aba (card TOTAL).
   var cards = [
-    { label: 'TOTAL PENDENTE',   num: total,                   classe: 'card-total',       icone: 'pending_actions', scrollId: null },
-    { label: 'DILIGÊNCIAS',      num: diligencias.length,      classe: 'card-encaminhado', icone: 'assignment',      scrollId: 'blocoGeralDiligencias' },
-    { label: 'INICIAIS',         num: iniciais.length,         classe: 'card-entregue',    icone: 'description',     scrollId: 'blocoGeralIniciais' },
-    { label: 'ACOMPANHAMENTOS',  num: acompanhamentos.length,  classe: 'card-devolvida',   icone: 'timeline',        scrollId: 'blocoGeralAcompanhamentos' }
+    { label: 'TOTAL PENDENTE',   num: total,                   classe: 'card-total',       icone: ICONES.pendencias, scrollId: null },
+    { label: 'DILIGÊNCIAS',      num: diligencias.length,      classe: 'card-encaminhado', icone: ICONES.diligencias, scrollId: 'blocoGeralDiligencias' },
+    { label: 'INICIAIS',         num: iniciais.length,         classe: 'card-entregue',    icone: ICONES.iniciais,   scrollId: 'blocoGeralIniciais' },
+    { label: 'ACOMPANHAMENTOS',  num: acompanhamentos.length,  classe: 'card-devolvida',   icone: ICONES.acompanhamentos, scrollId: 'blocoGeralAcompanhamentos' }
   ];
 
   var html = '';
@@ -4620,7 +4596,7 @@ function salvarGerenciarEstagiarios() {
   google.script.run
     .withSuccessHandler(function(res) {
       btnSalvar.disabled = false;
-      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Salvar';
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.salvar + '</span> Salvar';
 
       if (!res || !res.sucesso) {
         mostrarToast((res && res.erro) || 'Erro ao finalizar estagiários.', 'erro');
@@ -4646,7 +4622,7 @@ function salvarGerenciarEstagiarios() {
     })
     .withFailureHandler(function(err) {
       btnSalvar.disabled = false;
-      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Salvar';
+      btnSalvar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.salvar + '</span> Salvar';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .acaoFinalizarEstagiarios(ids);
@@ -4833,7 +4809,7 @@ function renderizarCelulaProcessoAudiencia(reg, idx) {
   if (!reg.processo) return '<span class="celula-vazio">—</span>';
   return '<span class="audiencias-processo-cell">' +
     '<span>' + reg.processo + '</span>' +
-    '<span class="material-symbols-outlined modal-copiar-icone" onclick="copiarProcessoAudienciaLinha(event, ' + idx + ')" title="Copiar processo" role="button" tabindex="0">content_copy</span>' +
+    '<span class="material-symbols-outlined modal-copiar-icone" onclick="copiarProcessoAudienciaLinha(event, ' + idx + ')" title="Copiar processo" role="button" tabindex="0">' + ICONES.copiar + '</span>' +
   '</span>';
 }
 
@@ -5034,7 +5010,7 @@ function renderizarFIA() {
     html += '  <table class="fia-tabela"><thead><tr><th>Indicador</th><th>Peso</th><th>Nota</th><th>Parcial</th></tr></thead><tbody>';
     bloco.indicadores.forEach(function(ind) {
       var alerta = ehIndicadorReprovacaoAutomatica(ind.id)
-        ? ' <span class="material-symbols-outlined fia-icone-alerta" title="Reprovação automática se a nota for menor que 7">error</span>'
+        ? ' <span class="material-symbols-outlined fia-icone-alerta" title="Reprovação automática se a nota for menor que 7">' + ICONES.erro + '</span>'
         : '';
       html += '<tr data-indicador="' + ind.id + '">';
       html += '  <td class="fia-td-nome">' + ind.nome + alerta + '</td>';
@@ -5052,7 +5028,7 @@ function renderizarFIA() {
   });
 
   html += '<div class="fia-alerta-reprovacao" id="fiaAlertaReprovacao" style="display:none;">' +
-          '<span class="material-symbols-outlined" style="font-size:18px;">warning</span>' +
+          '<span class="material-symbols-outlined" style="font-size:18px;">' + ICONES.alerta + '</span>' +
           'Reprovação automática: nota do indicador de Ética e/ou Produtividade abaixo de 7.</div>';
 
   document.getElementById('fiaCorpo').innerHTML = html;
@@ -5185,12 +5161,12 @@ function executarCalcularDiaUtil() {
 
   var btn = document.getElementById('btnCalcularDiaUtil');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Calculando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Calculando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">calculate</span> Calcular';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.calcular + '</span> Calcular';
 
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao calcular.', 'erro');
@@ -5202,7 +5178,7 @@ function executarCalcularDiaUtil() {
     })
     .withFailureHandler(function(err) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">calculate</span> Calcular';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.calcular + '</span> Calcular';
       mostrarToast('Erro ao calcular: ' + err.message, 'erro');
     })
     .acaoCalcularDiaUtil(data, prazo);

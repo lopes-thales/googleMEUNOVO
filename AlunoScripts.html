@@ -11,7 +11,7 @@ function temaPreferidoSistema() {
 function aplicarTema(tema) {
   document.documentElement.setAttribute('data-theme', tema);
   var icone = document.getElementById('iconeTema');
-  if (icone) icone.textContent = tema === 'dark' ? 'light_mode' : 'dark_mode';
+  if (icone) icone.textContent = tema === 'dark' ? ICONES.temaClaro : ICONES.temaEscuro;
 }
 function inicializarTema() {
   var salvo = null;
@@ -27,7 +27,7 @@ function alternarTema() {
 
 // === HELPERS DE REGRA DE NEGOCIO (mesma logica de Scripts.html) ===
 var STATUS_FINAIS = ['ok', 'protocolado', 'cancelada'];
-var TOAST_ICONES = { sucesso: 'check_circle', erro: 'error', '': 'info' };
+var TOAST_ICONES = { sucesso: ICONES.sucesso, erro: ICONES.erro, '': ICONES.info };
 
 function normalizarChave(valor) {
   return String(valor || '')
@@ -102,7 +102,7 @@ function badgeGatilho(reg) {
   var info = mapa[reg.gatilho];
   if (!info) return '';
   return '<span class="badge-gatilho ' + info.classe + '" title="' + info.titulo + '">' +
-    '<span class="material-symbols-outlined" style="font-size:13px;">schedule</span>' +
+    '<span class="material-symbols-outlined" style="font-size:13px;">' + ICONES.prazoProximo + '</span>' +
   '</span>';
 }
 
@@ -150,7 +150,7 @@ function mostrarLoading(show) {
 
 function mostrarToast(msg, tipo) {
   var el = document.getElementById('toast');
-  var icone = TOAST_ICONES[tipo || ''] || 'info';
+  var icone = TOAST_ICONES[tipo || ''] || ICONES.info;
   el.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">' + icone + '</span> ' + msg;
   el.className = 'toast ' + (tipo || '');
   el.classList.add('visivel');
@@ -252,7 +252,7 @@ function paMostrarErroCarregamento(msg) {
   document.getElementById('paConteudoAluno').style.display = 'none';
   var vazio = document.getElementById('paSemAluno');
   vazio.style.display = 'block';
-  vazio.querySelector('.material-symbols-outlined').textContent = 'error_outline';
+  vazio.querySelector('.material-symbols-outlined').textContent = ICONES.erro;
   vazio.querySelector('.estado-vazio-titulo').textContent = 'Não foi possível carregar seus dados';
   vazio.querySelector('.estado-vazio-desc').textContent = msg || 'Tente recarregar a página.';
   document.getElementById('btnCriarPeticaoInicial').disabled = true;
@@ -386,46 +386,7 @@ function paRenderizarTudo() {
   document.getElementById('paConteudoAluno').style.display = 'block';
 
   paRenderizarCards(alunoAtual);
-  paRenderizarProgressoAudiencias(alunoAtual);
   paRenderizarTabelas(alunoAtual);
-}
-
-// --- Card de progresso "Audiências" (uma barra por tipo, RN-06: trava em
-// 100% visualmente mas mostra o valor real quando excedente) ---
-function paRenderizarProgressoAudiencias(alunoAtual) {
-  var card = document.getElementById('paProgressoAudienciasCard');
-  var lista = document.getElementById('paProgressoAudienciasLista');
-  var parametros = PA.dados.parametrosAudiencias || [];
-
-  if (!parametros.length) {
-    card.style.display = 'none';
-    return;
-  }
-  card.style.display = 'block';
-
-  var aprovadas = paAudienciasFiltradas(alunoAtual).filter(function(a) {
-    return normalizarChave(a.status) === 'aprovada';
-  });
-
-  var html = '';
-  parametros.forEach(function(p) {
-    var realizado = aprovadas.filter(function(a) { return normalizarChave(a.tipo) === normalizarChave(p.tipo); }).length;
-    var meta = p.meta || 0;
-    var percentual = meta > 0 ? Math.min(100, Math.round((realizado / meta) * 100)) : (realizado > 0 ? 100 : 0);
-    var excedente = meta > 0 && realizado > meta;
-
-    html += '<div class="progresso-item">' +
-      '<div class="progresso-item-cabecalho">' +
-        '<span class="progresso-item-tipo">' + p.tipo + '</span>' +
-        '<span class="progresso-item-valor' + (excedente ? ' progresso-item-valor-excedente' : '') + '">' + realizado + '/' + meta + '</span>' +
-      '</div>' +
-      '<div class="progresso-barra-trilho">' +
-        '<div class="progresso-barra-preenchimento' + (percentual >= 100 ? ' progresso-completo' : '') + '" style="width:' + percentual + '%"></div>' +
-      '</div>' +
-    '</div>';
-  });
-
-  lista.innerHTML = html;
 }
 
 // --- Filtragem client-side (semestre + o unico aluno em foco) ---
@@ -472,6 +433,11 @@ function paRenderizarCards(alunoAtual) {
     return normalizarChave(r.status) === 'aprovado';
   });
   var acompanhamentos = paAcompanhamentosFiltrados(alunoAtual).filter(naoEhCancelada);
+  // Audiências: card mostra so o TOTAL realizado (Aprovada), independente do
+  // tipo — o detalhamento por tipo/meta fica na tabela (RN-05: so Aprovada conta).
+  var audienciasAprovadas = paAudienciasFiltradas(alunoAtual).filter(function(r) {
+    return normalizarChave(r.status) === 'aprovada';
+  });
 
   var complexasDiligencias = diligencias.filter(function(r) { return normalizarChave(r.subespecie) === 'complexa'; }).length;
   var simples = diligencias.filter(function(r) { return normalizarChave(r.subespecie) === 'simples'; }).length;
@@ -482,11 +448,12 @@ function paRenderizarCards(alunoAtual) {
   var totalAtendimentos = atendimentos.length + atendimentosOnlineAprovados.length;
 
   var cards = [
-    { label: 'TOTAL',          num: total,                   classe: 'card-total',       icone: 'folder_open' },
-    { label: 'COMPLEXAS',      num: complexas,               classe: 'card-entregue',    icone: 'gavel' },
-    { label: 'SIMPLES',        num: simples,                 classe: 'card-encaminhado', icone: 'description' },
-    { label: 'ACOMPANHAMENTOS', num: acompanhamentos.length, classe: 'card-devolvida',   icone: 'timeline' },
-    { label: 'ATENDIMENTOS',   num: totalAtendimentos,       classe: 'card-concluido',   icone: 'support_agent' }
+    { label: 'TOTAL',          num: total,                   classe: 'card-total',       icone: ICONES.cardTotal },
+    { label: 'COMPLEXAS',      num: complexas,               classe: 'card-entregue',    icone: ICONES.complexas },
+    { label: 'SIMPLES',        num: simples,                 classe: 'card-encaminhado', icone: ICONES.simples },
+    { label: 'ACOMPANHAMENTOS', num: acompanhamentos.length, classe: 'card-devolvida',   icone: ICONES.acompanhamentos },
+    { label: 'ATENDIMENTOS',   num: totalAtendimentos,       classe: 'card-concluido',   icone: ICONES.atendimentos },
+    { label: 'AUDIÊNCIAS',     num: audienciasAprovadas.length, classe: 'card-sem-estagiario', icone: ICONES.audiencias }
   ];
 
   var html = '';
@@ -505,7 +472,7 @@ function paRenderizarCards(alunoAtual) {
 function paCelulaVazia(colspan, titulo) {
   return '<tr><td colspan="' + colspan + '">' +
     '<div class="estado-vazio">' +
-      '<span class="material-symbols-outlined">search_off</span>' +
+      '<span class="material-symbols-outlined">' + ICONES.semResultado + '</span>' +
       '<div class="estado-vazio-titulo">' + titulo + '</div>' +
     '</div>' +
   '</td></tr>';
@@ -673,7 +640,7 @@ function paRenderizarTabelas(alunoAtual) {
   if (avisoTabela) {
     if (haPendente && PA.avisoComprovanteAudiencia) {
       avisoTabela.style.display = 'block';
-      avisoTabela.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">mail</span>' + PA.avisoComprovanteAudiencia;
+      avisoTabela.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.avisoEmail + '</span>' + PA.avisoComprovanteAudiencia;
     } else {
       avisoTabela.style.display = 'none';
     }
@@ -874,12 +841,12 @@ function paSalvarPeticaoInicial() {
 
   var btn = document.getElementById('btnSalvarPeticao');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Salvando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Salvando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Salvar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.salvar + '</span> Salvar';
 
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao salvar.', 'erro');
@@ -898,7 +865,7 @@ function paSalvarPeticaoInicial() {
     })
     .withFailureHandler(function(err) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Salvar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.salvar + '</span> Salvar';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .acaoCriarPedidoInicial(payload);
@@ -962,12 +929,12 @@ function paSalvarNovoAtendimentoOnline() {
 
   var btn = document.getElementById('btnSalvarNovoAtendimentoOnline');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Enviando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Enviando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Enviar para aprovação';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.salvar + '</span> Enviar para aprovação';
 
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao salvar.', 'erro');
@@ -979,7 +946,7 @@ function paSalvarNovoAtendimentoOnline() {
     })
     .withFailureHandler(function(err) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Enviar para aprovação';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.salvar + '</span> Enviar para aprovação';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .acaoCriarAtendimentoOnline(payload);
@@ -1038,12 +1005,12 @@ function paReenviarAtendimentoOnline() {
 
   var btn = document.getElementById('btnReenviarAtendimentoOnline');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Enviando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Enviando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span> Reenviar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.reenviar + '</span> Reenviar';
 
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao reenviar.', 'erro');
@@ -1055,7 +1022,7 @@ function paReenviarAtendimentoOnline() {
     })
     .withFailureHandler(function(err) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span> Reenviar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.reenviar + '</span> Reenviar';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .acaoReenviarAtendimentoOnline(payload);
@@ -1099,7 +1066,7 @@ function paAbrirModalNovaAudiencia() {
 
   var aviso = document.getElementById('auNovaAviso');
   aviso.innerHTML = PA.avisoComprovanteAudiencia
-    ? '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">mail</span>' + PA.avisoComprovanteAudiencia
+    ? '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.avisoEmail + '</span>' + PA.avisoComprovanteAudiencia
     : '';
 
   document.getElementById('paModalNovaAudienciaOverlay').classList.add('visivel');
@@ -1130,12 +1097,12 @@ function paSalvarNovaAudiencia() {
 
   var btn = document.getElementById('btnSalvarNovaAudiencia');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Registrando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Registrando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Registrar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.salvar + '</span> Registrar';
 
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao registrar.', 'erro');
@@ -1152,7 +1119,7 @@ function paSalvarNovaAudiencia() {
     })
     .withFailureHandler(function(err) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span> Registrar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.salvar + '</span> Registrar';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .acaoCriarAudienciaEstagiario(payload);
@@ -1192,7 +1159,7 @@ function paAbrirModalDetalheAudiencia(idx) {
     document.getElementById('auEditObs').value = reg.obs || '';
     var avisoEdit = document.getElementById('auEditAviso');
     avisoEdit.innerHTML = PA.avisoComprovanteAudiencia
-      ? '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">mail</span>' + PA.avisoComprovanteAudiencia
+      ? '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.avisoEmail + '</span>' + PA.avisoComprovanteAudiencia
       : '';
     btnReenviar.style.display = 'inline-flex';
   } else {
@@ -1227,12 +1194,12 @@ function paReenviarAudiencia() {
 
   var btn = document.getElementById('btnReenviarAudiencia');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">hourglass_top</span> Enviando...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">' + ICONES.carregando + '</span> Enviando...';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span> Reenviar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.reenviar + '</span> Reenviar';
 
       if (!res.sucesso) {
         mostrarToast(res.erro || 'Erro ao reenviar.', 'erro');
@@ -1244,7 +1211,7 @@ function paReenviarAudiencia() {
     })
     .withFailureHandler(function(err) {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span> Reenviar';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.reenviar + '</span> Reenviar';
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .acaoReenviarAudienciaEstagiario(payload);

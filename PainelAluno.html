@@ -19,10 +19,10 @@
     </div>
     <div class="header-acoes">
       <button class="btn-tema" id="btnAlternarTema" onclick="alternarTema()" title="Alternar tema claro/escuro">
-        <span class="material-symbols-outlined" id="iconeTema" style="font-size:19px;">dark_mode</span>
+        <span class="material-symbols-outlined" id="iconeTema" style="font-size:19px;"><?= ICONES.temaEscuro ?></span>
       </button>
       <div class="header-user">
-        <span class="material-symbols-outlined" style="font-size:18px;">sentiment_satisfied</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.usuarioAluno ?></span>
         <span id="saudacaoUsuario">Olá, <strong id="paSaudacaoNome"><?= nomeUsuario ?></strong></span>
       </div>
     </div>
@@ -31,24 +31,24 @@
   <!-- BARRA DE ACOES (substitui o "Gerenciar" do Painel de Thales) -->
   <div class="nav-bar">
     <div class="pa-nav-titulo">
-      <span class="material-symbols-outlined">dashboard</span>
+      <span class="material-symbols-outlined"><?= ICONES.meusRegistros ?></span>
       Meus Registros
     </div>
     <div class="pa-acoes">
       <button class="btn-acao-aluno" id="btnCriarPeticaoInicial" onclick="paAbrirModalPeticao()">
-        <span class="material-symbols-outlined" style="font-size:18px;">note_add</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.novaPeticao ?></span>
         Criar Petição Inicial
       </button>
       <button class="btn-acao-aluno desabilitado" id="btnSolicitarDiligencia" disabled title="Em breve">
-        <span class="material-symbols-outlined" style="font-size:18px;">assignment_add</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.solicitarDiligencia ?></span>
         Solicitar Diligência
       </button>
       <button class="btn-acao-aluno" id="btnNovoAtendimentoOnline" onclick="paAbrirModalNovoAtendimentoOnline()">
-        <span class="material-symbols-outlined" style="font-size:18px;">support_agent</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.atendimentos ?></span>
         Atendimento Online
       </button>
       <button class="btn-acao-aluno" id="btnRegistrarAudiencia" onclick="paAbrirModalNovaAudiencia()">
-        <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.audiencias ?></span>
         Registrar Audiência
       </button>
     </div>
@@ -66,14 +66,14 @@
 
       <!-- SELETORES DE SEMESTRE E ALUNO -->
       <div class="painel-semestre-panorama" id="paSeletores" style="display:none;">
-        <span class="material-symbols-outlined" style="font-size:18px;">event</span>
+        <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.semestre ?></span>
         <span class="busca-label">Semestre</span>
         <select id="paSelectSemestre" class="select-semestre" onchange="paMudarSemestre(this.value)">
           <option value="">— Nenhum semestre encontrado —</option>
         </select>
 
         <span class="painel-semestre-separador" id="paSepAluno" style="display:none;"></span>
-        <span class="material-symbols-outlined" id="paIconeAluno" style="font-size:18px; display:none;">school</span>
+        <span class="material-symbols-outlined" id="paIconeAluno" style="font-size:18px; display:none;"><?= ICONES.aluno ?></span>
         <span class="busca-label" id="paLabelAluno" style="display:none;">Aluno</span>
         <select id="paSelectAluno" class="select-semestre" style="display:none;" onchange="paMudarAluno(this.value)">
           <option value="">— Selecione um aluno —</option>
@@ -82,7 +82,7 @@
 
       <!-- ESTADO VAZIO: Thales sem aluno selecionado -->
       <div class="estado-vazio" id="paSemAluno" style="display:none;">
-        <span class="material-symbols-outlined">school</span>
+        <span class="material-symbols-outlined"><?= ICONES.aluno ?></span>
         <div class="estado-vazio-titulo">Selecione um aluno</div>
         <div class="estado-vazio-desc">Escolha um semestre e um aluno acima para ver os registros dele(a).</div>
       </div>
@@ -93,34 +93,10 @@
         <!-- CARDS RESUMO -->
         <div class="cards-grid cards-grid-panorama pa-cards-grid" id="paCardsGrid"></div>
 
-        <!-- CARD DE PROGRESSO: AUDIÊNCIAS (uma barra por tipo, vindo de bd!X:Z) -->
-        <div class="progresso-card" id="paProgressoAudienciasCard" style="display:none;">
-          <div class="progresso-card-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
-            Audiências
-          </div>
-          <div class="progresso-lista" id="paProgressoAudienciasLista"></div>
-        </div>
-
-        <!-- TABELA: AUDIÊNCIAS -->
-        <div class="panorama-tabela-bloco">
-          <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">gavel</span>
-            Audiências
-          </div>
-          <div class="aviso-comprovante-audiencia" id="paAvisoComprovanteAudiencia" style="display:none;"></div>
-          <div class="tabela-wrapper">
-            <table>
-              <thead id="paCabecalhoAudiencias"></thead>
-              <tbody id="paCorpoAudiencias"></tbody>
-            </table>
-          </div>
-        </div>
-
         <!-- TABELA: DILIGÊNCIAS -->
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">assignment</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.diligencias ?></span>
             Diligências
           </div>
           <div class="tabela-wrapper">
@@ -134,7 +110,7 @@
         <!-- TABELA: INICIAIS -->
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">description</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.iniciais ?></span>
             Iniciais
           </div>
           <div class="tabela-wrapper">
@@ -148,7 +124,7 @@
         <!-- TABELA: ACOMPANHAMENTOS -->
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">timeline</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.acompanhamentos ?></span>
             Acompanhamentos
           </div>
           <div class="tabela-wrapper">
@@ -162,7 +138,7 @@
         <!-- TABELA: ATENDIMENTOS -->
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">support_agent</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.atendimentos ?></span>
             Atendimentos
           </div>
           <div class="tabela-wrapper">
@@ -176,13 +152,28 @@
         <!-- TABELA: ATENDIMENTOS ONLINE -->
         <div class="panorama-tabela-bloco">
           <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;">forum</span>
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.atendimentoOnline ?></span>
             Atendimentos Online
           </div>
           <div class="tabela-wrapper">
             <table>
               <thead id="paCabecalhoAtendimentosOnline"></thead>
               <tbody id="paCorpoAtendimentosOnline"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABELA: AUDIÊNCIAS -->
+        <div class="panorama-tabela-bloco">
+          <div class="panorama-tabela-titulo">
+            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.audiencias ?></span>
+            Audiências
+          </div>
+          <div class="aviso-comprovante-audiencia" id="paAvisoComprovanteAudiencia" style="display:none;"></div>
+          <div class="tabela-wrapper">
+            <table>
+              <thead id="paCabecalhoAudiencias"></thead>
+              <tbody id="paCorpoAudiencias"></tbody>
             </table>
           </div>
         </div>
@@ -204,7 +195,7 @@
         <div class="modal-assistido" id="pdAssistido"></div>
         <div id="pdBadges"></div>
         <button class="modal-fechar" onclick="paFecharModal('paModalDiligenciaOverlay')">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -221,7 +212,7 @@
                 <div class="modal-campo-label">Processo N°</div>
                 <div class="modal-campo-valor modal-campo-valor-copiavel">
                   <span id="pdProcesso"></span>
-                  <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoDiligencia" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+                  <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoDiligencia" title="Copiar processo" role="button" tabindex="0"><?= ICONES.copiar ?></span>
                 </div>
               </div>
               <div style="grid-column: 1 / -1;">
@@ -302,7 +293,7 @@
         <div class="modal-assistido" id="piViewAssistido"></div>
         <div id="piViewBadges"></div>
         <button class="modal-fechar" onclick="paFecharModal('paModalInicialOverlay')">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -351,7 +342,7 @@
                 <div class="modal-campo-label">Processo N°</div>
                 <div class="modal-campo-valor modal-campo-valor-copiavel">
                   <span id="piViewProcesso">—</span>
-                  <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoInicial" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+                  <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoInicial" title="Copiar processo" role="button" tabindex="0"><?= ICONES.copiar ?></span>
                 </div>
               </div>
               <div>
@@ -393,7 +384,7 @@
         <div class="modal-assistido" id="acViewEstagiario"></div>
         <div id="acViewBadges"></div>
         <button class="modal-fechar" onclick="paFecharModal('paModalAcompanhamentoOverlay')">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -404,7 +395,7 @@
               <div class="modal-campo-label">Processo N°</div>
               <div class="modal-campo-valor modal-campo-valor-copiavel">
                 <span id="acViewProcesso">—</span>
-                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoAcompanhamento" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoAcompanhamento" title="Copiar processo" role="button" tabindex="0"><?= ICONES.copiar ?></span>
               </div>
             </div>
             <div>
@@ -436,7 +427,7 @@
         <div class="modal-processo">ATENDIMENTO</div>
         <div class="modal-assistido" id="maViewNome"></div>
         <button class="modal-fechar" onclick="paFecharModal('paModalAtendimentoOverlay')">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -485,7 +476,7 @@
         <div class="modal-assistido" id="aoViewAtendido"></div>
         <div id="aoViewBadges"></div>
         <button class="modal-fechar" onclick="paFecharModal('paModalAtendimentoOnlineOverlay')">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -546,7 +537,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="paFecharModal('paModalAtendimentoOnlineOverlay')">Fechar</button>
         <button class="btn btn-salvar" id="btnReenviarAtendimentoOnline" style="display:none;" onclick="paReenviarAtendimentoOnline()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.reenviar ?></span>
           Reenviar
         </button>
       </div>
@@ -560,7 +551,7 @@
         <div class="modal-processo">NOVO</div>
         <div class="modal-assistido">Atendimento Online</div>
         <button class="modal-fechar" onclick="paFecharModalNovoAtendimentoOnline()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -603,7 +594,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="paFecharModalNovoAtendimentoOnline()">Cancelar</button>
         <button class="btn btn-salvar" id="btnSalvarNovoAtendimentoOnline" onclick="paSalvarNovoAtendimentoOnline()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
           Enviar para aprovação
         </button>
       </div>
@@ -618,7 +609,7 @@
         <div class="modal-assistido" id="auViewTipo"></div>
         <div id="auViewBadges"></div>
         <button class="modal-fechar" onclick="paFecharModal('paModalAudienciaOverlay')">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -647,7 +638,7 @@
               <div class="modal-campo-label">Processo</div>
               <div class="modal-campo-valor modal-campo-valor-copiavel">
                 <span id="auViewProcesso">—</span>
-                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoAudiencia" title="Copiar processo" role="button" tabindex="0">content_copy</span>
+                <span class="modal-copiar-icone material-symbols-outlined" id="btnCopiarProcessoAudiencia" title="Copiar processo" role="button" tabindex="0"><?= ICONES.copiar ?></span>
               </div>
             </div>
             <div style="grid-column: 1 / -1;">
@@ -716,7 +707,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="paFecharModal('paModalAudienciaOverlay')">Fechar</button>
         <button class="btn btn-salvar" id="btnReenviarAudiencia" style="display:none;" onclick="paReenviarAudiencia()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">send</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.reenviar ?></span>
           Reenviar
         </button>
       </div>
@@ -730,7 +721,7 @@
         <div class="modal-processo">NOVA</div>
         <div class="modal-assistido">Registrar Audiência</div>
         <button class="modal-fechar" onclick="paFecharModalNovaAudiencia()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -789,7 +780,7 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="paFecharModalNovaAudiencia()">Cancelar</button>
         <button class="btn btn-salvar" id="btnSalvarNovaAudiencia" onclick="paSalvarNovaAudiencia()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
           Registrar
         </button>
       </div>
@@ -803,7 +794,7 @@
         <div class="modal-processo">NOVA PETIÇÃO</div>
         <div class="modal-assistido">Criar Petição Inicial</div>
         <button class="modal-fechar" onclick="paFecharModalPeticao()">
-          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
         </button>
       </div>
 
@@ -840,12 +831,21 @@
       <div class="modal-rodape">
         <button class="btn btn-cancelar" onclick="paFecharModalPeticao()">Cancelar</button>
         <button class="btn btn-salvar" id="btnSalvarPeticao" onclick="paSalvarPeticaoInicial()">
-          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">save</span>
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
           Salvar
         </button>
       </div>
     </div>
   </div>
+
+  <!-- Mapa de icones (fonte unica: Icones.js). Injetado ANTES do include, para
+       que Scripts/AlunoScripts encontrem a global ICONES ja definida.
+       A saida abaixo e NAO escapada de proposito; a versao escapada
+       converteria as aspas do JSON e quebraria o script. Ver Icones.js.
+       Decisao de 25/07/2026. -->
+  <script>
+    var ICONES = <?!= obterMapaIcones() ?>;
+  </script>
 
   <?!= include('AlunoScripts') ?>
 </body>
