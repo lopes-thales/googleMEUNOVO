@@ -64,14 +64,14 @@ function getRegistrosParaDistribuir() {
 // Agregador chamado na abertura/atualizacao da aba "Distribuição". Os
 // estagiarios ja chegam ao frontend via carregarDadosIniciais() (mesma lista
 // reaproveitada em todos os selects do painel) — nao ha necessidade de
-// devolve-los de novo aqui. producaoPorEstagiario reaproveita o mesmo
-// agregador da aba "Gráficos" (getDadosGraficos, Graficos.js) para exibir o
-// grafico "Complexas, simples e acompanhamentos por estagiário" tambem nesta
-// aba (decisao de Thales) — nenhuma nova regra de contagem e criada aqui.
+// devolve-los de novo aqui. graficos reaproveita o mesmo agregador que antes
+// alimentava a aba "Gráficos" (getDadosGraficos, Graficos.js) — essa aba foi
+// removida e seus 4 graficos passaram a ser exibidos aqui, na mesma ordem em
+// que estavam (decisao de Thales) — nenhuma nova regra de contagem e criada aqui.
 function getDadosAbaDistribuicao() {
   return {
     registros: getRegistrosParaDistribuir(),
-    producaoPorEstagiario: getDadosGraficos().porEstagiario
+    graficos: getDadosGraficos()
   };
 }
 

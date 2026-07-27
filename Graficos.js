@@ -1,12 +1,11 @@
 // Graficos.gs
-// Responsabilidade: agregacao de dados para a aba "Gráficos" — soma a
-// producao (pecas complexas, simples, acompanhamentos, atendimentos e
-// iniciais) de todos os estagiarios ATIVOS (FINALIZADO != true), cada um
-// contado no SEU PROPRIO semestre (coluna SEMESTRE da aba estagiarios) —
-// mesma convencao ja usada na Mensagem 4 (Mensagens.js). Este mesmo agregador
-// e reaproveitado pela aba Distribuição para exibir o grafico "Complexas,
-// simples e acompanhamentos por estagiário" (ver getDadosAbaDistribuicao,
-// Distribuicao.js). Reaproveita getTodosEstagiariosCompletos() e
+// Responsabilidade: agregacao de dados para os graficos de producao exibidos
+// ao final da aba "Distribuição" (ver getDadosAbaDistribuicao,
+// Distribuicao.js) — soma a producao (pecas complexas, simples,
+// acompanhamentos, atendimentos e iniciais) de todos os estagiarios ATIVOS
+// (FINALIZADO != true), cada um contado no SEU PROPRIO semestre (coluna
+// SEMESTRE da aba estagiarios) — mesma convencao ja usada na Mensagem 4
+// (Mensagens.js). Reaproveita getTodosEstagiariosCompletos() e
 // getContagemProducaoEstagiario() (Panorama.js) — nenhuma nova regra de
 // cruzamento ou de contagem e criada aqui; complexas/simples/acompanhamentos
 // ja excluem STATUS "Cancelada" e iniciais ja contam como complexas, tudo

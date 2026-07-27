@@ -31,10 +31,6 @@
   <!-- BARRA DE NAVEGACAO (abas + Gerenciar) -->
   <div class="nav-bar">
     <nav class="nav-tabs">
-      <div class="nav-tab" data-vista="geral">
-        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.pendencias ?></span>
-        Geral
-      </div>
       <div class="nav-tab ativo" data-vista="diligencias">
         <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.diligencias ?></span>
         Diligências
@@ -64,10 +60,6 @@
       <div class="nav-tab" data-vista="panorama">
         <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.panorama ?></span>
         Panorama
-      </div>
-      <div class="nav-tab" data-vista="graficos">
-        <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.graficos ?></span>
-        Gráficos
       </div>
       <div class="nav-tab" data-vista="audiencias">
         <span class="material-symbols-outlined nav-tab-icon"><?= ICONES.audienciasSecretaria ?></span>
@@ -120,57 +112,6 @@
   <!-- CONTEUDO PRINCIPAL -->
   <div id="conteudoPrincipal" style="display:none;">
     <div class="main">
-
-      <!-- ABA: GERAL (todas as atividades pendentes — status != Ok/Protocolado/Cancelada) -->
-      <div class="secao-vista" id="secaoGeral" style="display:none;">
-
-        <!-- CARDS RESUMO -->
-        <div class="cards-grid cards-grid-panorama" id="cardsGridGeral"></div>
-
-        <!-- TABELA: DILIGÊNCIAS -->
-        <div class="panorama-tabela-bloco" id="blocoGeralDiligencias">
-          <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.diligencias ?></span>
-            Diligências
-          </div>
-          <div class="tabela-wrapper">
-            <table>
-              <thead id="geralCabecalhoDiligencias"></thead>
-              <tbody id="geralCorpoDiligencias"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- TABELA: INICIAIS -->
-        <div class="panorama-tabela-bloco" id="blocoGeralIniciais">
-          <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.iniciais ?></span>
-            Iniciais
-          </div>
-          <div class="tabela-wrapper">
-            <table>
-              <thead id="geralCabecalhoIniciais"></thead>
-              <tbody id="geralCorpoIniciais"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- TABELA: ACOMPANHAMENTOS -->
-        <div class="panorama-tabela-bloco" id="blocoGeralAcompanhamentos">
-          <div class="panorama-tabela-titulo">
-            <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.acompanhamentos ?></span>
-            Acompanhamentos
-          </div>
-          <div class="tabela-wrapper">
-            <table>
-              <thead id="geralCabecalhoAcompanhamentos"></thead>
-              <tbody id="geralCorpoAcompanhamentos"></tbody>
-            </table>
-          </div>
-        </div>
-
-      </div>
-      <!-- fim secaoGeral -->
 
       <!-- ABA: DILIGENCIAS (visao atual) -->
       <div class="secao-vista" id="secaoDiligencias">
@@ -261,8 +202,19 @@
           </div>
         </div>
 
-        <!-- Mesmo grafico "Complexas, simples e acompanhamentos por estagiário"
-             exibido na aba Gráficos (ver renderizarGraficoPorEstagiario, Scripts.html) -->
+        <!-- Graficos antes exibidos na aba Gráficos, agora incorporados aqui
+             (ver carregarAbaDistribuicao / renderizarGraficosDistribuicao, Scripts.html) -->
+        <div class="graficos-card distribuicao-grafico">
+          <div class="graficos-card-header">
+            <div class="graficos-card-titulo">
+              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.graficoProducao ?></span>
+              Produção dos alunos ativos
+            </div>
+            <span class="graficos-card-subtitulo" id="distribuicaoGraficosSubtitulo"></span>
+          </div>
+          <div id="distribuicaoGraficosConteudo"></div>
+        </div>
+
         <div class="graficos-card distribuicao-grafico">
           <div class="graficos-card-header">
             <div class="graficos-card-titulo">
@@ -275,6 +227,38 @@
             <div class="grafico-multi-eixo" id="distribuicaoEixoPecas"></div>
             <div class="grafico-multi-scroll">
               <div class="grafico-multi-plot" id="distribuicaoPlotPecas"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="graficos-card distribuicao-grafico">
+          <div class="graficos-card-header">
+            <div class="graficos-card-titulo">
+              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.graficoBarras ?></span>
+              Atendimentos e iniciais por estagiário
+            </div>
+            <div class="legenda-cores" id="distribuicaoLegendaAtendIniciais"></div>
+          </div>
+          <div class="grafico-multi-wrap">
+            <div class="grafico-multi-eixo" id="distribuicaoEixoAtendIniciais"></div>
+            <div class="grafico-multi-scroll">
+              <div class="grafico-multi-plot" id="distribuicaoPlotAtendIniciais"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="graficos-card distribuicao-grafico">
+          <div class="graficos-card-header">
+            <div class="graficos-card-titulo">
+              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.audiencias ?></span>
+              Audiências por estagiário
+            </div>
+            <div class="legenda-cores" id="distribuicaoLegendaAudiencias"></div>
+          </div>
+          <div class="grafico-multi-wrap">
+            <div class="grafico-multi-eixo" id="distribuicaoEixoAudiencias"></div>
+            <div class="grafico-multi-scroll">
+              <div class="grafico-multi-plot" id="distribuicaoPlotAudiencias"></div>
             </div>
           </div>
         </div>
@@ -587,67 +571,6 @@
       </div>
 
       <!-- ABA: GRAFICOS -->
-      <div class="secao-vista" id="secaoGraficos" style="display:none;">
-        <div class="graficos-card">
-          <div class="graficos-card-header">
-            <div class="graficos-card-titulo">
-              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.graficoProducao ?></span>
-              Produção dos alunos ativos
-            </div>
-            <span class="graficos-card-subtitulo" id="graficosSubtitulo"></span>
-          </div>
-          <div id="graficosConteudo"></div>
-        </div>
-
-        <div class="graficos-card">
-          <div class="graficos-card-header">
-            <div class="graficos-card-titulo">
-              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.graficoBarras ?></span>
-              Complexas, simples e acompanhamentos por estagiário
-            </div>
-            <div class="legenda-cores" id="graficosLegendaPecas"></div>
-          </div>
-          <div class="grafico-multi-wrap">
-            <div class="grafico-multi-eixo" id="graficosEixoPecas"></div>
-            <div class="grafico-multi-scroll">
-              <div class="grafico-multi-plot" id="graficosPlotPecas"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="graficos-card">
-          <div class="graficos-card-header">
-            <div class="graficos-card-titulo">
-              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.graficoBarras ?></span>
-              Atendimentos e iniciais por estagiário
-            </div>
-            <div class="legenda-cores" id="graficosLegendaAtendIniciais"></div>
-          </div>
-          <div class="grafico-multi-wrap">
-            <div class="grafico-multi-eixo" id="graficosEixoAtendIniciais"></div>
-            <div class="grafico-multi-scroll">
-              <div class="grafico-multi-plot" id="graficosPlotAtendIniciais"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="graficos-card">
-          <div class="graficos-card-header">
-            <div class="graficos-card-titulo">
-              <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.audiencias ?></span>
-              Audiências por estagiário
-            </div>
-            <div class="legenda-cores" id="graficosLegendaAudiencias"></div>
-          </div>
-          <div class="grafico-multi-wrap">
-            <div class="grafico-multi-eixo" id="graficosEixoAudiencias"></div>
-            <div class="grafico-multi-scroll">
-              <div class="grafico-multi-plot" id="graficosPlotAudiencias"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- ABA: AUDIENCIAS -->
       <div class="secao-vista" id="secaoAudiencias" style="display:none;">
         <div class="barra-busca">

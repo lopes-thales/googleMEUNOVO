@@ -288,18 +288,6 @@ function carregarDadosPanorama() {
   }
 }
 
-// Chamado pelo frontend ao abrir a aba "Gráficos" — soma a producao dos
-// estagiarios ativos, cada um no seu proprio semestre (ver Graficos.js).
-function carregarDadosAbaGraficos() {
-  try {
-    var acesso = validarAcesso();
-    if (!acesso.autorizado) return { erro: acesso.motivo };
-    return getDadosGraficos();
-  } catch (e) {
-    return { erro: 'Erro ao carregar Gráficos: ' + e.message };
-  }
-}
-
 // Chamado pelo botao "Preencher Semestre" na aba "Utilitarios".
 function acaoPreencherSemestre() {
   try {

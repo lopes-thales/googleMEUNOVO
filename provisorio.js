@@ -201,15 +201,15 @@ function preencherDatasClassroomAntigasTudo() {
 // Layout esperado da aba "provisorio_acomp" (colunas A:E, sem cabecalho
 // pulado — a leitura comeca na linha 2):
 //   A = ID do estagiario (chave da aba estagiarios!A, nunca o nome)
-//   B = Processo (numero do processo, igual a acompanhamentos!C)
-//   C = ID da diligencia de origem (so para referencia no texto da
-//       descricao da atividade, nao e validado contra a aba diligencias)
-//   D = OK — marcado TRUE por este script apos sucesso; linhas com D=TRUE
-//       sao ignoradas em reexecucoes (a funcao e segura de rodar mais de
-//       uma vez sem duplicar atividades)
-//   E = Prazo, em dias uteis (considerando bd!C2:C) a partir de hoje, usado
+//   B = ID da atividade (diligencia) de origem (so para referencia no texto
+//       da descricao da atividade, nao e validado contra a aba diligencias)
+//   C = Processo (numero do processo, igual a acompanhamentos!C)
+//   D = Prazo, em dias uteis (considerando bd!C2:C) a partir de hoje, usado
 //       para calcular a DATA_ENTREGA do acompanhamento — mesmo campo pedido
 //       no modal "Novo Acompanhamento" (ver criarAcompanhamento, Acompanhamentos.js)
+//   E = OK — marcado TRUE por este script apos sucesso; linhas com E=TRUE
+//       sao ignoradas em reexecucoes (a funcao e segura de rodar mais de
+//       uma vez sem duplicar atividades)
 //
 // Para cada linha elegivel: cria o registro na aba acompanhamentos (mesmas
 // regras de criarAcompanhamento — ID sequencial AC-XXXX, STATUS
@@ -224,10 +224,10 @@ function preencherDatasClassroomAntigasTudo() {
 var SHEET_PROVISORIO_ACOMP = 'provisorio_acomp';
 var PROVISORIO_ACOMP_COL = {
   ID_ESTAGIARIO: 0, // A
-  PROCESSO: 1,      // B
-  ID_DILIGENCIA: 2, // C
-  OK: 3,            // D
-  PRAZO: 4          // E
+  ID_DILIGENCIA: 1, // B
+  PROCESSO: 2,      // C
+  PRAZO: 3,         // D
+  OK: 4             // E
 };
 var TOTAL_COLUNAS_PROVISORIO_ACOMP = 5; // A ate E
 

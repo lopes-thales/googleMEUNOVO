@@ -39,7 +39,6 @@ function atualizarSaudacao() {
 // === ABAS (NAVEGACAO) ===
 // Mapeia data-vista -> id da secao correspondente no DOM.
 var SECOES_POR_VISTA = {
-  geral: 'secaoGeral',
   diligencias: 'secaoDiligencias',
   distribuicao: 'secaoDistribuicao',
   iniciais: 'secaoIniciais',
@@ -47,7 +46,6 @@ var SECOES_POR_VISTA = {
   atendimento_online: 'secaoAtendimentoOnline',
   audiencias_estagiario: 'secaoAudienciasEstagiario',
   panorama: 'secaoPanorama',
-  graficos: 'secaoGraficos',
   audiencias: 'secaoAudiencias',
   utilitarios: 'secaoUtilitarios'
 };
@@ -64,14 +62,12 @@ function trocarVista(vista) {
   if (!SECOES_POR_VISTA[vista]) return;
   APP.vistaAtual = vista;
 
-  if (vista === 'geral') carregarAbaGeral();
   if (vista === 'distribuicao') carregarAbaDistribuicao();
   if (vista === 'iniciais') carregarAbaIniciais();
   if (vista === 'acompanhamentos') carregarAbaAcompanhamentos();
   if (vista === 'atendimento_online') carregarAbaAtendimentoOnline();
   if (vista === 'audiencias_estagiario') carregarAbaAudienciasEstagiario();
   if (vista === 'panorama') carregarAbaPanorama();
-  if (vista === 'graficos') carregarAbaGraficos();
   if (vista === 'audiencias') carregarAbaAudiencias();
 
   document.querySelectorAll('.nav-tab').forEach(function(t) {
@@ -1387,7 +1383,6 @@ function salvarModal() {
       renderizarTabela();
       recarregarAposEdicao();
       if (APP.vistaAtual === 'panorama') carregarAbaPanorama();
-      if (APP.vistaAtual === 'geral') carregarAbaGeral();
     })
     .withFailureHandler(function(err) {
       btnSalvar.disabled = false;
@@ -1433,15 +1428,10 @@ function carregarAbaDistribuicao() {
       }
       APP.dados.distribuicao = resultado.registros || [];
       renderizarTabelaDistribuicao();
-      // Mesmo grafico "Complexas, simples e acompanhamentos por estagiário" da
-      // aba Gráficos (ver renderizarGraficoPorEstagiario mais abaixo) — dados
+      // Graficos antes exibidos na aba Gráficos (removida) — dados
       // reaproveitados de getDadosGraficos() (Graficos.js) via
       // getDadosAbaDistribuicao() (Distribuicao.js).
-      renderizarGraficoPorEstagiario(
-        'distribuicaoLegendaPecas', 'distribuicaoEixoPecas', 'distribuicaoPlotPecas',
-        categoriasGraficosPorChaves(['complexas', 'simples', 'acompanhamentos']),
-        resultado.producaoPorEstagiario || []
-      );
+      renderizarGraficosDistribuicao(resultado.graficos || {});
     })
     .withFailureHandler(function(err) {
       mostrarToast('Erro ao carregar Distribuição: ' + err.message, 'erro');
@@ -1622,7 +1612,6 @@ function acaoSalvarDistribuicaoClique(enviar) {
       // novo estagiario/status assim que possivel.
       recarregarAposEdicao();
       if (APP.vistaAtual === 'panorama') carregarAbaPanorama();
-      if (APP.vistaAtual === 'geral') carregarAbaGeral();
     })
     .withFailureHandler(function(err) {
       btnSalvar.disabled = false;
@@ -2063,7 +2052,6 @@ function salvarModalIniciais() {
       fecharModalIniciais();
       carregarAbaIniciais();
       if (APP.vistaAtual === 'panorama') carregarAbaPanorama();
-      if (APP.vistaAtual === 'geral') carregarAbaGeral();
     })
     .withFailureHandler(function(err) {
       btnSalvar.disabled = false;
@@ -2485,7 +2473,6 @@ function salvarModalAcompanhamento() {
       fecharModalAcompanhamento();
       carregarAbaAcompanhamentos();
       if (APP.vistaAtual === 'panorama') carregarAbaPanorama();
-      if (APP.vistaAtual === 'geral') carregarAbaGeral();
     })
     .withFailureHandler(function(err) {
       btnSalvar.disabled = false;
@@ -3228,10 +3215,13 @@ function carregarAbaPanorama() {
     .carregarDadosPanorama();
 }
 
-// === ABA GRAFICOS ===
+// === GRAFICOS DA ABA DISTRIBUIÇÃO ===
 // Producao dos alunos ATIVOS (nao finalizados), cada um contado no seu
 // proprio semestre — ver getDadosGraficos (Graficos.js). Sem filtro de
-// semestre/aluno nesta aba (decisao de Thales): e sempre o total corrente.
+// semestre/aluno (decisao de Thales): e sempre o total corrente. Estes 4
+// graficos pertenciam antes a uma aba "Gráficos" propria (removida) e agora
+// sao exibidos ao final da aba "Distribuição", na mesma ordem de antes — ver
+// carregarAbaDistribuicao mais acima.
 
 var GRAFICOS_CATEGORIAS = [
   { chave: 'complexas',       label: 'Complexas',       icone: ICONES.complexas, classe: 'grafico-barra-complexas' },
@@ -3240,27 +3230,6 @@ var GRAFICOS_CATEGORIAS = [
   { chave: 'atendimentos',    label: 'Atendimentos',    icone: ICONES.atendimentos, classe: 'grafico-barra-atendimentos' },
   { chave: 'iniciais',        label: 'Iniciais',        icone: ICONES.iniciais,  classe: 'grafico-barra-iniciais' }
 ];
-
-function carregarAbaGraficos() {
-  var wrapper = document.getElementById('secaoGraficos');
-  if (wrapper) wrapper.style.opacity = '0.5';
-
-  google.script.run
-    .withSuccessHandler(function(resultado) {
-      if (wrapper) wrapper.style.opacity = '1';
-      if (resultado.erro) {
-        mostrarToast(resultado.erro, 'erro');
-        return;
-      }
-      APP.dados.graficos = resultado;
-      renderizarGraficos();
-    })
-    .withFailureHandler(function(err) {
-      if (wrapper) wrapper.style.opacity = '1';
-      mostrarToast('Erro ao carregar Gráficos: ' + err.message, 'erro');
-    })
-    .carregarDadosAbaGraficos();
-}
 
 function categoriasGraficosPorChaves(chaves) {
   return GRAFICOS_CATEGORIAS.filter(function(c) { return chaves.indexOf(c.chave) !== -1; });
@@ -3277,17 +3246,16 @@ function arredondarMaximoEixoGraficos(valor) {
   return fracaoArredondada * expoente;
 }
 
-function renderizarGraficos() {
-  var dados = APP.dados.graficos || {};
+function renderizarGraficosDistribuicao(dados) {
   var totais = dados.totais || {};
   var totalAtivos = dados.totalAlunosAtivos || 0;
 
-  var subtitulo = document.getElementById('graficosSubtitulo');
+  var subtitulo = document.getElementById('distribuicaoGraficosSubtitulo');
   if (subtitulo) {
     subtitulo.textContent = totalAtivos + (totalAtivos === 1 ? ' aluno(a) ativo(a)' : ' alunos(as) ativos(as)');
   }
 
-  var container = document.getElementById('graficosConteudo');
+  var container = document.getElementById('distribuicaoGraficosConteudo');
   if (!container) return;
 
   if (!totalAtivos) {
@@ -3331,12 +3299,12 @@ function renderizarGraficos() {
     '</div>';
 
   renderizarGraficoPorEstagiario(
-    'graficosLegendaPecas', 'graficosEixoPecas', 'graficosPlotPecas',
+    'distribuicaoLegendaPecas', 'distribuicaoEixoPecas', 'distribuicaoPlotPecas',
     categoriasGraficosPorChaves(['complexas', 'simples', 'acompanhamentos']),
     dados.porEstagiario || []
   );
   renderizarGraficoPorEstagiario(
-    'graficosLegendaAtendIniciais', 'graficosEixoAtendIniciais', 'graficosPlotAtendIniciais',
+    'distribuicaoLegendaAtendIniciais', 'distribuicaoEixoAtendIniciais', 'distribuicaoPlotAtendIniciais',
     categoriasGraficosPorChaves(['atendimentos', 'iniciais']),
     dados.porEstagiario || []
   );
@@ -3356,9 +3324,9 @@ var GRAFICOS_CLASSES_AUDIENCIA = ['grafico-barra-audiencia-1', 'grafico-barra-au
 // categoria tem sua propria meta (10/10/2), impossivel de expressar com uma
 // unica linha de eixo compartilhada.
 function renderizarGraficoAudiencias(parametrosAudiencias, porEstagiario) {
-  var legendaEl = document.getElementById('graficosLegendaAudiencias');
-  var eixoEl = document.getElementById('graficosEixoAudiencias');
-  var plotEl = document.getElementById('graficosPlotAudiencias');
+  var legendaEl = document.getElementById('distribuicaoLegendaAudiencias');
+  var eixoEl = document.getElementById('distribuicaoEixoAudiencias');
+  var plotEl = document.getElementById('distribuicaoPlotAudiencias');
   if (!legendaEl || !eixoEl || !plotEl) return;
 
   var categorias = parametrosAudiencias.map(function(p, i) {
@@ -4041,286 +4009,6 @@ function fecharModalAtendimento() {
 document.getElementById('modalAtendimentoOverlay').addEventListener('click', function(e) {
   if (e.target === this) fecharModalAtendimento();
 });
-
-// === ABA: GERAL (todas as atividades pendentes) ===
-// Mostra diligencias, iniciais e acompanhamentos cujo STATUS nao esta em
-// STATUS_FINAIS (ou seja, tudo != Ok, Protocolado e Cancelada), agrupados por
-// tipo (mesmo padrao de tabelas usado na aba Panorama). Reaproveita a mesma
-// chamada ao servidor do Panorama (carregarDadosPanorama) e os mesmos campos
-// em APP.dados — sem recorte de semestre/aluno, ve tudo de uma vez.
-
-// Cada uma das 3 tabelas (Diligencias/Iniciais/Acompanhamentos) tem sua
-// propria ordenacao independente, igual ao padrao de APP/APP_INICIAIS/
-// APP_ACOMPANHAMENTOS nas demais abas.
-var APP_GERAL = {
-  ordenacao: {
-    diligencias: { coluna: 'id', direcao: 'asc' },
-    iniciais: { coluna: 'id', direcao: 'asc' },
-    acompanhamentos: { coluna: 'id', direcao: 'asc' }
-  }
-};
-
-function ordenarPorGeral(tipo, coluna) {
-  var estado = APP_GERAL.ordenacao[tipo];
-  if (estado.coluna === coluna) {
-    estado.direcao = (estado.direcao === 'asc') ? 'desc' : 'asc';
-  } else {
-    estado.coluna = coluna;
-    estado.direcao = 'asc';
-  }
-  renderizarTabelasGeral();
-}
-
-// Reaproveita compararRegistros() (generico, ja usado por Diligencias/
-// Iniciais/Acompanhamentos) para ordenar qualquer coluna por tipo.
-function thOrdenavelGeral(tipo, label, coluna) {
-  var estado = APP_GERAL.ordenacao[tipo];
-  var ativo = estado.coluna === coluna;
-  var seta = '';
-  if (ativo) {
-    var simbolo = (estado.direcao === 'asc') ? '▲' : '▼';
-    seta = '<span class="th-seta">' + simbolo + '</span>';
-  }
-  return '<th class="th-ordenavel" onclick="ordenarPorGeral(\'' + tipo + '\',\'' + coluna + '\')">' + label + seta + '</th>';
-}
-
-function carregarAbaGeral() {
-  var wrapper = document.getElementById('secaoGeral');
-  if (wrapper) wrapper.style.opacity = '0.5';
-
-  google.script.run
-    .withSuccessHandler(function(resultado) {
-      if (wrapper) wrapper.style.opacity = '1';
-      if (resultado.erro) {
-        mostrarToast(resultado.erro, 'erro');
-        return;
-      }
-      APP.dados.panoramaDiligencias = resultado.diligencias || [];
-      APP.dados.panoramaIniciais = resultado.iniciais || [];
-      APP.dados.panoramaAcompanhamentos = resultado.acompanhamentos || [];
-      // O modal de Inicial depende de statusPicklist — garante que exista
-      // mesmo que a aba Iniciais nunca tenha sido aberta nesta sessao.
-      if (!APP.dados.statusPicklist || !APP.dados.statusPicklist.length) {
-        APP.dados.statusPicklist = resultado.statusPicklist || [];
-      }
-      renderizarGeral();
-    })
-    .withFailureHandler(function(err) {
-      if (wrapper) wrapper.style.opacity = '1';
-      mostrarToast('Erro ao carregar Geral: ' + err.message, 'erro');
-    })
-    .carregarDadosPanorama();
-}
-
-// Reaproveita STATUS_FINAIS (definido em "LOGICA DE CLASSIFICACAO"): um
-// registro e "pendente" quando o status nao e nenhum dos finais.
-function ehPendenteGeral(reg) {
-  return STATUS_FINAIS.indexOf(normalizarChave(reg.status)) === -1;
-}
-
-function getDiligenciasGeralFiltradas() {
-  var lista = (APP.dados.panoramaDiligencias || []).filter(ehPendenteGeral);
-  var est = APP_GERAL.ordenacao.diligencias;
-  return lista.sort(function(a, b) { return compararRegistros(a, b, est.coluna, est.direcao); });
-}
-
-function getIniciaisGeralFiltradas() {
-  var lista = (APP.dados.panoramaIniciais || []).filter(ehPendenteGeral);
-  var est = APP_GERAL.ordenacao.iniciais;
-  return lista.sort(function(a, b) { return compararRegistros(a, b, est.coluna, est.direcao); });
-}
-
-function getAcompanhamentosGeralFiltrados() {
-  var lista = (APP.dados.panoramaAcompanhamentos || []).filter(ehPendenteGeral);
-  var est = APP_GERAL.ordenacao.acompanhamentos;
-  return lista.sort(function(a, b) { return compararRegistros(a, b, est.coluna, est.direcao); });
-}
-
-function renderizarGeral() {
-  renderizarCardsGeral();
-  renderizarTabelasGeral();
-}
-
-function renderizarCardsGeral() {
-  var diligencias = getDiligenciasGeralFiltradas();
-  var iniciais = getIniciaisGeralFiltradas();
-  var acompanhamentos = getAcompanhamentosGeralFiltrados();
-  var total = diligencias.length + iniciais.length + acompanhamentos.length;
-
-  // scrollId = bloco da tabela correspondente na propria aba Geral; null =
-  // rola para o topo da aba (card TOTAL).
-  var cards = [
-    { label: 'TOTAL PENDENTE',   num: total,                   classe: 'card-total',       icone: ICONES.pendencias, scrollId: null },
-    { label: 'DILIGÊNCIAS',      num: diligencias.length,      classe: 'card-encaminhado', icone: ICONES.diligencias, scrollId: 'blocoGeralDiligencias' },
-    { label: 'INICIAIS',         num: iniciais.length,         classe: 'card-entregue',    icone: ICONES.iniciais,   scrollId: 'blocoGeralIniciais' },
-    { label: 'ACOMPANHAMENTOS',  num: acompanhamentos.length,  classe: 'card-devolvida',   icone: ICONES.acompanhamentos, scrollId: 'blocoGeralAcompanhamentos' }
-  ];
-
-  var html = '';
-  cards.forEach(function(c) {
-    html += '<div class="card-resumo ' + c.classe + '" onclick="rolarParaGeral(' + (c.scrollId ? "'" + c.scrollId + "'" : 'null') + ')">' +
-      '<div class="card-icone"><span class="material-symbols-outlined">' + c.icone + '</span></div>' +
-      '<div class="card-info">' +
-        '<div class="card-numero">' + c.num + '</div>' +
-        '<div class="card-label">' + c.label + '</div>' +
-      '</div>' +
-    '</div>';
-  });
-
-  document.getElementById('cardsGridGeral').innerHTML = html;
-}
-
-// Clique no card rola a pagina ate o bloco da tabela correspondente
-// (ou ate o topo da aba, no caso do card TOTAL).
-function rolarParaGeral(idBloco) {
-  var el = idBloco ? document.getElementById(idBloco) : document.getElementById('secaoGeral');
-  if (!el) return;
-  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function renderizarTabelasGeral() {
-  renderizarTabelaDiligenciasGeral();
-  renderizarTabelaIniciaisGeral();
-  renderizarTabelaAcompanhamentosGeral();
-}
-
-function renderizarTabelaDiligenciasGeral() {
-  var lista = getDiligenciasGeralFiltradas();
-
-  document.getElementById('geralCabecalhoDiligencias').innerHTML =
-    '<tr>' +
-      thOrdenavelGeral('diligencias', 'ID', 'id') +
-      thOrdenavelGeral('diligencias', 'PROCESSO', 'processo') +
-      thOrdenavelGeral('diligencias', 'ASSISTIDO(A)', 'assistido') +
-      thOrdenavelGeral('diligencias', 'DI', 'di') +
-      thOrdenavelGeral('diligencias', 'PRAZO', 'prazo') +
-      thOrdenavelGeral('diligencias', 'DF', 'df') +
-      thOrdenavelGeral('diligencias', 'ESTAGIÁRIO(A)', 'estagiario') +
-      thOrdenavelGeral('diligencias', 'STATUS', 'status') +
-      thOrdenavelGeral('diligencias', 'ESPÉCIE', 'especie') +
-      thOrdenavelGeral('diligencias', 'SUBESPÉCIE', 'subespecie') +
-    '</tr>';
-
-  var corpo = document.getElementById('geralCorpoDiligencias');
-  if (lista.length === 0) {
-    corpo.innerHTML = celulaVaziaTabela(10, 'Nenhuma diligência pendente');
-    return;
-  }
-
-  var html = '';
-  lista.forEach(function(reg, idx) {
-    var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
-    html += '<tr class="' + classeAtraso + '" onclick="abrirModalGeralDiligencia(' + idx + ')">' +
-      '<td class="td-numero">' + (reg.id || '') + '</td>' +
-      '<td class="td-processo">' + (reg.processo || '') + '</td>' +
-      '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
-      '<td>' + (reg.di || '') + '</td>' +
-      '<td>' + (reg.prazo || '') + '</td>' +
-      '<td>' + (reg.df || '') + '</td>' +
-      '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
-      '<td>' + badgeStatus(reg) + '</td>' +
-      '<td>' + (reg.especie || '<span class="celula-vazio">—</span>') + '</td>' +
-      '<td>' + (reg.subespecie || '<span class="celula-vazio">—</span>') + '</td>' +
-    '</tr>';
-  });
-  corpo.innerHTML = html;
-}
-
-// Abre o modal de Diligencia a partir da tabela da aba Geral.
-function abrirModalGeralDiligencia(idx) {
-  var lista = getDiligenciasGeralFiltradas();
-  var reg = lista[idx];
-  if (!reg) return;
-  preencherModalDiligencia(reg);
-}
-
-function renderizarTabelaIniciaisGeral() {
-  var lista = getIniciaisGeralFiltradas();
-
-  document.getElementById('geralCabecalhoIniciais').innerHTML =
-    '<tr>' +
-      thOrdenavelGeral('iniciais', 'ID', 'id') +
-      thOrdenavelGeral('iniciais', 'ASSISTIDO(A)', 'assistido') +
-      thOrdenavelGeral('iniciais', 'ESTAGIÁRIO(A)', 'estagiario') +
-      thOrdenavelGeral('iniciais', 'DATA', 'di') +
-      thOrdenavelGeral('iniciais', 'DF', 'df') +
-      thOrdenavelGeral('iniciais', 'STATUS', 'status') +
-      thOrdenavelGeral('iniciais', 'PROCESSO', 'processo') +
-      thOrdenavelGeral('iniciais', 'VARA', 'vara') +
-    '</tr>';
-
-  var corpo = document.getElementById('geralCorpoIniciais');
-  if (lista.length === 0) {
-    corpo.innerHTML = celulaVaziaTabela(8, 'Nenhum inicial pendente');
-    return;
-  }
-
-  var html = '';
-  lista.forEach(function(reg, idx) {
-    var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
-    html += '<tr class="' + classeAtraso + '" onclick="abrirModalGeralInicial(' + idx + ')">' +
-      '<td class="td-numero">' + (reg.id || '') + '</td>' +
-      '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
-      '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
-      '<td>' + (reg.di || '') + '</td>' +
-      '<td>' + (reg.df || '') + '</td>' +
-      '<td>' + badgeStatus(reg) + '</td>' +
-      '<td>' + (reg.processo || '<span class="celula-vazio">—</span>') + '</td>' +
-      '<td>' + (reg.vara || '<span class="celula-vazio">—</span>') + '</td>' +
-    '</tr>';
-  });
-  corpo.innerHTML = html;
-}
-
-// Abre o modal de Inicial a partir da tabela da aba Geral.
-function abrirModalGeralInicial(idx) {
-  var lista = getIniciaisGeralFiltradas();
-  var reg = lista[idx];
-  if (!reg) return;
-  preencherModalInicial(reg);
-}
-
-function renderizarTabelaAcompanhamentosGeral() {
-  var lista = getAcompanhamentosGeralFiltrados();
-
-  document.getElementById('geralCabecalhoAcompanhamentos').innerHTML =
-    '<tr>' +
-      thOrdenavelGeral('acompanhamentos', 'ID', 'id') +
-      thOrdenavelGeral('acompanhamentos', 'ESTAGIÁRIO(A)', 'estagiario') +
-      thOrdenavelGeral('acompanhamentos', 'PROCESSO', 'processo') +
-      thOrdenavelGeral('acompanhamentos', 'DATA', 'di') +
-      thOrdenavelGeral('acompanhamentos', 'ENTREGA', 'df') +
-      thOrdenavelGeral('acompanhamentos', 'STATUS', 'status') +
-    '</tr>';
-
-  var corpo = document.getElementById('geralCorpoAcompanhamentos');
-  if (lista.length === 0) {
-    corpo.innerHTML = celulaVaziaTabela(6, 'Nenhum acompanhamento pendente');
-    return;
-  }
-
-  var html = '';
-  lista.forEach(function(reg, idx) {
-    var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
-    html += '<tr class="' + classeAtraso + '" onclick="abrirModalGeralAcompanhamento(' + idx + ')">' +
-      '<td class="td-numero">' + (reg.id || '') + '</td>' +
-      '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
-      '<td class="td-processo">' + (reg.processo || '<span class="celula-vazio">—</span>') + '</td>' +
-      '<td>' + (reg.di || '') + '</td>' +
-      '<td>' + (reg.df || '') + '</td>' +
-      '<td>' + badgeStatus(reg) + '</td>' +
-    '</tr>';
-  });
-  corpo.innerHTML = html;
-}
-
-// Abre o modal de Acompanhamento a partir da tabela da aba Geral.
-function abrirModalGeralAcompanhamento(idx) {
-  var lista = getAcompanhamentosGeralFiltrados();
-  var reg = lista[idx];
-  if (!reg) return;
-  preencherModalAcompanhamento(reg);
-}
 
 // === UTILITARIOS ===
 
