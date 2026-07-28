@@ -40,7 +40,7 @@ var ICONES = {
   distribuicao:         'assignment_ind',
   iniciais:             'contract',
   acompanhamentos:      'timeline',
-  atendimentos:         'support_agent',
+  atendimentos:         'conversation',
   atendimentoOnline:    'forum',
   audiencias:           'gavel',
   audienciasSecretaria: 'calendar_month',

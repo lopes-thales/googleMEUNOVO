@@ -479,17 +479,19 @@ function paRenderizarCards(alunoAtual) {
   var totalAtendimentos = atendimentos.length + atendimentosOnlineAprovados.length;
 
   var cards = [
-    { label: 'TOTAL',          num: total,                   classe: 'card-total',       icone: ICONES.cardTotal },
-    { label: 'COMPLEXAS',      num: complexas,               classe: 'card-entregue',    icone: ICONES.complexas },
-    { label: 'SIMPLES',        num: simples,                 classe: 'card-encaminhado', icone: ICONES.simples },
-    { label: 'ACOMPANHAMENTOS', num: acompanhamentos.length, classe: 'card-devolvida',   icone: ICONES.acompanhamentos },
-    { label: 'ATENDIMENTOS',   num: totalAtendimentos,       classe: 'card-concluido',   icone: ICONES.atendimentos },
-    { label: 'AUDIÊNCIAS',     num: audienciasAprovadas.length, classe: 'card-sem-estagiario', icone: ICONES.audiencias }
+    { label: 'TOTAL',          num: total,                   classe: 'card-total',       icone: ICONES.cardTotal,   alvo: 'topo' },
+    { label: 'COMPLEXAS',      num: complexas,               classe: 'card-entregue',    icone: ICONES.complexas,   alvo: 'paBlocoDiligencias' },
+    { label: 'SIMPLES',        num: simples,                 classe: 'card-encaminhado', icone: ICONES.simples,     alvo: 'paBlocoDiligencias' },
+    { label: 'ACOMPANHAMENTOS', num: acompanhamentos.length, classe: 'card-devolvida',   icone: ICONES.acompanhamentos, alvo: 'paBlocoAcompanhamentos' },
+    { label: 'ATENDIMENTOS',   num: totalAtendimentos,       classe: 'card-concluido',   icone: ICONES.atendimentos, alvo: 'paBlocoAtendimentos' },
+    { label: 'AUDIÊNCIAS',     num: audienciasAprovadas.length, classe: 'card-sem-estagiario', icone: ICONES.audiencias, alvo: 'paBlocoAudiencias' }
   ];
 
   var html = '';
   cards.forEach(function(c) {
-    html += '<div class="card-resumo card-resumo-estatico ' + c.classe + '">' +
+    var clicavel = c.alvo ? ' card-resumo-clicavel' : '';
+    var onclick = c.alvo ? ' onclick="paRolarPara(\'' + c.alvo + '\')"' : '';
+    html += '<div class="card-resumo card-resumo-estatico ' + c.classe + clicavel + '"' + onclick + '>' +
       '<div class="card-icone"><span class="material-symbols-outlined">' + c.icone + '</span></div>' +
       '<div class="card-info">' +
         '<div class="card-numero">' + c.num + '</div>' +
@@ -498,6 +500,21 @@ function paRenderizarCards(alunoAtual) {
     '</div>';
   });
   document.getElementById('paCardsGrid').innerHTML = html;
+}
+
+// --- Rolagem dos cards ate a tabela correspondente ---
+function paRolarPara(alvo) {
+  if (alvo === 'topo') {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  var el = document.getElementById(alvo);
+  if (!el) return;
+  var header = document.querySelector('.header');
+  var navBar = document.querySelector('.nav-bar');
+  var offset = (header ? header.offsetHeight : 0) + (navBar ? navBar.offsetHeight : 0) + 16;
+  var topoAlvo = el.getBoundingClientRect().top + window.pageYOffset - offset;
+  window.scrollTo({ top: topoAlvo, behavior: 'smooth' });
 }
 
 function paCelulaVazia(colspan, titulo) {
