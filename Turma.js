@@ -34,9 +34,12 @@ function calcularTurma(dataInicio, semestreFallback) {
 
 // Retorna o rotulo legivel de uma turma para exibicao nos selects e selos.
 // Exemplos:
-//   "2026.02-A" -> "Antecipado (julho)"
-//   "2026.02-R" -> "Regular (agosto a dezembro)"
+//   "2026.02-A" -> "Antecipado"
+//   "2026.02-R" -> "Regular"
 //   "2026.02"   -> "Todas as turmas"
+// O mes entre parenteses foi removido em 30/07/2026: -A e sempre janeiro (.01)
+// ou julho (.02) — ja e obvio a partir do proprio sufixo — e os meses do
+// regular variam sem alterar o sentido do rotulo.
 function formatarRotuloTurma(turma) {
   var codigo = String(turma || '').trim();
   if (!codigo) return '';
@@ -45,8 +48,8 @@ function formatarRotuloTurma(turma) {
   var semestre = partes[0] || '';
   var sufixo = partes[1] || '';
 
-  if (sufixo === 'A') return semestre + ' — Antecipado (julho)';
-  if (sufixo === 'R') return semestre + ' — Regular (agosto a dezembro)';
+  if (sufixo === 'A') return semestre + ' — Antecipado';
+  if (sufixo === 'R') return semestre + ' — Regular';
   return semestre + ' — Todas as turmas';
 }
 
@@ -154,13 +157,11 @@ function getTodosEstagiariosParaCliente() {
 
 // Resolve a turma de um registro a partir do nome/e-mail do aluno e de uma
 // data de referencia (ex.: DF de uma diligencia, DATA de uma inicial).
-// A chaveAluno pode ser nome ou e-mail. A resolucao considera:
-//   1. linha cuja janela [DATA_INICIO, DATA_FIM] contem dataReferencia;
-//   2. senao, a linha com FINALIZADO vazio;
-//   3. senao, a de DATA_INICIO mais recente.
-// Nao usa buscarEmailEstagiario nem outras buscas por nome porque elas
-// retornam apenas o primeiro match — incorreto quando um aluno tem duas
-// linhas no mesmo semestre (antecipado + regular).
+// A chaveAluno pode ser nome ou e-mail. Nao usa buscarEmailEstagiario nem
+// outras buscas por nome porque elas retornam apenas o primeiro match —
+// incorreto quando um aluno tem duas linhas no mesmo semestre (antecipado +
+// regular). A logica de desempate entre candidatos esta em
+// _resolverEntreCandidatos.
 function resolverTurmaDoRegistro(chaveAluno, dataReferencia) {
   var chave = normalizarChave(chaveAluno);
   if (!chave) return '';
@@ -169,6 +170,27 @@ function resolverTurmaDoRegistro(chaveAluno, dataReferencia) {
     return normalizarChave(e.nome) === chave || normalizarChave(e.email) === chave;
   });
 
+  return _resolverEntreCandidatos(candidatos, dataReferencia);
+}
+
+// Desempata entre as linhas (candidatos) de um mesmo aluno para achar a
+// turma correta de um registro com data de referencia dataReferencia.
+// Corrigido em 30/07/2026: a linha "regular" normalmente NAO tem DATA_INICIO
+// preenchida (so a antecipada de julho tem, ver MigracaoTurma.js), entao a
+// janela [DATA_INICIO, DATA_FIM] quase nunca casava e tudo caia no fallback
+// de FINALIZADO vazio — que ignora dataReferencia e por isso jogava TODA a
+// producao do aluno (de qualquer semestre) na turma ativa no momento.
+// Ordem de decisao:
+//   1. linha cuja janela [DATA_INICIO, DATA_FIM] contem dataReferencia —
+//      so dispara quando as DUAS datas foram preenchidas manualmente
+//      (extensao/excecao real, tem prioridade sobre a regra generica);
+//   2. senao, a linha cujo codigo bate com a turma "natural" da
+//      dataReferencia pela mesma regra usada em calcularTurma (mes 1/7 vira
+//      antecipado, resto vira regular do semestre correspondente) — cobre o
+//      caso comum de DATA_INICIO/DATA_FIM ausentes;
+//   3. senao, a linha com FINALIZADO vazio;
+//   4. senao, a de DATA_INICIO mais recente.
+function _resolverEntreCandidatos(candidatos, dataReferencia) {
   if (candidatos.length === 0) return '';
   if (candidatos.length === 1) return candidatos[0].turma;
 
@@ -176,8 +198,8 @@ function resolverTurmaDoRegistro(chaveAluno, dataReferencia) {
     ? dataReferencia
     : null;
 
-  // 1) Janela [DATA_INICIO, DATA_FIM] contem dataReferencia
   if (ref) {
+    // 1) Janela [DATA_INICIO, DATA_FIM] contem dataReferencia
     for (var i = 0; i < candidatos.length; i++) {
       var e = candidatos[i];
       var inicio = e.dataInicio;
@@ -191,13 +213,21 @@ function resolverTurmaDoRegistro(chaveAluno, dataReferencia) {
         if (refTs >= inicioTs && refTs <= fimTs) return e.turma;
       }
     }
+
+    // 2) Turma natural da dataReferencia (mesma regra de calcularTurma)
+    var turmaNatural = calcularTurma(ref, '');
+    if (turmaNatural) {
+      for (var j = 0; j < candidatos.length; j++) {
+        if (candidatos[j].turma === turmaNatural) return candidatos[j].turma;
+      }
+    }
   }
 
-  // 2) Linha com FINALIZADO vazio
+  // 3) Linha com FINALIZADO vazio
   var naoFinalizados = candidatos.filter(function(e) { return !e.finalizado; });
   if (naoFinalizados.length > 0) candidatos = naoFinalizados;
 
-  // 3) DATA_INICIO mais recente
+  // 4) DATA_INICIO mais recente
   candidatos.sort(function(a, b) {
     var ta = (a.dataInicio instanceof Date && !isNaN(a.dataInicio.getTime())) ? a.dataInicio.getTime() : 0;
     var tb = (b.dataInicio instanceof Date && !isNaN(b.dataInicio.getTime())) ? b.dataInicio.getTime() : 0;
@@ -274,38 +304,7 @@ function _resolverTurmaLocalmente(chaveAluno, dataReferencia, estagiarios) {
     return normalizarChave(e.nome) === chave || normalizarChave(e.email) === chave;
   });
 
-  if (candidatos.length === 0) return '';
-  if (candidatos.length === 1) return candidatos[0].turma;
-
-  var ref = (dataReferencia instanceof Date && !isNaN(dataReferencia.getTime()))
-    ? dataReferencia
-    : null;
-
-  if (ref) {
-    for (var i = 0; i < candidatos.length; i++) {
-      var e = candidatos[i];
-      var inicio = e.dataInicio;
-      var fim = e.dataFim;
-      if (inicio instanceof Date && !isNaN(inicio.getTime()) &&
-          fim instanceof Date && !isNaN(fim.getTime())) {
-        var refTs = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()).getTime();
-        var inicioTs = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate()).getTime();
-        var fimTs = new Date(fim.getFullYear(), fim.getMonth(), fim.getDate()).getTime();
-        if (refTs >= inicioTs && refTs <= fimTs) return e.turma;
-      }
-    }
-  }
-
-  var naoFinalizados = candidatos.filter(function(e) { return !e.finalizado; });
-  if (naoFinalizados.length > 0) candidatos = naoFinalizados;
-
-  candidatos.sort(function(a, b) {
-    var ta = (a.dataInicio instanceof Date && !isNaN(a.dataInicio.getTime())) ? a.dataInicio.getTime() : 0;
-    var tb = (b.dataInicio instanceof Date && !isNaN(b.dataInicio.getTime())) ? b.dataInicio.getTime() : 0;
-    return tb - ta;
-  });
-
-  return candidatos[0].turma;
+  return _resolverEntreCandidatos(candidatos, dataReferencia);
 }
 
 // Converte string "dd/MM/yyyy" (com ou sem horario) em Date puro, ignorando
