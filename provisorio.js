@@ -1,3 +1,94 @@
+// === DIAGNOSTICO TEMPORARIO (28/07/2026) — "Resposta invalida do servidor" ===
+// Investigando por que carregarDadosPanorama()/carregarDadosPainelAluno()
+// chegam como null no cliente (google.script.run) mesmo sem excecao no
+// servidor. Hipotese: algum campo do payload ainda e um objeto Date cru
+// (mesma classe de bug ja documentada para HORA em AudienciasEstagiario.js).
+// Varre o payload inteiro recursivamente e loga o CAMINHO exato de qualquer
+// Date encontrado. Rodar pelo editor (Executar > diagnosticoPanorama /
+// diagnosticoPainelAluno) e ler Executar > Registros de execucao. Apagar
+// estas 3 funcoes (ate o proximo comentario "===") depois de resolvido.
+function _acharDatasNoObjeto_(obj, caminho, encontrados, visitados) {
+  if (obj === null || obj === undefined) return;
+  if (obj instanceof Date) {
+    encontrados.push(caminho + ' = ' + obj.toString());
+    return;
+  }
+  if (typeof obj !== 'object') return;
+  if (visitados.indexOf(obj) !== -1) {
+    encontrados.push(caminho + ' = [REFERENCIA CIRCULAR]');
+    return;
+  }
+  visitados.push(obj);
+
+  if (Array.isArray(obj)) {
+    for (var i = 0; i < obj.length; i++) {
+      _acharDatasNoObjeto_(obj[i], caminho + '[' + i + ']', encontrados, visitados);
+    }
+    return;
+  }
+  for (var chave in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, chave)) {
+      _acharDatasNoObjeto_(obj[chave], caminho + '.' + chave, encontrados, visitados);
+    }
+  }
+}
+
+function diagnosticoPanorama() {
+  var r;
+  try {
+    r = getDadosPanorama();
+  } catch (e) {
+    Logger.log('EXCECAO ao chamar getDadosPanorama(): ' + e.message + '\n' + e.stack);
+    return;
+  }
+  Logger.log('getDadosPanorama() retornou sem excecao. Verificando serializacao...');
+  try {
+    var json = JSON.stringify(r);
+    Logger.log('JSON.stringify OK — ' + json.length + ' caracteres.');
+  } catch (e) {
+    Logger.log('JSON.stringify FALHOU: ' + e.message);
+  }
+  var achados = [];
+  _acharDatasNoObjeto_(r, 'payload', achados, []);
+  Logger.log('Objetos Date encontrados no payload: ' + achados.length);
+  Logger.log(achados.slice(0, 80).join('\n'));
+}
+
+function diagnosticoPainelAluno() {
+  var acesso;
+  try {
+    acesso = validarAcessoAluno();
+  } catch (e) {
+    Logger.log('EXCECAO ao chamar validarAcessoAluno(): ' + e.message + '\n' + e.stack);
+    return;
+  }
+  Logger.log('acesso: ' + JSON.stringify(acesso));
+  if (!acesso || !acesso.autorizado) {
+    Logger.log('acesso.autorizado = false — motivo: ' + (acesso && acesso.motivo));
+    return;
+  }
+
+  var r;
+  try {
+    r = getDadosPainelAluno(acesso);
+  } catch (e) {
+    Logger.log('EXCECAO ao chamar getDadosPainelAluno(): ' + e.message + '\n' + e.stack);
+    return;
+  }
+  Logger.log('getDadosPainelAluno() retornou sem excecao. Verificando serializacao...');
+  try {
+    var json = JSON.stringify(r);
+    Logger.log('JSON.stringify OK — ' + json.length + ' caracteres.');
+  } catch (e) {
+    Logger.log('JSON.stringify FALHOU: ' + e.message);
+  }
+  var achados = [];
+  _acharDatasNoObjeto_(r, 'payload', achados, []);
+  Logger.log('Objetos Date encontrados no payload: ' + achados.length);
+  Logger.log(achados.slice(0, 80).join('\n'));
+}
+// === FIM DO DIAGNOSTICO TEMPORARIO ===
+
 // Script temporário — rodar uma unica vez apos apagar SEMESTRE em diligencias.
 // Preenche R (SEMESTRE) a partir de G (DF), usando a mesma regra de
 // calcularSemestre() em Data.js. Apagar esta funcao depois do uso.

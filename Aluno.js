@@ -6,19 +6,29 @@
 // nova de planilha e criada aqui, so o recorte/filtragem por usuario.
 //
 // Diferenca fundamental em relacao a aba "Panorama" do Painel de Thales: lá
-// o payload completo vai para o navegador e a filtragem por aluno/semestre e
+// o payload completo vai para o navegador e a filtragem por aluno/turma e
 // feita no frontend (Thales é o unico usuario, e ja enxerga tudo). Aqui,
 // quando quem acessa e um ALUNO (tipo === 'aluno'), o recorte por aluno tem
 // que ser feito NO SERVIDOR — nunca mandar ao navegador de um estagiario
 // registros de outros estagiarios. Quando quem acessa e Thales
 // (tipo === 'thales'), o comportamento e o mesmo do Panorama: manda tudo e
 // deixa a escolha de aluno/semestre no frontend.
+//
+// Painel Aluno continua filtrando por SEMESTRE (sem seletor hierarquico de
+// turma), mas cada estagiario no payload ja traz a TURMA derivada
+// (estagiarios!M) para uso futuro.
 
 // --- Conjunto de estagiarios visiveis para o usuario logado ---
-// Pode haver mais de uma linha (um por semestre) para o mesmo e-mail — o
-// frontend usa isso para oferecer a troca de semestre mesmo para o aluno.
+// Pode haver mais de uma linha (uma por turma) para o mesmo e-mail — o
+// frontend usa isso para oferecer a troca de turma mesmo para o aluno.
+// Usa getTodosEstagiariosParaCliente() (Turma.js), NUNCA
+// getTodosEstagiariosCompletos() — este resultado vai direto para o payload
+// de getDadosPainelAluno() abaixo, e o segundo inclui dataInicio/dataFim como
+// objetos Date crus, que quebram a serializacao de google.script.run assim
+// que alguma linha tiver essas celulas preenchidas (payload inteiro vira
+// null no cliente).
 function getEstagiariosVisiveisPainelAluno(acesso) {
-  var todos = getTodosEstagiariosCompletos(); // Panorama.js
+  var todos = getTodosEstagiariosParaCliente(); // Turma.js
   if (acesso.tipo === 'thales') return todos;
 
   var chaveEmail = normalizarChave(acesso.email);
@@ -70,6 +80,19 @@ function getDadosPainelAluno(acesso) {
     audienciasEstagiario = filtrarRegistrosPorEstagiarios(audienciasEstagiario, estagiariosVisiveis, ['estagiario'], ['email']);
   }
 
+  // TURMA (27/07/2026): cada lista recebe aqui a turma JA RESOLVIDA (registro
+  // -> aluno -> turma, ver anotarTurmaEmRegistros/criarResolvedorTurma em
+  // Turma.js) — mesma tecnica usada em getDadosPanorama (Panorama.js). O
+  // Painel Aluno passa a ter o mesmo seletor hierarquico de turma do
+  // Panorama (AlunoScripts.html), e filtra direto em reg.turma.
+  var resolvedorTurma = criarResolvedorTurma();
+  anotarTurmaEmRegistros(diligencias, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.df; });
+  anotarTurmaEmRegistros(iniciais, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
+  anotarTurmaEmRegistros(atendimentos, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.data; });
+  anotarTurmaEmRegistros(acompanhamentos, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
+  anotarTurmaEmRegistros(atendimentosOnline, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.data; });
+  anotarTurmaEmRegistros(audienciasEstagiario, resolvedorTurma, function(r) { return r.estagiario || r.email; }, function(r) { return r.data; });
+
   // Atividades ainda sem Atendimento Online vinculado, calculadas a partir
   // das MESMAS listas ja filtradas acima (ver AtendimentoOnline.js) — o
   // frontend do Painel Aluno usa isso para popular o seletor de atividade no
@@ -92,6 +115,7 @@ function getDadosPainelAluno(acesso) {
     atividadesElegiveisAO: atividadesElegiveisAO,
     audienciasEstagiario: audienciasEstagiario, // AudienciasEstagiario.js
     parametrosAudiencias: lerParametrosAudiencias(), // bd!X:Z — tipo/meta/horas (AudienciasEstagiario.js)
+    turmaCorrente: obterTurmaCorrente(), // TURMA ativa hoje (Turma.js) — padrao do seletor hierarquico
     // RN-13: aviso obrigatorio sobre a ata/declaracao, com o e-mail sempre
     // interpolado a partir de CONFIG.EMAIL_AUTORIZADO — nunca digitado fixo
     // no HTML (ver modal/confirmacao/legenda em AlunoScripts.html).

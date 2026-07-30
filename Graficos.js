@@ -3,16 +3,17 @@
 // ao final da aba "Distribuição" (ver getDadosAbaDistribuicao,
 // Distribuicao.js) — soma a producao (pecas complexas, simples,
 // acompanhamentos, atendimentos e iniciais) de todos os estagiarios ATIVOS
-// (FINALIZADO != true), cada um contado no SEU PROPRIO semestre (coluna
-// SEMESTRE da aba estagiarios) — mesma convencao ja usada na Mensagem 4
-// (Mensagens.js). Reaproveita getTodosEstagiariosCompletos() e
-// getContagemProducaoEstagiario() (Panorama.js) — nenhuma nova regra de
-// cruzamento ou de contagem e criada aqui; complexas/simples/acompanhamentos
-// ja excluem STATUS "Cancelada" e iniciais ja contam como complexas, tudo
-// decidido naquela funcao.
+// (FINALIZADO != true), cada um contado na SUA PROPRIA TURMA (ex. "2026.02-A",
+// "2026.02-R", derivada de DATA_INICIO em estagiarios!M — ver Turma.js) —
+// mesma convencao ja usada na Mensagem 4 (Mensagens.js). Reaproveita
+// getTodosEstagiariosCompletos() e getProducaoPorEstagiarios() (Panorama.js) —
+// nenhuma nova regra de cruzamento ou de contagem e criada aqui;
+// complexas/simples/acompanhamentos ja excluem STATUS "Cancelada" e iniciais
+// ja contam como complexas, tudo decidido naquela funcao.
 //
-// porEstagiario traz a mesma contagem quebrada por aluno (para os graficos
-// de barras agrupadas "por estagiario"), ordenada alfabeticamente pelo nome.
+// porEstagiario traz a mesma contagem quebrada por aluno/turma (para os
+// graficos de barras agrupadas "por estagiario"), ordenada alfabeticamente
+// pelo nome.
 //
 // A producao de todos os estagiarios ativos e calculada em uma unica passada
 // por getProducaoPorEstagiarios (Panorama.js), que le cada aba de origem

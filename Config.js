@@ -6,9 +6,10 @@
 
 //ORIENTACOES - AS ABAS NA PLANILHA SEGUEM A ESTRUTURA AQUI INSERIDAS:
 //diligencias
-//com as colunas (A:X) ID	PROCESSO N°	ASSISTIDA(O)	DILIGÊNCIA	DI	PRAZO	DF	ADV	ESTAGIÁRIO(A)	STATUS	OBS	ESPÉCIE	ALTERADO EM	SUBSESPÉCIE	DF REAL	VARA	LINK	SEMESTRE	SINC	CLASS SEC	SECRETARIA	DRIVE	DI CLASS	DF CLASS
+//com as colunas (A:Y) ID	PROCESSO N°	ASSISTIDA(O)	DILIGÊNCIA	DI	PRAZO	DF	ADV	ESTAGIÁRIO(A)	STATUS	OBS	ESPÉCIE	ALTERADO EM	SUBSESPÉCIE	DF REAL	VARA	LINK	SEMESTRE	SINC	CLASS SEC	SECRETARIA	DRIVE	DI CLASS	DF CLASS	COMENTÁRIO
 //(coluna V = DRIVE: 'S' quando o PDF do processo ja foi organizado na pasta do estagiario — ver Drive.js)
 //(colunas W/X = DI CLASS/DF CLASS: data de criacao e de entrega da atividade, conforme registradas no proprio Google Classroom — ver Classroom.js)
+//(coluna Y = COMENTARIO: observacao adicional digitada por Thales no modal, exibida no painel embaixo de OBS. Quando preenchida, entra nas Instrucoes da Atividade do Classroom — ver montarDescricaoAtividade em Classroom.js — precedida de "⚠️⚠️" e com a primeira letra maiuscula; quando vazia, a descricao da atividade segue o comportamento padrao, sem esse aviso.)
 //
 //a aba bd (colunas A:Q):
 //feriados: c2:c
@@ -25,7 +26,7 @@
 //m2: nao usado neste desenvolvimento (antigo ID do Google Calendar de audiencias)
 //id planilha secretaria: n2
 //nome da aba geral de diligencias: o2
-//data final do estagio (mensageria — Mensagens.js): p2
+//(p2 foi aposentado em 27/07/2026: data final do estagio agora fica em estagiarios!L, por aluno — ver Mensagens.js)
 //id pasta de arquivo dos estagiarios finalizados (botao "Arquivar Pastas", Drive.js): q2
 //pesos do calculo de "Parcial de Horas" (aba Panorama — Panorama.js): peso por atendimento: s2, peso por simples: t2, peso por complexa/inicial: u2, peso por acompanhamento: v2
 //
@@ -44,10 +45,14 @@
 //ID	Data	Dia	Hora	Vara	Adv	Tipo	Processo	Assistido(a)	OBS
 //(OBS: a coluna "Dia" nao tem valor digitado, e sempre uma formula a partir de "Data" — somente leitura)
 //
-//aba estagiarios: colunas A:H = ID	nome	e-mail	TRIMESTRE	FINALIZADO	SEMESTRE	DRIVE	ARQUIVADO, sendo que a coluna C tem o e-mail dos ESTAGIÁRIOS.
+//aba estagiarios: colunas A:M = ID	nome	e-mail	TRIMESTRE	FINALIZADO	SEMESTRE	DRIVE	ARQUIVADO	PERIODO	MATRICULA	DATA_INICIO	DATA_FIM	TURMA, sendo que a coluna C tem o e-mail dos ESTAGIÁRIOS.
 //(coluna G = DRIVE: ID da pasta do estagiario dentro de bd!L2 — ver Drive.js)
 //(coluna E = FINALIZADO: ao salvar no modal "Gerenciar Estagiários", tambem e replicada por ID na aba estagiarios da planilha GERAL — bd!G2, ver Geralsync.js)
 //(coluna H = ARQUIVADO: 'S' quando a pasta do estagiario (coluna G) ja foi movida de bd!L2 para bd!Q2 pelo botao "Arquivar Pastas" — ver Drive.js)
+//(coluna I = PERIODO: periodo do aluno na IES — dimensao distinta da turma de estagio)
+//(coluna K = DATA_INICIO: inicio do estagio — origem da derivacao de TURMA)
+//(coluna L = DATA_FIM: fim do estagio — substitui bd!P2 na mensageria)
+//(coluna M = TURMA: codigo "AAAA.SS-A" ou "AAAA.SS-R", derivado de DATA_INICIO)
 //
 //aba atendimentos colunas A:J ID	Nome	Processo	Data	Status	e-mail	link	DataEntrega	Semestre
 //
@@ -131,7 +136,7 @@ var CONFIG = {
 
   TIMEZONE: 'America/Fortaleza',
 
-  // --- Colunas da aba diligencias (A:U, base 0) ---
+  // --- Colunas da aba diligencias (A:Y, base 0) ---
   COL: {
     ID: 0,            // A
     PROCESSO: 1,      // B
@@ -147,7 +152,7 @@ var CONFIG = {
     ESPECIE: 11,       // L  (picklist manual — vem de bd!D2:D)
     ALTERADO_EM: 12,   // M
     SUBESPECIE: 13,    // N  (SEMPRE calculada automaticamente a partir de ESPECIE — nunca editada manualmente)
-    DF_REAL: 14,       // O (nao usado nesta pagina)
+    DF_REAL: 14,       // O (somente leitura no modal — exibida como "DF Real")
     VARA: 15,         // P
     LINK: 16,         // Q  (link do Classroom — populado automaticamente ao criar a atividade)
     SEMESTRE: 17,      // R
@@ -156,9 +161,10 @@ var CONFIG = {
     SECRETARIA: 20,   // U  ('S' quando o registro ja foi copiado para a aba secretaria)
     DRIVE: 21,        // V  ('S' quando o PDF do processo ja foi organizado na pasta do estagiario — ver Drive.js)
     DI_CLASS: 22,     // W  (data de criacao da atividade no Classroom — preenchida com o valor retornado pela API, nao com DI/hoje)
-    DF_CLASS: 23      // X  (data de entrega/dueDate da atividade no Classroom — preenchida com o valor retornado pela API, nao com DF)
+    DF_CLASS: 23,     // X  (data de entrega/dueDate da atividade no Classroom — preenchida com o valor retornado pela API, nao com DF)
+    COMENTARIO: 24    // Y  (campo "Comentário" do modal — observacao adicional que, quando preenchida, entra nas Instrucoes da Atividade do Classroom, ver montarDescricaoAtividade em Classroom.js)
   },
-  TOTAL_COLUNAS_DILIGENCIAS: 24, // A ate X
+  TOTAL_COLUNAS_DILIGENCIAS: 25, // A ate Y
 
   SHEET_SECRETARIA: 'secretaria',
 
@@ -173,12 +179,16 @@ var CONFIG = {
   // estagiario ser movida de bd!L2 para bd!Q2 (botao "Arquivar Pastas" — ver Drive.js).
   ARQUIVADO_ESTAGIARIO: 'S',
 
-  // --- Colunas da aba estagiarios (A:H) ---
+  // --- Colunas da aba estagiarios (A:M) ---
   // B = nome (usado no picklist e na aba Panorama), C = e-mail institucional
   // (usado para localizar o aluno no Classroom e na aba Panorama/Iniciais).
   // F = SEMESTRE (texto simples, ex. "2026.01") — preenchido manualmente por
-  // Thales; e a unica fonte do semestre do estagiario na aba Panorama (TRIMESTRE
-  // nao e mais usado para isso).
+  // Thales; continua sendo a dimensao das telas operacionais (Diligencias,
+  // Distribuicao).
+  // K = DATA_INICIO (Date) — origem da derivacao de TURMA.
+  // L = DATA_FIM (Date) — substitui bd!P2 na mensageria de encerramento.
+  // M = TURMA (texto "AAAA.SS-A" ou "AAAA.SS-R") — dimensao das telas de
+  // metrica (Panorama, Graficos, Painel Aluno). Nunca editada manualmente.
   ESTAGIARIOS_COL: {
     ID: 0,          // A
     NOME: 1,        // B
@@ -187,8 +197,14 @@ var CONFIG = {
     FINALIZADO: 4,  // E
     SEMESTRE: 5,    // F
     DRIVE: 6,       // G  (ID da pasta do estagiario dentro de bd!L2 — ver Drive.js)
-    ARQUIVADO: 7    // H  ('S' quando a pasta (coluna G) ja foi movida de bd!L2 para bd!Q2 — botao "Arquivar Pastas", ver Drive.js)
+    ARQUIVADO: 7,   // H  ('S' quando a pasta (coluna G) ja foi movida de bd!L2 para bd!Q2 — botao "Arquivar Pastas", ver Drive.js)
+    PERIODO: 8,     // I  (periodo do aluno na IES — NAO e a turma de estagio)
+    MATRICULA: 9,   // J
+    DATA_INICIO: 10, // K  (origem da derivacao de TURMA)
+    DATA_FIM: 11,    // L  (substitui bd!P2 na mensageria)
+    TURMA: 12        // M  ("AAAA.SS-A" ou "AAAA.SS-R", derivado e gravado como texto)
   },
+  TOTAL_COLUNAS_ESTAGIARIOS: 13, // A ate M
 
   // --- Colunas da aba bd (picklists e parametros), base A:H ---
   BD_COL: {
@@ -215,11 +231,12 @@ var CONFIG = {
     ID_PASTA_PROCESSOS: 'L2', // ID da pasta no Drive com os PDFs de processos recebidos e as subpastas por estagiario — usado por Drive.js
     ID_PLANILHA_SECRETARIA: 'N2', // ID da planilha destino para envio da aba secretaria
     NOME_ABA_GERAL_DILIGENCIAS: 'O2', // nome da aba de diligencias dentro da planilha GERAL
-    DATA_FINALIZACAO_ESTAGIO: 'P2', // data final do periodo de estagio corrente (mensageria — ver Mensagens.js)
+    // (P2 foi aposentado: data final do estagio agora fica em estagiarios!L)
     ID_PASTA_ARQUIVO_ESTAGIARIOS: 'Q2', // ID da pasta no Drive para onde vao as pastas dos estagiarios finalizados, retiradas de bd!L2 — botao "Arquivar Pastas" (Drive.js)
     CONTROLE_AO: 'R2', // contador para numeracao AO-XXXX (Atendimento Online) — guarda apenas o numero inteiro atual, ver AtendimentoOnline.js
     ID_PASTA_ACOMPANHAMENTOS: 'W2', // ID da pasta no Drive com os PDFs de acompanhamentos recebidos, ainda soltos — botao "Organizar Pastas" (Drive.js). O destino continua sendo a MESMA pasta do estagiario usada pelas diligencias (estagiarios!G, dentro de bd!L2).
     CONTROLE_AU: 'AA2', // contador para numeracao AU-XXXX (Audiencia do Estagiario) — guarda apenas o numero inteiro atual, ver AudienciasEstagiario.js
+    CONSOLIDADO_AUDIENCIAS_TURMA: 'AE2', // ancoradouro da guarda de duplicidade do A-6 (consolidado de pendencias de audiencias por turma), substituindo a antiga nota em bd!P2 — ver Mensagens.js
 
     // Pesos usados no calculo de "Parcial de Horas" da aba Panorama (ver
     // getPesosPontuacaoPanorama, Panorama.js). Cada celula guarda um unico
@@ -443,9 +460,10 @@ var CONFIG = {
   },
 
   // Mensagens 4/5 (encerramento de estagio), disparadas pelo gatilho diario
-  // que compara hoje com bd!P2 (CONFIG.BD_CELL.DATA_FINALIZACAO_ESTAGIO):
-  //   DIAS_AVISO_PRODUCAO dias corridos antes de P2 -> Mensagem 4 (resumo de producao, e-mail)
-  //   DIAS_AVISO_FLUXO    dias corridos antes de P2 -> Mensagem 5 (fluxo de encerramento, mural + e-mail)
+  // que compara hoje com DATA_FIM de cada estagiario (estagiarios!L), por
+  // aluno. bd!P2 foi aposentado em 27/07/2026.
+  //   DIAS_AVISO_PRODUCAO dias corridos antes de DATA_FIM -> Mensagem 4 (resumo de producao, e-mail)
+  //   DIAS_AVISO_FLUXO    dias corridos antes de DATA_FIM -> Mensagem 5 (fluxo de encerramento, mural + e-mail)
   // PASSOS: texto fixo definido por Thales para a Mensagem 5 — lista numerada
   // montada em montarMensagemEncerramento (Mensagens.js).
   ENCERRAMENTO_ESTAGIO: {

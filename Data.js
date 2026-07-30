@@ -140,12 +140,14 @@ function rowParaObjeto(row, indice, feriadosTimestamps) {
     link: String(row[CONFIG.COL.LINK] || '').trim(),
     diClass: formatarData(row[CONFIG.COL.DI_CLASS]), // data de criacao real no Classroom, ver Classroom.js
     dfClass: formatarData(row[CONFIG.COL.DF_CLASS]), // data de entrega/dueDate real no Classroom, ver Classroom.js
+    dfReal: formatarData(row[CONFIG.COL.DF_REAL]), // somente leitura — exibida no modal como "DF Real"
+    comentario: row[CONFIG.COL.COMENTARIO] || '', // observacao adicional (modal) — ver montarDescricaoAtividade em Classroom.js
     alteradoEm: formatarDataHora(row[CONFIG.COL.ALTERADO_EM]),
     atraso: atrasoVal,
     prazoAtraso: formatarData(dfParaAtraso), // DF CLASS (com fallback para DF) usada no calculo de atraso — consumida pelas cobrancas, ver Mensagens.js
     gatilho: gatilhoVal, // null | 'gatilho1' | 'gatilho2' | 'gatilho3'
     semestre: normalizarSemestreLido(row[CONFIG.COL.SEMESTRE]) // fonte unica do semestre do registro — nao e mais recalculado ao vivo a partir de DF
-    // ADV, DF REAL e SINC nunca sao enviados ao frontend
+    // ADV e SINC nunca sao enviados ao frontend
   };
 }
 
@@ -209,9 +211,10 @@ function getTodasDiligencias() {
 }
 
 // --- Escrita ---
-// Campos editaveis pelo painel: estagiario, status, obs, especie, vara.
-// alteradoEm, semestre e subespecie sao sempre recalculados automaticamente
-// no servidor (subespecie nunca e recebida do frontend, so calculada).
+// Campos editaveis pelo painel: estagiario, status, obs, comentario, especie,
+// vara. alteradoEm, semestre e subespecie sao sempre recalculados
+// automaticamente no servidor (subespecie nunca e recebida do frontend, so
+// calculada).
 function salvarEdicaoDiligencia(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName(CONFIG.SHEET_DILIGENCIAS);
@@ -233,6 +236,7 @@ function salvarEdicaoDiligencia(payload) {
   aba.getRange(linha, CONFIG.COL.ESTAGIARIO + 1).setValue(payload.estagiario || '');
   aba.getRange(linha, CONFIG.COL.STATUS + 1).setValue(novoStatus);
   aba.getRange(linha, CONFIG.COL.OBS + 1).setValue(payload.obs || '');
+  aba.getRange(linha, CONFIG.COL.COMENTARIO + 1).setValue(payload.comentario || '');
   aba.getRange(linha, CONFIG.COL.ESPECIE + 1).setValue(novaEspecie);
   aba.getRange(linha, CONFIG.COL.SUBESPECIE + 1).setValue(novaSubespecie);
   aba.getRange(linha, CONFIG.COL.VARA + 1).setValue(payload.vara || '');
@@ -440,6 +444,7 @@ function criarPedidoAluno(payload) {
   novaLinha[CONFIG.COL.DRIVE] = '';
   novaLinha[CONFIG.COL.DI_CLASS] = '';
   novaLinha[CONFIG.COL.DF_CLASS] = '';
+  novaLinha[CONFIG.COL.COMENTARIO] = '';
 
   var proximaLinhaPlanilha = aba.getLastRow() + 1;
   aba.getRange(proximaLinhaPlanilha, 1, 1, CONFIG.TOTAL_COLUNAS_DILIGENCIAS).setValues([novaLinha]);
@@ -574,7 +579,8 @@ function transferirDiligencia(payload) {
         especie: especie,
         vara: linhaAtual[CONFIG.COL.VARA],
         estagiario: novoEstagiario,
-        dfRaw: novaDf
+        dfRaw: novaDf,
+        comentario: linhaAtual[CONFIG.COL.COMENTARIO]
       };
       var resultadoClassroom = recriarCourseWorkTransferencia(regNovo, courseworkIdAntigo);
 

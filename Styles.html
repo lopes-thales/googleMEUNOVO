@@ -728,6 +728,17 @@
   .badge-ao-aprovado  { background: var(--fundo-concluido);   color: var(--cor-concluido); }
   .badge-ao-reprovado { background: var(--fundo-atraso);      color: var(--cor-atraso); }
 
+  /* Selo "Antecipado" (27/07/2026) — identifica um aluno/registro de turma
+     -A (estagio antecipado de janeiro/julho) na aba Panorama e no Painel
+     Aluno, para nao confundir na visao "Todas as turmas" (ver Turma.js,
+     formatarRotuloTurma). Reaproveita --cor-total/--fundo-total: neutro e
+     informativo, sem sobrepor o significado dos badges de status acima. */
+  .selo-turma-antecipada {
+    display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 20px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap;
+    background: var(--fundo-total); color: var(--cor-total); margin-left: 6px;
+  }
+
   /* Contador de pendentes na aba de navegacao (ex.: "Atendimento Online (3)") */
   .nav-tab-contador {
     display: inline-flex; align-items: center; justify-content: center;
@@ -773,7 +784,7 @@
     transform: translateY(16px); transition: transform 0.2s;
   }
   .modal-overlay.visivel .modal { transform: translateY(0); }
-  .modal-largo { max-width: 920px; }
+  .modal-largo { max-width: 1080px; }
   .modal-estreito { max-width: 460px; }
   .modal-estreito .modal-corpo { padding: 20px 24px 8px; }
 

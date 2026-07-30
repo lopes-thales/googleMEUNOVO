@@ -128,18 +128,6 @@ function popularSelectSimples(select, valores, valorAtual, placeholder) {
   }
 }
 
-function obterSemestreAtual() {
-  try {
-    var hoje = new Date();
-    var ano = hoje.getFullYear();
-    var mes = hoje.getMonth() + 1;
-    if (!ano || !mes) return '';
-    return ano + '.' + (mes <= 6 ? '01' : '02');
-  } catch (e) {
-    return '';
-  }
-}
-
 // === LOADING / TOAST ===
 function mostrarLoading(show) {
   var el = document.getElementById('loadingWrapper');
@@ -199,7 +187,11 @@ var PA = {
     especiePicklistIniciais: []
   },
   avisoComprovanteAudiencia: '',
-  semestreFiltro: '',
+  // Valor de turma/semestre selecionado no seletor hierarquico: um codigo de
+  // turma completo ("2026.02-A") para uma turma especifica, ou so o semestre
+  // base ("2026.02") para "Todas as turmas" — ver paPopularSeletores. Definido
+  // a partir de PA.dados.turmaCorrente (backend, Turma.js) na primeira carga.
+  turmaFiltro: '',
   alunoSelecionado: null, // { nome, email } — so usado quando tipo === 'thales'
   _diligenciasAtuais: [],
   _iniciaisAtuais: [],
@@ -266,6 +258,7 @@ function paCarregarDados() {
       PA.dados.parametrosAudiencias = resultado.parametrosAudiencias || [];
       PA.dados.especiePicklistIniciais = resultado.especiePicklistIniciais || [];
       PA.avisoComprovanteAudiencia = resultado.avisoComprovanteAudiencia || '';
+      PA.dados.turmaCorrente = resultado.turmaCorrente || '';
 
       mostrarLoading(false);
       paPopularSeletores();
@@ -289,36 +282,66 @@ function paMostrarErroCarregamento(msg) {
   document.getElementById('btnCriarPeticaoInicial').disabled = true;
 }
 
-// === SELETORES DE SEMESTRE / ALUNO ===
+// === SELETORES DE TURMA / ALUNO ===
+// 27/07/2026: o seletor passou de SEMESTRE (flat) para um seletor hierarquico
+// de TURMA — mesmo formato e mesma tecnica de Scripts.html (Panorama): para
+// cada semestre presente nos estagiarios visiveis, 3 opcoes (Todas as
+// turmas / Antecipado / Regular). Rotulos identicos aos de formatarRotuloTurma
+// (Turma.js) — reaproveitados aqui em texto porque nao ha como chamar uma
+// funcao server-side sincronamente do cliente.
+function rotulosTurma(semestreBase) {
+  return {
+    todas: semestreBase + ' — Todas as turmas',
+    antecipado: semestreBase + ' — Antecipado (julho)',
+    regular: semestreBase + ' — Regular (agosto a dezembro)'
+  };
+}
+
+// Porta cliente de turmaCasaComFiltro (Turma.js) — ver nota acima.
+function turmaCasaComFiltroCliente(turma, filtro) {
+  var t = String(turma || '').trim();
+  var f = String(filtro || '').trim();
+  if (!t || !f) return false;
+  if (t === f) return true;
+  return t.indexOf(f + '-') === 0;
+}
+
 function paPopularSeletores() {
   var wrapper = document.getElementById('paSeletores');
   var estagiarios = PA.dados.estagiarios || [];
 
-  var presentes = {};
-  estagiarios.forEach(function(e) { if (e.semestre) presentes[e.semestre] = true; });
-  var semestres = Object.keys(presentes).sort().reverse();
+  var semestresPresentes = {};
+  estagiarios.forEach(function(e) {
+    var sem = String(e.turma || '').split('-')[0];
+    if (sem) semestresPresentes[sem] = true;
+  });
+  var semestres = Object.keys(semestresPresentes).sort().reverse();
 
   if (!semestres.length) {
     wrapper.style.display = 'none';
-    PA.semestreFiltro = '';
+    PA.turmaFiltro = '';
     return;
   }
   wrapper.style.display = 'flex';
 
-  if (semestres.indexOf(PA.semestreFiltro) === -1) {
-    var atual = obterSemestreAtual();
-    PA.semestreFiltro = semestres.indexOf(atual) !== -1 ? atual : semestres[0];
+  var valoresValidos = [];
+  var htmlSem = '';
+  semestres.forEach(function(sem) {
+    var rotulos = rotulosTurma(sem);
+    htmlSem += '<option value="' + sem + '">' + rotulos.todas + '</option>';
+    htmlSem += '<option value="' + sem + '-A">' + rotulos.antecipado + '</option>';
+    htmlSem += '<option value="' + sem + '-R">' + rotulos.regular + '</option>';
+    valoresValidos.push(sem, sem + '-A', sem + '-R');
+  });
+
+  if (valoresValidos.indexOf(PA.turmaFiltro) === -1) {
+    var candidato = PA.dados.turmaCorrente || '';
+    PA.turmaFiltro = valoresValidos.indexOf(candidato) !== -1 ? candidato : semestres[0];
   }
 
   var selSem = document.getElementById('paSelectSemestre');
-  selSem.innerHTML = '';
-  semestres.forEach(function(s) {
-    var opt = document.createElement('option');
-    opt.value = s;
-    opt.textContent = s;
-    if (s === PA.semestreFiltro) opt.selected = true;
-    selSem.appendChild(opt);
-  });
+  selSem.innerHTML = htmlSem;
+  selSem.value = PA.turmaFiltro;
 
   var mostrarAluno = (PA.tipo === 'thales');
   document.getElementById('paSepAluno').style.display = mostrarAluno ? 'inline-block' : 'none';
@@ -329,22 +352,25 @@ function paPopularSeletores() {
   if (mostrarAluno) paPopularSelectAluno();
 }
 
-function paAlunosDoSemestre() {
+function paAlunosDaTurma() {
+  var filtro = PA.turmaFiltro;
   return (PA.dados.estagiarios || [])
-    .filter(function(e) { return e.semestre === PA.semestreFiltro; })
+    .filter(function(e) { return turmaCasaComFiltroCliente(e.turma, filtro); })
     .sort(function(a, b) { return normalizarChave(a.nome) < normalizarChave(b.nome) ? -1 : 1; });
 }
 
 function paPopularSelectAluno() {
   var select = document.getElementById('paSelectAluno');
-  var alunos = paAlunosDoSemestre();
+  var alunos = paAlunosDaTurma();
   var valorAtual = PA.alunoSelecionado ? PA.alunoSelecionado.email : '';
 
   select.innerHTML = '<option value="">— Selecione um aluno —</option>';
   alunos.forEach(function(a) {
     var opt = document.createElement('option');
     opt.value = a.email;
-    opt.textContent = a.nome + (a.finalizado ? ' — Finalizado' : '');
+    var sufixo = a.finalizado ? ' — Finalizado' : '';
+    if (String(a.turma || '').slice(-2) === '-A') sufixo += ' · Antecipado';
+    opt.textContent = a.nome + sufixo;
     if (a.finalizado) opt.className = 'opcao-finalizada';
     if (a.email === valorAtual) opt.selected = true;
     select.appendChild(opt);
@@ -357,8 +383,8 @@ function paPopularSelectAluno() {
   }
 }
 
-function paMudarSemestre(valor) {
-  PA.semestreFiltro = valor || '';
+function paMudarTurma(valor) {
+  PA.turmaFiltro = valor || '';
   if (PA.tipo === 'thales') {
     PA.alunoSelecionado = null;
     paPopularSelectAluno();
@@ -370,18 +396,22 @@ function paMudarAluno(valor) {
   if (!valor) {
     PA.alunoSelecionado = null;
   } else {
-    var achado = paAlunosDoSemestre().filter(function(a) { return a.email === valor; })[0];
+    var achado = paAlunosDaTurma().filter(function(a) { return a.email === valor; })[0];
     PA.alunoSelecionado = achado ? { nome: achado.nome, email: achado.email } : null;
   }
   paRenderizarTudo();
 }
 
-// Aluno "em foco" no momento: para tipo 'aluno' e sempre a propria linha do
-// semestre escolhido (nunca ha o que escolher alem do semestre); para tipo
+// Aluno "em foco" no momento: para tipo 'aluno' e sempre a propria linha da
+// turma escolhida (nunca ha o que escolher alem da turma); para tipo
 // 'thales' e o que estiver selecionado no seletor de aluno (pode ser nenhum).
+// Quando o filtro atual e um semestre inteiro ("Todas as turmas") e o aluno
+// tem mais de uma linha nele (antecipado + regular), a primeira e devolvida
+// so para fins de cabecalho/cards — a criacao de audiencia (que precisa de
+// uma linha exata) tem sua propria checagem, ver paSalvarNovaAudiencia.
 function paResolverAlunoAtual() {
   if (PA.tipo === 'thales') return PA.alunoSelecionado;
-  var linha = paAlunosDoSemestre()[0];
+  var linha = paAlunosDaTurma()[0];
   return linha ? { nome: linha.nome, email: linha.email } : null;
 }
 
@@ -420,12 +450,19 @@ function paRenderizarTudo() {
   paRenderizarTabelas(alunoAtual);
 }
 
-// --- Filtragem client-side (semestre + o unico aluno em foco) ---
+// --- Filtragem client-side (turma + o unico aluno em foco) ---
+// 27/07/2026: o filtro de turma casa direto contra r.turma (ja resolvida
+// pelo servidor — registro -> aluno -> turma, ver getDadosPainelAluno,
+// Aluno.js), em vez de r.semestre. Combinado ao filtro por nome/e-mail do
+// aluno em foco, isso cobre corretamente a visao "Todas as turmas" para um
+// aluno que fez antecipado e regular no mesmo semestre — cada registro
+// pertence a uma e so uma turma, entao a soma das duas nao gera dupla
+// contagem (mesmo raciocinio do Panorama, ver Scripts.html).
 function paFiltrarPorAluno(lista, alunoAtual, camposNome, camposEmail) {
   var chaveNome = normalizarChave(alunoAtual.nome);
   var chaveEmail = normalizarChave(alunoAtual.email);
   return (lista || []).filter(function(r) {
-    if (r.semestre !== PA.semestreFiltro) return false;
+    if (!turmaCasaComFiltroCliente(r.turma, PA.turmaFiltro)) return false;
     var okNome = camposNome.some(function(c) { return normalizarChave(r[c]) === chaveNome; });
     if (okNome) return true;
     if (!camposEmail || !camposEmail.length) return false;
@@ -1098,6 +1135,15 @@ function paAbrirModalNovaAudiencia() {
     return;
   }
 
+  // Mesma checagem de paSalvarNovaAudiencia — bloqueia mais cedo, antes de
+  // abrir o modal, quando "Todas as turmas" deixa o aluno em foco ambiguo
+  // (mais de uma matricula no mesmo semestre).
+  var linhasDoAluno = paAlunosDaTurma().filter(function(a) { return a.email === alunoAtual.email; });
+  if (linhasDoAluno.length > 1) {
+    mostrarToast('Você tem mais de uma matrícula neste semestre. Selecione a turma específica (Antecipado ou Regular) antes de registrar a audiência.', 'erro');
+    return;
+  }
+
   var parametros = PA.dados.parametrosAudiencias || [];
   if (!parametros.length) {
     mostrarToast('Nenhum tipo de audiência cadastrado. Procure o coordenador.', 'erro');
@@ -1131,6 +1177,18 @@ function paSalvarNovaAudiencia() {
     return;
   }
 
+  // A audiencia precisa ser gravada contra uma linha EXATA de "estagiarios"
+  // (RN-02 — SEMESTRE e ESTATICO, copiado da linha no momento da criacao).
+  // Com "Todas as turmas" selecionado, paResolverAlunoAtual() pode devolver a
+  // primeira linha do aluno (ambiguo se ele fez antecipado E regular no mesmo
+  // semestre) — nesse caso, exige que uma turma especifica seja escolhida no
+  // seletor antes de registrar, em vez de arriscar gravar na turma errada.
+  var linhasDoAluno = paAlunosDaTurma().filter(function(a) { return a.email === alunoAtual.email; });
+  if (linhasDoAluno.length > 1) {
+    mostrarToast('Você tem mais de uma matrícula neste semestre. Selecione a turma específica (Antecipado ou Regular) antes de registrar a audiência.', 'erro');
+    return;
+  }
+
   var payload = {
     data: document.getElementById('auNovaData').value,
     hora: document.getElementById('auNovaHora').value,
@@ -1139,7 +1197,7 @@ function paSalvarNovaAudiencia() {
     processo: document.getElementById('auNovaProcesso').value,
     partes: document.getElementById('auNovaPartes').value,
     obs: document.getElementById('auNovaObs').value,
-    semestre: PA.semestreFiltro,
+    turma: linhasDoAluno[0].turma,
     emailAluno: alunoAtual.email
   };
 

@@ -124,16 +124,21 @@ function proximoNumeroAudienciaEstagiario() {
   return CONFIG.PREFIXO_AUDIENCIA_ESTAGIARIO + String(proximo).padStart(4, '0');
 }
 
-// --- Resolucao segura do estagiario/semestre alvo (nunca confia em nome/e-mail do payload) ---
-// O SEMESTRE gravado e ESTATICO (RN-02) e depende de qual linha de
-// "estagiarios" (par email+semestre) esta selecionada no Painel Aluno — por
-// isso payload.semestre e sempre exigido e validado contra a planilha, tanto
-// para o proprio aluno quanto para Thales agindo em nome de um aluno (mesmo
-// padrao de validacao ja usado em acaoCriarAtendimentoOnline/
-// acaoCriarPedidoInicial, Code.js).
+// --- Resolucao segura do estagiario/turma alvo (nunca confia em nome/e-mail do payload) ---
+// O SEMESTRE gravado no registro e ESTATICO (RN-02) e depende de qual linha
+// de "estagiarios" esta selecionada no Painel Aluno — por isso o payload
+// precisa identificar essa linha sem ambiguidade. Ate 27/07/2026 a chave era
+// payload.semestre (par email+semestre), mas isso e ambiguo quando o aluno
+// tem duas linhas no MESMO semestre (antecipado e regular — ver Turma.js):
+// o filtro pegava a primeira que casasse, podendo gravar a audiencia na
+// turma errada. A chave passou a ser payload.turma (par email+turma, casamento
+// exato — um aluno tem no maximo uma linha por turma), exigido e validado
+// contra a planilha tanto para o proprio aluno quanto para Thales agindo em
+// nome de um aluno (mesmo padrao de validacao ja usado em
+// acaoCriarAtendimentoOnline/acaoCriarPedidoInicial, Code.js).
 function _resolverEstagiarioAlvoAudiencia(payload, emailUsuario, ehThales) {
-  var semestreInformado = String((payload && payload.semestre) || '').trim();
-  if (!semestreInformado) return null;
+  var turmaInformada = String((payload && payload.turma) || '').trim();
+  if (!turmaInformada) return null;
 
   var emailAlvo = ehThales
     ? normalizarChave((payload && payload.emailAluno) || '')
@@ -141,7 +146,7 @@ function _resolverEstagiarioAlvoAudiencia(payload, emailUsuario, ehThales) {
   if (!emailAlvo) return null;
 
   var achado = getTodosEstagiariosCompletos().filter(function(e) {
-    return normalizarChave(e.email) === emailAlvo && e.semestre === semestreInformado;
+    return normalizarChave(e.email) === emailAlvo && e.turma === turmaInformada;
   })[0];
   if (!achado) return null;
 
@@ -217,7 +222,7 @@ function _audienciaDuplicada(nomeEstagiario, processoNormalizado, dataFormatada,
 }
 
 // --- Criacao (Painel Aluno) ---
-// payload: { data, hora, tipo, vara, processo, partes, obs, semestre,
+// payload: { data, hora, tipo, vara, processo, partes, obs, turma,
 // emailAluno (so quando ehThales) }.
 function criarAudienciaEstagiario(payload, emailUsuario, ehThales) {
   var parametros = lerParametrosAudiencias();
@@ -225,7 +230,7 @@ function criarAudienciaEstagiario(payload, emailUsuario, ehThales) {
   if (!validacao.valido) return { sucesso: false, erro: validacao.erro };
 
   var alvo = _resolverEstagiarioAlvoAudiencia(payload, emailUsuario, ehThales);
-  if (!alvo) return { sucesso: false, erro: 'Não foi possível identificar o estagiário(a) e o semestre selecionados.' };
+  if (!alvo) return { sucesso: false, erro: 'Não foi possível identificar o estagiário(a) e a turma selecionados.' };
 
   var processoNormalizado = _normalizarProcessoAudiencia(validacao.processo);
   var dataFormatada = formatarData(validacao.data);
@@ -352,7 +357,8 @@ function aprovarAudienciaEstagiario(linha) {
   var avisoEmail = null;
   if (reg.email) {
     var parametros = lerParametrosAudiencias();
-    var contagens = contarAudienciasPorTipo(reg.estagiario, reg.semestre, getTodasAudienciasEstagiario(), parametros);
+    var turmaRegistro = resolverTurmaDoRegistro(reg.estagiario || reg.email, parseDataBR(reg.data));
+    var contagens = contarAudienciasPorTipo(reg.estagiario, turmaRegistro, getTodasAudienciasEstagiario(), parametros);
     var contagemTipo = contagens.filter(function(c) { return normalizarChave(c.tipo) === normalizarChave(reg.tipo); })[0];
     var progressoTexto = contagemTipo ? (contagemTipo.realizado + '/' + contagemTipo.meta) : '';
 
@@ -360,7 +366,7 @@ function aprovarAudienciaEstagiario(linha) {
 
     // A-3 (meta de um tipo cumprida) / A-4 (todas as metas cumpridas) — ver
     // Mensagens.js. Disparado so apos a contagem ja refletir esta aprovacao.
-    var avisoMetas = dispararAvisosMetaAudiencia(reg.estagiario, reg.email, reg.semestre, contagens);
+    var avisoMetas = dispararAvisosMetaAudiencia(reg.estagiario, reg.email, turmaRegistro, contagens);
     if (avisoMetas) avisoEmail = avisoEmail ? (avisoEmail + ' | ' + avisoMetas) : avisoMetas;
   }
 
@@ -427,15 +433,24 @@ function reprovarAudienciasEmLote(linhas, motivo) {
 }
 
 // --- Contagem por tipo (meta/progresso — Painel Aluno, Panorama, Gráficos) ---
-// So considera STATUS = Aprovada (RN-05). "excedente" so fica true quando a
-// meta ja foi definida (meta > 0) e o realizado a ultrapassa (RN-06) — a
-// barra de progresso trava em 100% no frontend, mas o numero real (realizado)
-// e sempre exibido e conta integralmente na Parcial de Horas.
-function contarAudienciasPorTipo(nomeEstagiario, semestre, lista, parametros) {
+// Filtrada pela TURMA informada (ex. "2026.02-A" ou "2026.02" para "todas as
+// turmas"). So considera STATUS = Aprovada (RN-05). "excedente" so fica true
+// quando a meta ja foi definida (meta > 0) e o realizado a ultrapassa (RN-06)
+// — a barra de progresso trava em 100% no frontend, mas o numero real
+// (realizado) e sempre exibido e conta integralmente na Parcial de Horas.
+//
+// A turma de cada registro e resolvida em tempo de leitura a partir do
+// estagiario e da data da audiencia, sem materializar TURMA na aba
+// transacional (decisao de arquitetura, 27/07/2026).
+function contarAudienciasPorTipo(nomeEstagiario, turma, lista, parametros) {
   var chaveNome = normalizarChave(nomeEstagiario);
+  var resolvedorTurma = criarResolvedorTurma();
+
   var aprovadas = (lista || []).filter(function(a) {
-    return normalizarChave(a.estagiario) === chaveNome && a.semestre === semestre &&
-      normalizarChave(a.status) === normalizarChave(CONFIG.STATUS_AUDIENCIA_ESTAGIARIO.APROVADA);
+    if (normalizarChave(a.estagiario) !== chaveNome) return false;
+    if (normalizarChave(a.status) !== normalizarChave(CONFIG.STATUS_AUDIENCIA_ESTAGIARIO.APROVADA)) return false;
+    var turmaRegistro = resolvedorTurma(a.estagiario || a.email, parseDataBR(a.data));
+    return turmaCasaComFiltro(turmaRegistro, turma);
   });
 
   return (parametros || []).map(function(p) {

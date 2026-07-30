@@ -34,8 +34,19 @@ function montarTituloAtividade(reg) {
   return reg.id + ' - ' + reg.assistido + ' - ' + reg.especie;
 }
 
+// Capitaliza apenas a primeira letra do texto, preservando o resto como
+// digitado — usada no aviso do campo COMENTARIO (ver montarDescricaoAtividade).
+function capitalizarPrimeiraLetra(texto) {
+  var t = String(texto || '').trim();
+  if (!t) return '';
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 // Texto fixo definido por Thales. So os campos entre {} sao substituidos —
-// o restante do texto nunca deve ser alterado.
+// o restante do texto nunca deve ser alterado. reg.comentario (campo
+// "Comentário" do modal, coluna Y de diligencias) e opcional: quando vazio,
+// a descricao segue o comportamento padrao; quando preenchido, vira uma linha
+// de aviso "⚠️⚠️ <comentario>" entre o tipo da peça e as instrucoes de envio.
 function montarDescricaoAtividade(reg, subespecie) {
   var linhas = [
     '📝Atividade de Prática Jurídica',
@@ -43,14 +54,22 @@ function montarDescricaoAtividade(reg, subespecie) {
     'Vara: ' + reg.vara,
     'Assistido(a): ' + reg.assistido,
     'Diligência: ' + reg.diligencia + ' (' + reg.especie + ')',
-    'Peça ' + subespecie,
+    'Peça ' + subespecie
+  ];
+
+  var comentario = String(reg.comentario || '').trim();
+  if (comentario) {
+    linhas.push('⚠️⚠️ ' + capitalizarPrimeiraLetra(comentario));
+  }
+
+  linhas.push(
     '',
     'Enviem a atividade em formato WORD (.doc, .docx) ou digitem diretamente na atividade.',
     'Não enviem em PDF, a não ser os anexos (documentos, memórias de cálculo etc.).',
     'Para acessar o processo, procure pelo número nesta pasta:',
     obterUrlPastaProcessos(),
     'Esta atividade foi criada automaticamente pelo sistema.'
-  ];
+  );
   return linhas.join('\n');
 }
 
@@ -520,7 +539,8 @@ function coletarLinhasElegiveisParaEnvio() {
       especie: row[CONFIG.COL.ESPECIE],
       vara: row[CONFIG.COL.VARA],
       estagiario: row[CONFIG.COL.ESTAGIARIO],
-      dfRaw: row[CONFIG.COL.DF]
+      dfRaw: row[CONFIG.COL.DF],
+      comentario: row[CONFIG.COL.COMENTARIO]
     });
   }
   return { elegiveis: elegiveis, ignorados: ignorados };

@@ -71,12 +71,12 @@
   <div id="conteudoPrincipal" style="display:none;">
     <div class="main">
 
-      <!-- SELETORES DE SEMESTRE E ALUNO -->
+      <!-- SELETORES DE TURMA E ALUNO -->
       <div class="painel-semestre-panorama" id="paSeletores" style="display:none;">
         <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.semestre ?></span>
-        <span class="busca-label">Semestre</span>
-        <select id="paSelectSemestre" class="select-semestre" onchange="paMudarSemestre(this.value)">
-          <option value="">— Nenhum semestre encontrado —</option>
+        <span class="busca-label">Turma</span>
+        <select id="paSelectSemestre" class="select-semestre" onchange="paMudarTurma(this.value)">
+          <option value="">— Nenhuma turma encontrada —</option>
         </select>
 
         <span class="painel-semestre-separador" id="paSepAluno" style="display:none;"></span>
@@ -91,7 +91,7 @@
       <div class="estado-vazio" id="paSemAluno" style="display:none;">
         <span class="material-symbols-outlined"><?= ICONES.aluno ?></span>
         <div class="estado-vazio-titulo">Selecione um aluno</div>
-        <div class="estado-vazio-desc">Escolha um semestre e um aluno acima para ver os registros dele(a).</div>
+        <div class="estado-vazio-desc">Escolha uma turma e um aluno acima para ver os registros dele(a).</div>
       </div>
 
       <!-- CONTEUDO DO ALUNO SELECIONADO -->

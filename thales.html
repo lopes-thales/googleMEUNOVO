@@ -473,12 +473,12 @@
       <div class="secao-vista" id="secaoPanorama" style="display:none;">
         <div class="overlay-carregando-aba" id="overlayCarregandoPanorama"><div class="spinner-aba"></div></div>
 
-        <!-- SELETORES DE SEMESTRE E ALUNO -->
+        <!-- SELETORES DE TURMA E ALUNO -->
         <div class="painel-semestre-panorama">
           <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.semestre ?></span>
-          <span class="busca-label">Semestre</span>
-          <select id="selectSemestrePanorama" class="select-semestre" onchange="mudarSemestrePanorama(this.value)">
-            <option value="">— Nenhum semestre encontrado —</option>
+          <span class="busca-label">Turma</span>
+          <select id="selectSemestrePanorama" class="select-semestre" onchange="mudarTurmaPanorama(this.value)">
+            <option value="">— Nenhuma turma encontrada —</option>
           </select>
 
           <span class="painel-semestre-separador"></span>
@@ -833,6 +833,10 @@
                 <div class="modal-campo-label">Vencimento (DF)</div>
                 <div class="modal-campo-valor" id="mDf"></div>
               </div>
+              <div>
+                <div class="modal-campo-label">DF Real</div>
+                <div class="modal-campo-valor" id="mDfReal">—</div>
+              </div>
             </div>
           </div>
 
@@ -898,10 +902,16 @@
                 <div class="modal-campo-label">Subespécie (Peça)</div>
                 <div class="modal-campo-valor modal-campo-calculado" id="displaySubespecie">—</div>
               </div>
-              <div style="grid-column: 1 / -1;">
+              <div>
                 <div class="modal-campo-label">Observações</div>
                 <div class="modal-campo-editavel">
                   <textarea class="modal-textarea" id="editObs" placeholder="Observações sobre a diligência..."></textarea>
+                </div>
+              </div>
+              <div>
+                <div class="modal-campo-label">Comentário</div>
+                <div class="modal-campo-editavel">
+                  <textarea class="modal-textarea" id="editComentario" placeholder="Observação adicional para as Instruções da Atividade no Classroom..."></textarea>
                 </div>
               </div>
             </div>

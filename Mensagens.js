@@ -253,7 +253,7 @@ function enviarEmailAudienciaReprovada(email, nomeAluno, idAudiencia, tipo, data
 }
 
 // A-3: meta de UM tipo cumprida (disparada uma unica vez por tipo, por
-// estagiario, por semestre — controle de reenvio via nota de celula, ver
+// estagiario, por TURMA — controle de reenvio via nota de celula, ver
 // dispararAvisosMetaAudiencia mais abaixo).
 function montarMensagemMetaAudienciaCumprida(nomeAluno, tipo, meta) {
   var linhas = [
@@ -271,7 +271,7 @@ function enviarEmailMetaAudienciaCumprida(email, nomeAluno, tipo, meta) {
 }
 
 // A-4: as TRES metas cumpridas (disparada uma unica vez por estagiario, por
-// semestre — mensagem de encerramento do requisito, distinta da A-3).
+// TURMA — mensagem de encerramento do requisito, distinta da A-3).
 function montarMensagemTodasMetasAudienciaCumpridas(nomeAluno) {
   var linhas = [
     primeiroNome(nomeAluno) + ', você cumpriu as três metas de audiências do estágio (Escritório Escola, Externas e Tribunal do Júri). Parabéns pelo empenho!',
@@ -287,20 +287,26 @@ function enviarEmailTodasMetasAudienciaCumpridas(email, nomeAluno) {
   enviarEmailIndividual(email, assunto, texto);
 }
 
-// Localiza a linha exata de "estagiarios" (par NOME+SEMESTRE, ja que um mesmo
-// estagiario pode ter mais de uma linha — um por semestre) para gravar/ler a
-// nota de rastreio de A-3/A-4 na celula NOME (coluna B), mesma tecnica de
-// _avisoEncerramentoJaEnviado/_marcarAvisoEncerramentoEnviado (mais abaixo).
-function _linhaEstagiarioPorNomeSemestre(abaEstagiarios, nome, semestre) {
+// Localiza a linha exata de "estagiarios" (par NOME+TURMA, ja que um mesmo
+// estagiario pode ter mais de uma linha — ex.: antecipado e regular do mesmo
+// semestre) para gravar/ler a nota de rastreio de A-3/A-4 na celula NOME
+// (coluna B), mesma tecnica de _avisoEncerramentoJaEnviado/
+// _marcarAvisoEncerramentoEnviado (mais abaixo).
+function _linhaEstagiarioPorNomeTurma(abaEstagiarios, nome, turma) {
   var ultimaLinha = abaEstagiarios.getLastRow();
   if (ultimaLinha < 2) return null;
 
-  var dados = abaEstagiarios.getRange(2, 1, ultimaLinha - 1, 6).getValues();
+  var dados = abaEstagiarios.getRange(2, 1, ultimaLinha - 1, CONFIG.TOTAL_COLUNAS_ESTAGIARIOS).getValues();
   var chaveNome = normalizarChave(nome);
   for (var i = 0; i < dados.length; i++) {
     var linhaNome = normalizarChave(dados[i][CONFIG.ESTAGIARIOS_COL.NOME]);
-    var linhaSemestre = normalizarSemestreLido(dados[i][CONFIG.ESTAGIARIOS_COL.SEMESTRE]);
-    if (linhaNome === chaveNome && linhaSemestre === semestre) return i + 2;
+    var linhaTurma = String(dados[i][CONFIG.ESTAGIARIOS_COL.TURMA] || '').trim();
+    if (!linhaTurma) {
+      var dataInicio = dados[i][CONFIG.ESTAGIARIOS_COL.DATA_INICIO];
+      var semestre = normalizarSemestreLido(dados[i][CONFIG.ESTAGIARIOS_COL.SEMESTRE]);
+      linhaTurma = calcularTurma(dataInicio, semestre);
+    }
+    if (linhaNome === chaveNome && linhaTurma === turma) return i + 2;
   }
   return null;
 }
@@ -308,17 +314,19 @@ function _linhaEstagiarioPorNomeSemestre(abaEstagiarios, nome, semestre) {
 // Chamada por aprovarAudienciaEstagiario (AudienciasEstagiario.js) apos cada
 // aprovacao, ja com a contagem atualizada (contagens = contarAudienciasPorTipo).
 // Dispara A-3 para cada tipo recem-completado e A-4 quando os tres tipos
-// estiverem completos — cada um no maximo uma vez por estagiario+semestre,
-// controlado por nota na celula NOME (mesmo mecanismo de
+// estiverem completos — cada um no maximo uma vez por estagiario+TURMA
+// (27/07/2026: chave trocada de semestre para turma, ja que um estagiario
+// pode ter uma linha por turma dentro do mesmo semestre civil — antecipado e
+// regular), controlado por nota na celula NOME (mesmo mecanismo de
 // _avisoEncerramentoJaEnviado/_marcarAvisoEncerramentoEnviado). Falha de
 // envio nunca interrompe o restante (RN-12) — erros sao concatenados e
 // devolvidos como aviso nao bloqueante.
-function dispararAvisosMetaAudiencia(nomeEstagiario, email, semestre, contagens) {
+function dispararAvisosMetaAudiencia(nomeEstagiario, email, turma, contagens) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var abaEstagiarios = ss.getSheetByName(CONFIG.SHEET_ESTAGIARIOS);
   if (!abaEstagiarios) return null;
 
-  var linha = _linhaEstagiarioPorNomeSemestre(abaEstagiarios, nomeEstagiario, semestre);
+  var linha = _linhaEstagiarioPorNomeTurma(abaEstagiarios, nomeEstagiario, turma);
   if (!linha) return null;
   var cellNome = abaEstagiarios.getRange(linha, CONFIG.ESTAGIARIOS_COL.NOME + 1);
 
@@ -328,10 +336,10 @@ function dispararAvisosMetaAudiencia(nomeEstagiario, email, semestre, contagens)
   lista.forEach(function(c) {
     if (c.meta > 0 && c.realizado >= c.meta) {
       var chaveTipo = 'AUDIENCIA_META_' + normalizarChave(c.tipo).toUpperCase();
-      if (!_avisoEncerramentoJaEnviado(cellNome, chaveTipo, semestre)) {
+      if (!_avisoEncerramentoJaEnviado(cellNome, chaveTipo, turma)) {
         try {
           enviarEmailMetaAudienciaCumprida(email, nomeEstagiario, c.tipo, c.meta);
-          _marcarAvisoEncerramentoEnviado(cellNome, chaveTipo, semestre);
+          _marcarAvisoEncerramentoEnviado(cellNome, chaveTipo, turma);
         } catch (e) {
           erros.push(e.message);
         }
@@ -342,10 +350,10 @@ function dispararAvisosMetaAudiencia(nomeEstagiario, email, semestre, contagens)
   var todasCumpridas = lista.length > 0 && lista.every(function(c) { return c.meta > 0 && c.realizado >= c.meta; });
   if (todasCumpridas) {
     var chaveTodas = 'AUDIENCIA_TODAS_METAS';
-    if (!_avisoEncerramentoJaEnviado(cellNome, chaveTodas, semestre)) {
+    if (!_avisoEncerramentoJaEnviado(cellNome, chaveTodas, turma)) {
       try {
         enviarEmailTodasMetasAudienciaCumpridas(email, nomeEstagiario);
-        _marcarAvisoEncerramentoEnviado(cellNome, chaveTodas, semestre);
+        _marcarAvisoEncerramentoEnviado(cellNome, chaveTodas, turma);
       } catch (e) {
         erros.push(e.message);
       }
@@ -357,9 +365,12 @@ function dispararAvisosMetaAudiencia(nomeEstagiario, email, semestre, contagens)
 
 // --- A-6: consolidado de pendencias de audiencias para Thales ---
 // Disparado pelo mesmo gatilho da Mensagem 4 (ver verificarEncerramentoEstagioAutomatico
-// mais abaixo) — um unico e-mail para Thales, com todos os estagiarios ativos
-// que ainda nao fecharam alguma meta de audiencia e o quanto falta em cada
-// tipo. Nao envia nada se ninguem tiver pendencia.
+// mais abaixo), agora UMA VEZ POR TURMA (27/07/2026 — antes era um unico
+// e-mail para todo o periodo, o que misturava antecipado e regular do mesmo
+// semestre civil). Um e-mail para Thales por turma, restrito aos
+// estagiarios ativos daquela turma que ainda nao fecharam alguma meta de
+// audiencia e o quanto falta em cada tipo. Nao envia nada se ninguem daquela
+// turma tiver pendencia.
 function montarEmailConsolidadoPendenciasAudiencias(pendencias) {
   var linhas = [];
   pendencias.forEach(function(p) {
@@ -397,13 +408,21 @@ function montarEmailConsolidadoPendenciasAudiencias(pendencias) {
   return html;
 }
 
-function enviarConsolidadoPendenciasAudiencias(estagiariosAtivos) {
+// turma: codigo da turma (ex. "2026.02-A") — passado explicitamente (em vez
+// de reaproveitar e.turma de cada estagiario) porque contarAudienciasPorTipo
+// espera o FILTRO de turma, nao a turma do proprio registro (turmaCasaComFiltro
+// trata um valor "AAAA.SS" sem sufixo como semestre inteiro — passar e.turma
+// aqui garante casamento exato com a turma sendo processada).
+// estagiariosDaTurma: ja pre-filtrados pelo chamador (ver
+// verificarEncerramentoEstagioAutomatico) para conter somente os alunos
+// ativos daquela turma.
+function enviarConsolidadoPendenciasAudiencias(turma, estagiariosDaTurma) {
   var parametros = lerParametrosAudiencias(); // AudienciasEstagiario.js
   var audienciasTodas = getTodasAudienciasEstagiario(); // AudienciasEstagiario.js
 
   var pendencias = [];
-  (estagiariosAtivos || []).forEach(function(e) {
-    var contagens = contarAudienciasPorTipo(e.nome, e.semestre, audienciasTodas, parametros);
+  (estagiariosDaTurma || []).forEach(function(e) {
+    var contagens = contarAudienciasPorTipo(e.nome, turma, audienciasTodas, parametros);
     var faltantes = contagens.filter(function(c) { return c.meta > 0 && c.faltante > 0; });
     if (faltantes.length) pendencias.push({ nome: e.nome, faltantes: faltantes });
   });
@@ -413,7 +432,7 @@ function enviarConsolidadoPendenciasAudiencias(estagiariosAtivos) {
   var html = montarEmailConsolidadoPendenciasAudiencias(pendencias);
   MailApp.sendEmail({
     to: CONFIG.EMAIL_AUTORIZADO,
-    subject: 'Consolidado de pendências de audiências dos estagiários',
+    subject: 'Consolidado de pendências de audiências — turma ' + formatarRotuloTurma(turma),
     htmlBody: html
   });
   return null;
@@ -651,8 +670,8 @@ function configurarGatilhoCobrancas() {
 // --- Mensagem 4: resumo de producao (e-mail, 15 dias antes do fim do estagio) ---
 // So sai por e-mail (nao tem versao de mural) — decisao explicita do
 // documento de templates. Contagens vem de getContagemProducaoEstagiario
-// (Panorama.js), filtradas pelo SEMESTRE do proprio estagiario (nao e
-// producao acumulada do estagio inteiro).
+// (Panorama.js), filtradas pela TURMA do proprio estagiario (27/07/2026 —
+// antes era pelo SEMESTRE; nao e producao acumulada do estagio inteiro).
 
 // Tabela HTML no mesmo formato visual do e-mail da Secretaria (ver
 // _enviarEmailSecretaria, Secretaria.js) — reaproveita _escapeHtmlSecretaria
@@ -722,12 +741,15 @@ function montarTabelaAudienciasHtml(audiencias) {
 }
 
 // Texto fixo definido por Thales. So os campos entre {} sao substituidos —
-// mesma convencao das demais mensagens deste arquivo.
-function montarEmailProducaoEstagio(nomeAluno, dataFinalizacaoFormatada, semestre, contagens) {
+// mesma convencao das demais mensagens deste arquivo. O campo que antes
+// mostrava o SEMESTRE agora mostra o rotulo legivel da TURMA (27/07/2026 —
+// ver formatarRotuloTurma, Turma.js), ja que a producao contada abaixo e a
+// da turma do aluno, nao do semestre civil inteiro.
+function montarEmailProducaoEstagio(nomeAluno, dataFinalizacaoFormatada, turma, contagens) {
   var html = '<p style="font-family:Arial,sans-serif; font-size:14px;">'
     + primeiroNome(nomeAluno) + ', faltam 15 dias para o encerramento do seu período de estágio (' + dataFinalizacaoFormatada + ').</p>'
     + '<p style="font-family:Arial,sans-serif; font-size:14px;">'
-    + 'Para que você tenha uma visão clara do seu desempenho neste semestre (' + semestre + '), segue um resumo da sua produção:</p>'
+    + 'Para que você tenha uma visão clara do seu desempenho neste período (' + formatarRotuloTurma(turma) + '), segue um resumo da sua produção:</p>'
     + montarTabelaProducaoHtml(contagens)
     + montarTabelaAudienciasHtml(contagens.audiencias)
     + '<p style="font-family:Arial,sans-serif; font-size:14px; margin-top:16px;">'
@@ -739,11 +761,12 @@ function montarEmailProducaoEstagio(nomeAluno, dataFinalizacaoFormatada, semestr
   };
 }
 
-// estagiario: { nome, email, semestre } (ver getTodosEstagiariosCompletos, Panorama.js).
+// estagiario: { nome, email, turma, dataFim } (ver getTodosEstagiariosCompletos,
+// Panorama.js/Turma.js). dataFim substitui a antiga leitura de bd!P2
+// (27/07/2026 — ver secao 3 do documento de migracao de TURMA).
 function enviarEmailProducaoEstagio(estagiario) {
-  var contagens = getContagemProducaoEstagiario(estagiario.nome, estagiario.semestre);
-  var dataFinalizacao = _lerDataFinalizacaoEstagio();
-  var email = montarEmailProducaoEstagio(estagiario.nome, formatarData(dataFinalizacao), estagiario.semestre, contagens);
+  var contagens = getContagemProducaoEstagiario(estagiario.nome, estagiario.turma);
+  var email = montarEmailProducaoEstagio(estagiario.nome, formatarData(estagiario.dataFim), estagiario.turma, contagens);
 
   MailApp.sendEmail({ to: estagiario.email, subject: email.assunto, htmlBody: email.html });
 }
@@ -770,39 +793,43 @@ function montarMensagemEncerramento(nomeAluno, dataFinalizacaoFormatada) {
   return linhas.join('\n');
 }
 
-// estagiario: { nome, email } (ver getTodosEstagiariosCompletos, Panorama.js).
+// estagiario: { nome, email, dataFim } (ver getTodosEstagiariosCompletos,
+// Panorama.js/Turma.js). dataFim substitui a antiga leitura de bd!P2
+// (27/07/2026).
 function enviarMensagemEncerramento(estagiario) {
   var cursoId = obterIdCursoClassroom();
   var userId = obterUserIdDoAluno(cursoId, estagiario.email);
-  var dataFinalizacao = _lerDataFinalizacaoEstagio();
 
-  var texto = montarMensagemEncerramento(estagiario.nome, formatarData(dataFinalizacao));
+  var texto = montarMensagemEncerramento(estagiario.nome, formatarData(estagiario.dataFim));
   var assunto = 'Última semana de estágio — fluxo de encerramento';
 
   enviarMensagemDuploCanal(cursoId, userId, estagiario.email, assunto, texto);
 }
 
-// --- Gatilho diario de encerramento de estagio (bd!P2) ---
-// Le bd!P2 (CONFIG.BD_CELL.DATA_FINALIZACAO_ESTAGIO — "Data final do
-// estágio", celula unica compartilhada por todos os estagiarios ativos do
-// periodo corrente, preenchida manualmente por Thales). Quando faltam
-// exatamente DIAS_AVISO_PRODUCAO dias corridos, dispara a Mensagem 4 para
-// todos os estagiarios ativos (FINALIZADO vazio); quando faltam exatamente
-// DIAS_AVISO_FLUXO dias corridos, dispara a Mensagem 5. Guarda de
-// duplicidade (mesma tecnica de marcarNotificacaoInicialEnviada): nota na
-// celula NOME (coluna B) da aba estagiarios, incluindo o semestre — assim,
-// se Thales atualizar bd!P2 para um novo periodo/semestre, o aviso volta a
-// disparar normalmente.
-
-function _lerDataFinalizacaoEstagio() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var aba = ss.getSheetByName(CONFIG.SHEET_BD);
-  if (!aba) return null;
-
-  var valor = aba.getRange(CONFIG.BD_CELL.DATA_FINALIZACAO_ESTAGIO).getValue();
-  if (!(valor instanceof Date) || isNaN(valor.getTime())) return null;
-  return valor;
-}
+// --- Gatilho diario de encerramento de estagio (por DATA_FIM, por aluno) ---
+// Ate 27/07/2026 este gatilho lia uma unica celula (bd!P2,
+// DATA_FINALIZACAO_ESTAGIO) compartilhada por TODOS os estagiarios ativos.
+// Com duas turmas por semestre (antecipado e regular — ver Turma.js) essa
+// celula unica deixou de fazer sentido: a turma antecipada de julho encerra
+// em 31/07 e a regular do mesmo semestre civil encerra em dezembro. bd!P2
+// foi aposentada (CONFIG.BD_CELL.DATA_FINALIZACAO_ESTAGIO removida); o
+// encerramento agora e calculado individualmente contra DATA_FIM
+// (estagiarios!L) de cada aluno.
+//
+// A cada execucao diaria (configurarGatilhoEncerramentoEstagio):
+//   1. Guarda obrigatoria (secao 3.3 do documento de migracao de TURMA):
+//      alerta o coordenador se algum aluno ativo estiver sem DATA_FIM
+//      preenchida — ver _alertarEstagiariosSemDataFim. Sem essa guarda, o
+//      esquecimento seria silencioso (nao ha ponto de cadastro no codigo,
+//      as linhas de estagiarios sao criadas a mao na planilha).
+//   2. Mensagens 4/5: por aluno com DATA_FIM valida, compara hoje com o
+//      proprio DATA_FIM e dispara quando faltam DIAS_AVISO_PRODUCAO ou
+//      DIAS_AVISO_FLUXO dias corridos — guarda de duplicidade na nota da
+//      celula NOME (coluna B), agora chaveada por TURMA em vez de SEMESTRE
+//      (um aluno pode ter uma linha por turma dentro do mesmo semestre).
+//   3. A-6: consolidado de pendencias de audiencias, uma vez por TURMA (nao
+//      mais um unico e-mail para todo o periodo), 15 dias antes do DATA_FIM
+//      daquela turma, restrito aos alunos daquela turma.
 
 function _diasCorridosAte(dataAlvo) {
   var hoje = new Date();
@@ -812,83 +839,108 @@ function _diasCorridosAte(dataAlvo) {
   return Math.round((alvo.getTime() - hoje.getTime()) / 86400000);
 }
 
-function _avisoEncerramentoJaEnviado(cellNome, chave, semestre) {
-  var nota = String(cellNome.getNote() || '');
-  return nota.indexOf(chave + ': ' + semestre) !== -1;
+function _dataFimValida(valor) {
+  return valor instanceof Date && !isNaN(valor.getTime());
 }
 
-function _marcarAvisoEncerramentoEnviado(cellNome, chave, semestre) {
+function _avisoEncerramentoJaEnviado(cellNome, chave, turma) {
+  var nota = String(cellNome.getNote() || '');
+  return nota.indexOf(chave + ': ' + turma) !== -1;
+}
+
+function _marcarAvisoEncerramentoEnviado(cellNome, chave, turma) {
   var notaAtual = String(cellNome.getNote() || '');
-  var novaLinha = chave + ': ' + semestre;
+  var novaLinha = chave + ': ' + turma;
   cellNome.setNote(notaAtual ? notaAtual + '\n' + novaLinha : novaLinha);
 }
 
-// Guarda de duplicidade da A-6 (consolidado de pendencias de audiencias para
-// Thales) — nota na propria celula bd!P2 (DATA_FINALIZACAO_ESTAGIO), ja que
-// esse aviso e um unico e-mail agregado (nao ha uma linha de estagiario para
-// gravar a nota). Chave inclui a data de finalizacao formatada — se Thales
-// atualizar bd!P2 para um novo periodo, o aviso volta a disparar normalmente.
-function _consolidadoAudienciasJaEnviado(dataFinalizacaoFormatada) {
+// Guarda de duplicidade da A-6, uma vez por TURMA (27/07/2026). Como esse
+// aviso e um unico e-mail agregado por turma (nao ha uma linha de
+// estagiario individual para gravar a nota), o ancoradouro escolhido e a
+// nota da propria celula bd!AE2 (CONFIG.BD_CELL.CONSOLIDADO_AUDIENCIAS_TURMA,
+// celula reservada exclusivamente para este fim — ver Config.js), que
+// acumula uma linha por turma+data-fim ja avisada, mesma tecnica de
+// _avisoEncerramentoJaEnviado/_marcarAvisoEncerramentoEnviado acima. A
+// chave inclui a DATA_FIM formatada da turma — se ela mudar (ex.:
+// prorrogacao), o aviso volta a disparar normalmente.
+function _consolidadoAudienciasJaEnviado(turma, dataFimFormatada) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName(CONFIG.SHEET_BD);
   if (!aba) return false;
-  var nota = String(aba.getRange(CONFIG.BD_CELL.DATA_FINALIZACAO_ESTAGIO).getNote() || '');
-  return nota.indexOf('CONSOLIDADO_AUDIENCIAS: ' + dataFinalizacaoFormatada) !== -1;
+  var nota = String(aba.getRange(CONFIG.BD_CELL.CONSOLIDADO_AUDIENCIAS_TURMA).getNote() || '');
+  return nota.indexOf('CONSOLIDADO_AUDIENCIAS_' + turma + ': ' + dataFimFormatada) !== -1;
 }
 
-function _marcarConsolidadoAudienciasEnviado(dataFinalizacaoFormatada) {
+function _marcarConsolidadoAudienciasEnviado(turma, dataFimFormatada) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName(CONFIG.SHEET_BD);
   if (!aba) return;
-  var cell = aba.getRange(CONFIG.BD_CELL.DATA_FINALIZACAO_ESTAGIO);
+  var cell = aba.getRange(CONFIG.BD_CELL.CONSOLIDADO_AUDIENCIAS_TURMA);
   var notaAtual = String(cell.getNote() || '');
-  var novaLinha = 'CONSOLIDADO_AUDIENCIAS: ' + dataFinalizacaoFormatada;
+  var novaLinha = 'CONSOLIDADO_AUDIENCIAS_' + turma + ': ' + dataFimFormatada;
   cell.setNote(notaAtual ? notaAtual + '\n' + novaLinha : novaLinha);
 }
 
+// Guarda obrigatoria (secao 3.3): sem DATA_FIM, as Mensagens 4/5 e a A-6
+// nunca disparam para o aluno/turma afetado, sem erro, sem log, sem sintoma
+// ate o fim do semestre. Reaproveita o mesmo gatilho e a mesma infraestrutura
+// de e-mail ja existentes (decisao de Thales — nao criar gatilho novo).
+function _alertarEstagiariosSemDataFim(estagiariosAtivos) {
+  var semDataFim = (estagiariosAtivos || []).filter(function(e) { return !_dataFimValida(e.dataFim); });
+  if (!semDataFim.length) return;
+
+  var linhas = semDataFim.map(function(e) {
+    return '- ' + e.nome + ' (' + (e.turma || 'turma não derivada — DATA_INICIO também vazia') + ')';
+  });
+
+  var corpo = 'Os estagiários abaixo estão ativos (FINALIZADO vazio) mas sem DATA_FIM preenchida na aba "estagiarios".\n\n'
+    + 'Sem essa data, as Mensagens 4 e 5 (resumo de produção e fluxo de encerramento) e o consolidado de '
+    + 'pendências de audiências (A-6) nunca serão disparados para eles:\n\n'
+    + linhas.join('\n')
+    + '\n\nPreencha DATA_FIM na linha de cada um para que o fluxo automático volte a funcionar.';
+
+  try {
+    MailApp.sendEmail({
+      to: CONFIG.EMAIL_AUTORIZADO,
+      subject: 'Alerta: estagiário(s) sem DATA_FIM cadastrada',
+      body: corpo
+    });
+  } catch (e) {
+    Logger.log('Erro ao enviar alerta de DATA_FIM ausente: ' + e.message);
+  }
+}
+
 function verificarEncerramentoEstagioAutomatico() {
-  var dataFinalizacao = _lerDataFinalizacaoEstagio();
-  if (!dataFinalizacao) return;
-
-  var diasRestantes = _diasCorridosAte(dataFinalizacao);
-  var ehDiaAvisoProducao = diasRestantes === CONFIG.ENCERRAMENTO_ESTAGIO.DIAS_AVISO_PRODUCAO;
-  var ehDiaAvisoFluxo = diasRestantes === CONFIG.ENCERRAMENTO_ESTAGIO.DIAS_AVISO_FLUXO;
-  if (!ehDiaAvisoProducao && !ehDiaAvisoFluxo) return;
-
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var abaEstagiarios = ss.getSheetByName(CONFIG.SHEET_ESTAGIARIOS);
   if (!abaEstagiarios) return;
 
-  var estagiarios = getTodosEstagiariosCompletos().filter(function(e) { return !e.finalizado && e.email; });
+  var estagiariosAtivos = getTodosEstagiariosCompletos().filter(function(e) { return !e.finalizado && e.email; });
 
-  // A-6: mesmo gatilho da Mensagem 4 (producao), mas um UNICO e-mail
-  // agregado para Thales — nao entra no loop por estagiario abaixo.
-  if (ehDiaAvisoProducao) {
-    var dataFinalizacaoFormatada = formatarData(dataFinalizacao);
-    if (!_consolidadoAudienciasJaEnviado(dataFinalizacaoFormatada)) {
-      try {
-        enviarConsolidadoPendenciasAudiencias(estagiarios);
-        _marcarConsolidadoAudienciasEnviado(dataFinalizacaoFormatada);
-      } catch (e) {
-        Logger.log('Erro ao enviar consolidado de pendencias de audiencias: ' + e.message);
-      }
-    }
-  }
+  _alertarEstagiariosSemDataFim(estagiariosAtivos);
 
-  estagiarios.forEach(function(estagiario) {
+  var comDataFim = estagiariosAtivos.filter(function(e) { return _dataFimValida(e.dataFim); });
+
+  // --- Mensagens 4/5: por aluno, contra o proprio DATA_FIM ---
+  comDataFim.forEach(function(estagiario) {
+    var diasRestantes = _diasCorridosAte(estagiario.dataFim);
+    var ehDiaAvisoProducao = diasRestantes === CONFIG.ENCERRAMENTO_ESTAGIO.DIAS_AVISO_PRODUCAO;
+    var ehDiaAvisoFluxo = diasRestantes === CONFIG.ENCERRAMENTO_ESTAGIO.DIAS_AVISO_FLUXO;
+    if (!ehDiaAvisoProducao && !ehDiaAvisoFluxo) return;
+
     // Localiza a linha do estagiario na aba (para gravar a nota de rastreio).
     var linha = _linhaEstagiarioPorId(abaEstagiarios, estagiario.id);
     if (!linha) return;
     var cellNome = abaEstagiarios.getRange(linha, CONFIG.ESTAGIARIOS_COL.NOME + 1);
 
     try {
-      if (ehDiaAvisoProducao && !_avisoEncerramentoJaEnviado(cellNome, 'MSG_PRODUCAO_ENVIADA', estagiario.semestre)) {
+      if (ehDiaAvisoProducao && !_avisoEncerramentoJaEnviado(cellNome, 'MSG_PRODUCAO_ENVIADA', estagiario.turma)) {
         enviarEmailProducaoEstagio(estagiario);
-        _marcarAvisoEncerramentoEnviado(cellNome, 'MSG_PRODUCAO_ENVIADA', estagiario.semestre);
+        _marcarAvisoEncerramentoEnviado(cellNome, 'MSG_PRODUCAO_ENVIADA', estagiario.turma);
       }
-      if (ehDiaAvisoFluxo && !_avisoEncerramentoJaEnviado(cellNome, 'MSG_ENCERRAMENTO_ENVIADA', estagiario.semestre)) {
+      if (ehDiaAvisoFluxo && !_avisoEncerramentoJaEnviado(cellNome, 'MSG_ENCERRAMENTO_ENVIADA', estagiario.turma)) {
         enviarMensagemEncerramento(estagiario);
-        _marcarAvisoEncerramentoEnviado(cellNome, 'MSG_ENCERRAMENTO_ENVIADA', estagiario.semestre);
+        _marcarAvisoEncerramentoEnviado(cellNome, 'MSG_ENCERRAMENTO_ENVIADA', estagiario.turma);
       }
     } catch (e) {
       // Erro isolado por estagiario — nao interrompe os demais. Sem lista de
@@ -896,6 +948,35 @@ function verificarEncerramentoEstagioAutomatico() {
       // (sem usuario para ver o resultado); erros ficam no log de execucoes
       // do Apps Script.
       Logger.log('Erro ao processar encerramento de estagio para ' + estagiario.nome + ': ' + e.message);
+    }
+  });
+
+  // --- A-6: consolidado de pendencias de audiencias, uma vez por TURMA ---
+  // Agrupa os alunos ativos com DATA_FIM valida por turma. Assume-se que
+  // todos os alunos de uma mesma turma compartilham a mesma DATA_FIM (e uma
+  // data de coorte, nao individual) — usa-se a data do primeiro aluno
+  // encontrado como representante da turma.
+  var estagiariosPorTurma = {};
+  comDataFim.forEach(function(e) {
+    if (!e.turma) return;
+    if (!estagiariosPorTurma[e.turma]) estagiariosPorTurma[e.turma] = [];
+    estagiariosPorTurma[e.turma].push(e);
+  });
+
+  Object.keys(estagiariosPorTurma).forEach(function(turma) {
+    var estagiariosDaTurma = estagiariosPorTurma[turma];
+    var dataFimTurma = estagiariosDaTurma[0].dataFim;
+    var diasRestantes = _diasCorridosAte(dataFimTurma);
+    if (diasRestantes !== CONFIG.ENCERRAMENTO_ESTAGIO.DIAS_AVISO_PRODUCAO) return;
+
+    var dataFimFormatada = formatarData(dataFimTurma);
+    if (_consolidadoAudienciasJaEnviado(turma, dataFimFormatada)) return;
+
+    try {
+      enviarConsolidadoPendenciasAudiencias(turma, estagiariosDaTurma);
+      _marcarConsolidadoAudienciasEnviado(turma, dataFimFormatada);
+    } catch (e) {
+      Logger.log('Erro ao enviar consolidado de pendencias de audiencias da turma ' + turma + ': ' + e.message);
     }
   });
 }
@@ -957,9 +1038,8 @@ function mockTestEnviarProducaoEstagiarios() {
     }
 
     try {
-      var contagens = getContagemProducaoEstagiario(estagiario.nome, estagiario.semestre);
-      var dataFinalizacao = _lerDataFinalizacaoEstagio();
-      var email = montarEmailProducaoEstagio(estagiario.nome, formatarData(dataFinalizacao), estagiario.semestre, contagens);
+      var contagens = getContagemProducaoEstagiario(estagiario.nome, estagiario.turma);
+      var email = montarEmailProducaoEstagio(estagiario.nome, formatarData(estagiario.dataFim), estagiario.turma, contagens);
 
       MailApp.sendEmail({
         to: destinatarioTeste,

@@ -1010,9 +1010,16 @@ function filtrarCard(id) {
   renderizarTabela();
 }
 
+// reg.turma so vem preenchido quando o registro veio do payload do Panorama
+// (getDadosPanorama, Panorama.js) — na aba Diligencias (carregarDadosIniciais)
+// o campo e undefined e o selo simplesmente nao aparece, sem precisar de
+// parametro extra aqui (mesma funcao reaproveitada nas duas telas).
 function renderizarCelulaEstagiario(reg) {
   var est = String(reg.estagiario || '').trim();
-  if (est) return est;
+  if (est) {
+    var selo = String(reg.turma || '').slice(-2) === '-A' ? ' <span class="selo-turma-antecipada">Antecipado</span>' : '';
+    return est + selo;
+  }
   if (ehSemEstagiario(reg)) {
     return '<span class="estagiario-celula-vazio"><span class="material-symbols-outlined sem-estagiario-indicador">' + ICONES.semEstagiario + '</span></span>';
   }
@@ -1210,6 +1217,7 @@ function preencherModalDiligencia(reg) {
   document.getElementById('mDi').textContent = reg.di || '—';
   document.getElementById('mPrazo').textContent = reg.prazo || '—';
   document.getElementById('mDf').textContent = reg.df || '—';
+  document.getElementById('mDfReal').textContent = reg.dfReal || '—';
   document.getElementById('mAlteradoEm').textContent = reg.alteradoEm || '—';
 
   var linkEl = document.getElementById('mLink');
@@ -1286,6 +1294,7 @@ function preencherEdicaoModal(reg) {
   popularSelectSimples(selectStatus, APP.dados.picklists.status.map(normalizarStatusParaUI), statusAtualUI, '— Sem status —');
 
   document.getElementById('editObs').value = reg.obs || '';
+  document.getElementById('editComentario').value = reg.comentario || '';
   document.getElementById('displaySubespecie').textContent = reg.subespecie || calcularSubespeciePreview(reg.especie) || '—';
 
   var selectEspecie = document.getElementById('editEspecie');
@@ -1357,6 +1366,7 @@ function salvarModal() {
     estagiario: document.getElementById('editEstagiario').value,
     status: normalizarStatusParaUI(document.getElementById('editStatus').value),
     obs: document.getElementById('editObs').value,
+    comentario: document.getElementById('editComentario').value,
     especie: document.getElementById('editEspecie').value,
     vara: document.getElementById('editVara').value
   };
@@ -1391,6 +1401,7 @@ function salvarModal() {
           r.subespecie = res.subespecie;
           r.vara       = payload.vara;
           r.obs        = payload.obs;
+          r.comentario = payload.comentario;
           r.alteradoEm = res.alteradoEm;
         }
       });
@@ -3370,9 +3381,15 @@ function confirmarReprovarAudiencia() {
 
 // === ABA: PANORAMA ===
 // Estado especifico da aba Panorama (independente das demais abas).
-// alunoSelecionado = e-mail do estagiario em foco, ou null = semestre inteiro.
+// alunoSelecionado = e-mail do estagiario em foco, ou null = todos os alunos
+// da turma/semestre selecionado.
 var APP_PANORAMA = {
-  semestreFiltro: obterSemestreAtual(),
+  // Valor de turma/semestre selecionado no seletor hierarquico: um codigo de
+  // turma completo ("2026.02-A") para uma turma especifica, ou so o semestre
+  // base ("2026.02") para "Todas as turmas" — ver popularSelectTurmaPanorama.
+  // Definido a partir de APP.dados.turmaCorrente (backend, Turma.js) na
+  // primeira carga — ver carregarAbaPanorama.
+  turmaFiltro: '',
   alunoSelecionado: null,
   atendimentoAtual: null
 };
@@ -3389,8 +3406,8 @@ function carregarAbaPanorama() {
       alternarOverlayCarregando('overlayCarregandoPanorama', false);
       // resultado === null significa falha de serializacao no servidor (ver
       // nota em formatarHora, Data.js) — nunca um retorno legitimo. Sem esta
-      // guarda o handler morria antes de popularSelectSemestrePanorama(), e o
-      // select ficava travado na opcao estatica "Nenhum semestre encontrado".
+      // guarda o handler morria antes de popularSelectTurmaPanorama(), e o
+      // select ficava travado na opcao estatica "Nenhuma turma encontrada".
       if (!resultado) {
         mostrarToast('Falha ao carregar Panorama: resposta inválida do servidor.', 'erro');
         return;
@@ -3408,13 +3425,19 @@ function carregarAbaPanorama() {
       APP.dados.panoramaAudienciasEstagiario = resultado.audienciasEstagiario || [];
       APP.dados.parametrosAudiencias = resultado.parametrosAudiencias || [];
       APP.dados.pesosPontuacao = resultado.pesosPontuacao || {};
+      APP.dados.turmaCorrente = resultado.turmaCorrente || '';
       // O modal de Inicial e reaproveitado tal como esta e depende de
       // statusPicklist — garante que exista mesmo que a aba Iniciais nunca
       // tenha sido aberta nesta sessao.
       if (!APP.dados.statusPicklist || !APP.dados.statusPicklist.length) {
         APP.dados.statusPicklist = resultado.statusPicklist || [];
       }
-      popularSelectSemestrePanorama();
+      // So aplica a turma corrente como padrao na PRIMEIRA carga (seletor
+      // ainda vazio) — trocas de aba depois disso preservam a escolha do
+      // usuario (mesmo padrao ja usado no seletor de semestre da aba
+      // Diligencias).
+      if (!APP_PANORAMA.turmaFiltro) APP_PANORAMA.turmaFiltro = APP.dados.turmaCorrente;
+      popularSelectTurmaPanorama();
       renderizarPanorama();
     })
     .withFailureHandler(function(err) {
@@ -3425,12 +3448,12 @@ function carregarAbaPanorama() {
 }
 
 // === GRAFICOS DA ABA DISTRIBUIÇÃO ===
-// Producao dos alunos ATIVOS (nao finalizados), cada um contado no seu
-// proprio semestre — ver getDadosGraficos (Graficos.js). Sem filtro de
-// semestre/aluno (decisao de Thales): e sempre o total corrente. Estes 4
-// graficos pertenciam antes a uma aba "Gráficos" propria (removida) e agora
-// sao exibidos ao final da aba "Distribuição", na mesma ordem de antes — ver
-// carregarAbaDistribuicao mais acima.
+// Producao dos alunos ATIVOS (nao finalizados), cada um contado na sua
+// propria TURMA (27/07/2026 — ver getDadosGraficos, Graficos.js). Sem
+// seletor de turma/aluno (decisao de Thales): e sempre o total corrente.
+// Estes 4 graficos pertenciam antes a uma aba "Gráficos" propria (removida) e
+// agora sao exibidos ao final da aba "Distribuição", na mesma ordem de antes
+// — ver carregarAbaDistribuicao mais acima.
 
 var GRAFICOS_CATEGORIAS = [
   { chave: 'complexas',       label: 'Complexas',       icone: ICONES.complexas, classe: 'grafico-barra-complexas' },
@@ -3675,39 +3698,75 @@ function renderizarGraficoPorEstagiario(idLegenda, idEixo, idPlot, categorias, p
   plotEl.style.width = Math.max(larguraConteudo, larguraDisponivel) + 'px';
 }
 
-function popularSelectSemestrePanorama() {
+// Rotulos legiveis identicos aos de formatarRotuloTurma (Turma.js) — nao ha
+// como chamar uma funcao server-side sincronamente do cliente, entao os
+// mesmos textos sao reaproveitados aqui (mesmo espirito da duplicacao ja
+// existente de normalizarChave entre Scripts.html e Data.js).
+function rotulosTurma(semestreBase) {
+  return {
+    todas: semestreBase + ' — Todas as turmas',
+    antecipado: semestreBase + ' — Antecipado (julho)',
+    regular: semestreBase + ' — Regular (agosto a dezembro)'
+  };
+}
+
+// Casa um codigo de turma (ex. "2026.02-A") contra um filtro que pode ser um
+// semestre base ("2026.02", casa por prefixo — "todas as turmas") ou um
+// codigo de turma completo (casamento exato) — porta cliente de
+// turmaCasaComFiltro (Turma.js).
+function turmaCasaComFiltroCliente(turma, filtro) {
+  var t = String(turma || '').trim();
+  var f = String(filtro || '').trim();
+  if (!t || !f) return false;
+  if (t === f) return true;
+  return t.indexOf(f + '-') === 0;
+}
+
+// Seletor hierarquico: para cada semestre presente nos alunos, 3 opcoes
+// (Todas as turmas / Antecipado / Regular) — ver secao 2.6 do documento de
+// migracao de TURMA. O semestre base de cada opcao sai do proprio codigo de
+// turma via split('-'), sem tabela auxiliar.
+function popularSelectTurmaPanorama() {
   var select = document.getElementById('selectSemestrePanorama');
   if (!select) return;
 
-  var presentes = {};
+  var semestresPresentes = {};
   (APP.dados.panoramaEstagiarios || []).forEach(function(e) {
-    if (e.semestre) presentes[e.semestre] = true;
+    var sem = String(e.turma || '').split('-')[0];
+    if (sem) semestresPresentes[sem] = true;
   });
-  if (APP_PANORAMA.semestreFiltro) presentes[APP_PANORAMA.semestreFiltro] = true;
+  if (APP_PANORAMA.turmaFiltro) {
+    semestresPresentes[String(APP_PANORAMA.turmaFiltro).split('-')[0]] = true;
+  }
 
-  var semestres = Object.keys(presentes).sort().reverse();
+  var semestres = Object.keys(semestresPresentes).sort().reverse();
 
   if (semestres.length === 0) {
-    select.innerHTML = '<option value="">— Nenhum semestre encontrado —</option>';
+    select.innerHTML = '<option value="">— Nenhuma turma encontrada —</option>';
     return;
   }
 
-  if (semestres.indexOf(APP_PANORAMA.semestreFiltro) === -1) {
-    APP_PANORAMA.semestreFiltro = semestres[0];
+  var valoresValidos = [];
+  var html = '';
+  semestres.forEach(function(sem) {
+    var rotulos = rotulosTurma(sem);
+    html += '<option value="' + sem + '">' + rotulos.todas + '</option>';
+    html += '<option value="' + sem + '-A">' + rotulos.antecipado + '</option>';
+    html += '<option value="' + sem + '-R">' + rotulos.regular + '</option>';
+    valoresValidos.push(sem, sem + '-A', sem + '-R');
+  });
+
+  if (valoresValidos.indexOf(APP_PANORAMA.turmaFiltro) === -1) {
+    var candidato = APP.dados.turmaCorrente || '';
+    APP_PANORAMA.turmaFiltro = valoresValidos.indexOf(candidato) !== -1 ? candidato : semestres[0];
   }
 
-  select.innerHTML = '';
-  semestres.forEach(function(s) {
-    var opt = document.createElement('option');
-    opt.value = s;
-    opt.textContent = s;
-    if (s === APP_PANORAMA.semestreFiltro) opt.selected = true;
-    select.appendChild(opt);
-  });
+  select.innerHTML = html;
+  select.value = APP_PANORAMA.turmaFiltro;
 }
 
-function mudarSemestrePanorama(valor) {
-  APP_PANORAMA.semestreFiltro = valor || '';
+function mudarTurmaPanorama(valor) {
+  APP_PANORAMA.turmaFiltro = valor || '';
   APP_PANORAMA.alunoSelecionado = null;
   renderizarPanorama();
 }
@@ -3718,44 +3777,36 @@ function renderizarPanorama() {
   renderizarTabelasPanorama();
 }
 
-// --- Alunos do semestre escolhido ---
+// --- Alunos da turma escolhida (so para popular o seletor de aluno) ---
 
-function getAlunosDoSemestrePanorama() {
-  var sem = APP_PANORAMA.semestreFiltro;
+function getAlunosDaTurmaPanorama() {
+  var filtro = APP_PANORAMA.turmaFiltro;
   return (APP.dados.panoramaEstagiarios || [])
-    .filter(function(e) { return e.semestre === sem; })
+    .filter(function(e) { return turmaCasaComFiltroCliente(e.turma, filtro); })
     .sort(function(a, b) { return normalizar(a.nome) < normalizar(b.nome) ? -1 : 1; });
-}
-
-// Conjunto de alunos a considerar nos cards/tabelas: so o selecionado, ou
-// todos os alunos do semestre quando nenhum estiver selecionado.
-function getConjuntoAlunosPanorama() {
-  var alunos = getAlunosDoSemestrePanorama();
-  if (APP_PANORAMA.alunoSelecionado) {
-    alunos = alunos.filter(function(a) { return a.email === APP_PANORAMA.alunoSelecionado; });
-  }
-  return alunos;
 }
 
 function popularSelectAlunoPanorama() {
   var select = document.getElementById('selectAlunoPanorama');
   if (!select) return;
 
-  var alunos = getAlunosDoSemestrePanorama();
+  var alunos = getAlunosDaTurmaPanorama();
   var valorAtual = APP_PANORAMA.alunoSelecionado;
 
   select.innerHTML = '<option value="">— Todos os alunos —</option>';
   alunos.forEach(function(a) {
     var opt = document.createElement('option');
     opt.value = a.email;
-    opt.textContent = a.nome + (a.finalizado ? ' — Finalizado' : '');
+    var sufixo = a.finalizado ? ' — Finalizado' : '';
+    if (String(a.turma || '').slice(-2) === '-A') sufixo += ' · Antecipado';
+    opt.textContent = a.nome + sufixo;
     if (a.finalizado) opt.className = 'opcao-finalizada';
     if (a.email === valorAtual) opt.selected = true;
     select.appendChild(opt);
   });
 
-  // Se o aluno que estava selecionado nao pertence mais ao semestre atual
-  // (troca de semestre), volta para "Todos os alunos".
+  // Se o aluno que estava selecionado nao pertence mais a turma atual
+  // (troca de turma), volta para "Todos os alunos".
   var aindaExiste = alunos.some(function(a) { return a.email === valorAtual; });
   if (valorAtual && !aindaExiste) {
     APP_PANORAMA.alunoSelecionado = null;
@@ -3769,114 +3820,93 @@ function mudarAlunoPanorama(valor) {
   renderizarTabelasPanorama();
 }
 
-// --- Registros filtrados (semestre + conjunto de alunos em foco) ---
-// Diligencias sao cruzadas pelo nome em ESTAGIARIO(A); Iniciais pelo E-MAIL —
-// mesmas chaves ja usadas nas abas Diligencias e Iniciais.
-//
-// Semestre: diligencias.semestre, iniciais.semestre e estagiarios.semestre
-// sao todos texto simples (ex. "2026.01"), preenchidos manualmente por
-// Thales — comparados diretamente, sem calcular nada a partir de datas.
+// --- Registros filtrados (turma + aluno em foco) ---
+// 27/07/2026: a chave de agrupamento das telas de metrica passou de SEMESTRE
+// para TURMA (ver Turma.js). Cada registro ja chega do servidor com a turma
+// RESOLVIDA (registro -> aluno -> turma, ver getDadosPanorama, Panorama.js)
+// — o filtro aqui casa direto contra reg.turma, nunca contra um conjunto de
+// nomes/e-mails de estagiarios. Isso elimina a dupla contagem que ocorreria
+// se um aluno tivesse duas linhas na aba estagiarios (antecipado + regular)
+// dentro do mesmo semestre: cada registro pertence a uma e so uma turma,
+// entao contar "por registro" (em vez de "por linha de estagiario")
+// resolve o problema pela raiz.
+function _filtrarRegistrosPanoramaPorTurma(lista) {
+  var filtro = APP_PANORAMA.turmaFiltro;
+  var filtrados = (lista || []).filter(function(r) { return turmaCasaComFiltroCliente(r.turma, filtro); });
+
+  if (!APP_PANORAMA.alunoSelecionado) return filtrados;
+
+  var alunoAtual = (APP.dados.panoramaEstagiarios || []).filter(function(a) {
+    return a.email === APP_PANORAMA.alunoSelecionado;
+  })[0];
+  if (!alunoAtual) return filtrados;
+
+  var chaveNome = normalizarChave(alunoAtual.nome);
+  var chaveEmail = normalizarChave(alunoAtual.email);
+  return filtrados.filter(function(r) {
+    return normalizarChave(r.estagiario) === chaveNome || (r.email && normalizarChave(r.email) === chaveEmail);
+  });
+}
 
 function getDiligenciasPanoramaFiltradas() {
-  var sem = APP_PANORAMA.semestreFiltro;
-  var nomes = {};
-  getConjuntoAlunosPanorama().forEach(function(a) { nomes[normalizarChave(a.nome)] = true; });
-  return (APP.dados.panoramaDiligencias || []).filter(function(r) {
-    return r.semestre === sem && nomes[normalizarChave(r.estagiario)];
-  });
+  return _filtrarRegistrosPanoramaPorTurma(APP.dados.panoramaDiligencias);
 }
 
 function getIniciaisPanoramaFiltradas() {
-  var sem = APP_PANORAMA.semestreFiltro;
-  var emails = {};
-  var nomes = {};
-  getConjuntoAlunosPanorama().forEach(function(a) {
-    if (a.email) emails[normalizarChave(a.email)] = true;
-    if (a.nome) nomes[normalizarChave(a.nome)] = true;
-  });
-  return (APP.dados.panoramaIniciais || []).filter(function(r) {
-    if (r.semestre !== sem) return false;
-    var emailOk = !!emails[normalizarChave(r.email)];
-    var nomeOk = !!nomes[normalizarChave(r.estagiario)];
-    // Mantem o cruzamento principal por e-mail e usa nome como fallback
-    // para registros antigos/inconsistentes em que o e-mail nao casa.
-    return emailOk || nomeOk;
-  });
+  return _filtrarRegistrosPanoramaPorTurma(APP.dados.panoramaIniciais);
 }
 
 function getAcompanhamentosPanoramaFiltrados() {
-  var sem = APP_PANORAMA.semestreFiltro;
-  var emails = {};
-  var nomes = {};
-  getConjuntoAlunosPanorama().forEach(function(a) {
-    if (a.email) emails[normalizarChave(a.email)] = true;
-    if (a.nome) nomes[normalizarChave(a.nome)] = true;
-  });
-  return (APP.dados.panoramaAcompanhamentos || []).filter(function(r) {
-    if (r.semestre !== sem) return false;
-    var emailOk = !!emails[normalizarChave(r.email)];
-    var nomeOk = !!nomes[normalizarChave(r.estagiario)];
-    return emailOk || nomeOk;
-  });
+  return _filtrarRegistrosPanoramaPorTurma(APP.dados.panoramaAcompanhamentos);
 }
 
 function getAtendimentosPanoramaFiltrados() {
-  var sem = APP_PANORAMA.semestreFiltro;
-  var nomes = {};
-  getConjuntoAlunosPanorama().forEach(function(a) { nomes[normalizarChave(a.nome)] = true; });
-  return (APP.dados.panoramaAtendimentos || []).filter(function(r) {
-    return r.semestre === sem && nomes[normalizarChave(r.estagiario)];
-  });
+  return _filtrarRegistrosPanoramaPorTurma(APP.dados.panoramaAtendimentos);
 }
 
-// Cruzamento por e-mail e nome, mesmo padrao de Iniciais/Acompanhamentos
-// (ver AtendimentoOnline.js — atendimentos_online guarda os dois campos).
 function getAtendimentosOnlinePanoramaFiltrados() {
-  var sem = APP_PANORAMA.semestreFiltro;
-  var emails = {};
-  var nomes = {};
-  getConjuntoAlunosPanorama().forEach(function(a) {
-    if (a.email) emails[normalizarChave(a.email)] = true;
-    if (a.nome) nomes[normalizarChave(a.nome)] = true;
-  });
-  return (APP.dados.panoramaAtendimentosOnline || []).filter(function(r) {
-    if (r.semestre !== sem) return false;
-    var emailOk = !!emails[normalizarChave(r.email)];
-    var nomeOk = !!nomes[normalizarChave(r.estagiario)];
-    return emailOk || nomeOk;
-  });
+  return _filtrarRegistrosPanoramaPorTurma(APP.dados.panoramaAtendimentosOnline);
 }
 
-// Cruzamento por e-mail e nome, mesmo padrao acima (ver AudienciasEstagiario.js).
 function getAudienciasPanoramaFiltradas() {
-  var sem = APP_PANORAMA.semestreFiltro;
-  var emails = {};
-  var nomes = {};
-  getConjuntoAlunosPanorama().forEach(function(a) {
-    if (a.email) emails[normalizarChave(a.email)] = true;
-    if (a.nome) nomes[normalizarChave(a.nome)] = true;
-  });
-  return (APP.dados.panoramaAudienciasEstagiario || []).filter(function(r) {
-    if (r.semestre !== sem) return false;
-    var emailOk = !!emails[normalizarChave(r.email)];
-    var nomeOk = !!nomes[normalizarChave(r.estagiario)];
-    return emailOk || nomeOk;
-  });
+  return _filtrarRegistrosPanoramaPorTurma(APP.dados.panoramaAudienciasEstagiario);
 }
 
 // --- Progresso por tipo (contagem local, mesma regra de
 // contarAudienciasPorTipo em AudienciasEstagiario.js — so Aprovada conta) ---
-function contarAudienciasPorTipoCliente(lista) {
+// multiplicadorMeta (secao 2.9 do documento de migracao de TURMA): quantas
+// "linhas" de turma do aluno contam para a meta na visao atual. Na visao
+// "Todas as turmas" com um aluno selecionado que fez antecipado E regular no
+// mesmo semestre, a meta e somada (uma meta por turma, ja que a exigencia e
+// identica em cada turma) — 1 em qualquer outra visao (turma especifica, ou
+// nenhum aluno selecionado).
+function contarAudienciasPorTipoCliente(lista, multiplicadorMeta) {
+  var mult = multiplicadorMeta || 1;
   var parametros = APP.dados.parametrosAudiencias || [];
   var aprovadas = (lista || []).filter(function(r) { return normalizarChave(r.status) === 'aprovada'; });
 
   return parametros.map(function(p) {
     var realizado = aprovadas.filter(function(r) { return normalizarChave(r.tipo) === normalizarChave(p.tipo); }).length;
-    var meta = p.meta || 0;
+    var meta = (p.meta || 0) * mult;
     var percentual = meta > 0 ? Math.min(100, Math.round((realizado / meta) * 100)) : (realizado > 0 ? 100 : 0);
     var excedente = meta > 0 && realizado > meta;
     return { tipo: p.tipo, meta: meta, horas: p.horas || 0, realizado: realizado, percentual: percentual, excedente: excedente };
   });
+}
+
+// Quantas linhas de estagiario o aluno selecionado tem dentro do semestre
+// base do filtro atual — usado como multiplicadorMeta acima. So relevante
+// quando o filtro atual e um semestre inteiro (sem sufixo -A/-R, "Todas as
+// turmas"); em qualquer outra visao o multiplicador e 1.
+function multiplicadorMetaPanorama() {
+  var filtro = APP_PANORAMA.turmaFiltro;
+  var ehTodasAsTurmas = filtro && filtro.indexOf('-') === -1;
+  if (!ehTodasAsTurmas || !APP_PANORAMA.alunoSelecionado) return 1;
+
+  var qtd = (APP.dados.panoramaEstagiarios || []).filter(function(a) {
+    return a.email === APP_PANORAMA.alunoSelecionado && String(a.turma || '').split('-')[0] === filtro;
+  }).length;
+  return qtd || 1;
 }
 
 // --- Cards resumo ---
@@ -3925,7 +3955,7 @@ function renderizarCardsPanorama() {
   // as horas de bd!Z (ver contarAudienciasPorTipoCliente).
   if (APP_PANORAMA.alunoSelecionado) {
     var pesos = APP.dados.pesosPontuacao || {};
-    var contagensAudiencias = contarAudienciasPorTipoCliente(getAudienciasPanoramaFiltradas());
+    var contagensAudiencias = contarAudienciasPorTipoCliente(getAudienciasPanoramaFiltradas(), multiplicadorMetaPanorama());
     var pontuacaoAudiencias = contagensAudiencias.reduce(function(soma, c) {
       return soma + (c.realizado * (c.horas || 0));
     }, 0);

@@ -181,7 +181,8 @@ function salvarDistribuicao(payload) {
           especie: row[CONFIG.COL.ESPECIE],
           vara: row[CONFIG.COL.VARA],
           estagiario: row[CONFIG.COL.ESTAGIARIO],
-          dfRaw: row[CONFIG.COL.DF]
+          dfRaw: row[CONFIG.COL.DF],
+          comentario: row[CONFIG.COL.COMENTARIO]
         };
 
         var resultado = criarCourseWorkParaRegistro(reg);
