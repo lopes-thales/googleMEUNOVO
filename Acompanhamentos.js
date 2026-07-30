@@ -67,8 +67,14 @@ function getTodosAcompanhamentos() {
 // --- Agregador usado pela aba "Acompanhamentos" no frontend ---
 
 function getDadosAbaAcompanhamentos() {
+  var acompanhamentos = getTodosAcompanhamentos();
+  // Anota reg.turma para alimentar o filtro de Turma da aba — ver
+  // Turma.js: anotarTurmaEmRegistros/criarResolvedorTurma (mesma tecnica
+  // ja usada em Panorama.js).
+  anotarTurmaEmRegistros(acompanhamentos, criarResolvedorTurma(), function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
+
   return {
-    acompanhamentos: getTodosAcompanhamentos(),
+    acompanhamentos: acompanhamentos,
     // Mesma picklist de status usada por Diligencias/Iniciais (bd!A2:A).
     // "Protocolado" permanece disponivel na lista por decisao de Thales,
     // ainda que nunca seja atribuido automaticamente a um acompanhamento.

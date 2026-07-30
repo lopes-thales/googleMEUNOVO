@@ -163,8 +163,14 @@ function getTodasIniciais() {
 // --- Agregador usado pela aba Iniciais no frontend ---
 
 function getDadosAbaIniciais() {
+  var iniciais = getTodasIniciais();
+  // Anota reg.turma para alimentar o filtro de Turma da aba — ver
+  // Turma.js: anotarTurmaEmRegistros/criarResolvedorTurma (mesma tecnica
+  // ja usada em Panorama.js).
+  anotarTurmaEmRegistros(iniciais, criarResolvedorTurma(), function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
+
   return {
-    iniciais: getTodasIniciais(),
+    iniciais: iniciais,
     statusPicklist: lerColunaBd(CONFIG.BD_COL.STATUS)
   };
 }

@@ -92,7 +92,9 @@ function recarregarDiligencias() {
   try {
     var acesso = validarAcesso();
     if (!acesso.autorizado) return { erro: acesso.motivo };
-    return { diligencias: getTodasDiligencias() };
+    var diligencias = getTodasDiligencias();
+    anotarTurmaEmRegistros(diligencias, criarResolvedorTurma(), function(r) { return r.estagiario; }, function(r) { return r.df; });
+    return { diligencias: diligencias };
   } catch (e) {
     return { erro: 'Erro ao recarregar: ' + e.message };
   }

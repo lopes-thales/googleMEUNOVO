@@ -89,7 +89,7 @@ var APP = {
   busca: '',
   dfDe: '',
   dfAte: '',
-  semestreFiltro: obterSemestreAtual(),
+  turmaFiltro: '',
   ordenacao: { coluna: 'id', direcao: 'asc' },
   paginaAtual: 1,
   itensPorPagina: 20,
@@ -639,7 +639,7 @@ function carregarDados() {
         return;
       }
       APP.dados = resultado;
-      popularSelectSemestre();
+      popularSelectTurma();
       mostrarLoading(false);
       renderizarCards();
       renderizarTabela();
@@ -656,7 +656,7 @@ function recarregarAposEdicao() {
     .withSuccessHandler(function(resultado) {
       if (resultado.erro) return;
       APP.dados.diligencias = resultado.diligencias;
-      popularSelectSemestre();
+      popularSelectTurma();
       renderizarCards();
       renderizarTabela();
     })
@@ -784,8 +784,8 @@ function getRegistrosFiltrados() {
     });
   }
 
-  if (APP.semestreFiltro) {
-    lista = lista.filter(function(r) { return r.semestre === APP.semestreFiltro; });
+  if (APP.turmaFiltro) {
+    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP.turmaFiltro); });
   }
 
   lista = lista.slice().sort(function(a, b) {
@@ -824,42 +824,19 @@ function normalizar(str) {
     .toLowerCase();
 }
 
-function obterSemestreAtual() {
-  try {
-    var hoje = new Date();
-    var ano = hoje.getFullYear();
-    var mes = hoje.getMonth() + 1;
-    if (!ano || !mes) return '';
-    return ano + '.' + (mes <= 6 ? '01' : '02');
-  } catch (e) {
-    return '';
-  }
+// Popula o select de Turma (hierarquico: Todas as turmas / Antecipado /
+// Regular por semestre) a partir dos codigos (reg.turma) presentes na lista
+// carregada, usando popularSelectTurmaGenerico (definido mais abaixo, junto
+// de rotulosTurma/turmaCasaComFiltroCliente) para nao triplicar a logica
+// entre Diligencias/Iniciais/Acompanhamentos. Substitui o antigo select de
+// Semestre (removido em 30/07/2026 por decisao de Thales — redundante com
+// a opcao "semestre — Todas as turmas" deste seletor).
+function popularSelectTurma() {
+  popularSelectTurmaGenerico('selectTurma', APP.dados.diligencias, APP.turmaFiltro);
 }
 
-function popularSelectSemestre() {
-  var select = document.getElementById('selectSemestre');
-  if (!select) return;
-
-  var presentes = {};
-  (APP.dados.diligencias || []).forEach(function(r) {
-    if (r.semestre) presentes[r.semestre] = true;
-  });
-
-  var semestres = Object.keys(presentes).sort().reverse();
-  var valorAtual = APP.semestreFiltro;
-
-  select.innerHTML = '<option value="">— Todos os semestres —</option>';
-  semestres.forEach(function(s) {
-    var opt = document.createElement('option');
-    opt.value = s;
-    opt.textContent = s;
-    if (s === valorAtual) opt.selected = true;
-    select.appendChild(opt);
-  });
-}
-
-function mudarSemestre(valor) {
-  APP.semestreFiltro = valor || '';
+function mudarTurma(valor) {
+  APP.turmaFiltro = valor || '';
   APP.paginaAtual = 1;
   renderizarCards();
   renderizarTabela();
@@ -971,8 +948,8 @@ function contarPorClassificacao(lista) {
 // === RENDERIZACAO: CARDS ===
 function renderizarCards() {
   var lista = APP.dados.diligencias || [];
-  if (APP.semestreFiltro) {
-    lista = lista.filter(function(r) { return r.semestre === APP.semestreFiltro; });
+  if (APP.turmaFiltro) {
+    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP.turmaFiltro); });
   }
   var c = contarPorClassificacao(lista);
 
@@ -1010,10 +987,12 @@ function filtrarCard(id) {
   renderizarTabela();
 }
 
-// reg.turma so vem preenchido quando o registro veio do payload do Panorama
-// (getDadosPanorama, Panorama.js) — na aba Diligencias (carregarDadosIniciais)
-// o campo e undefined e o selo simplesmente nao aparece, sem precisar de
-// parametro extra aqui (mesma funcao reaproveitada nas duas telas).
+// reg.turma vem anotado pelo servidor em todos os payloads que alimentam
+// esta funcao (Panorama, Diligencias, Iniciais e Acompanhamentos — ver
+// anotarTurmaEmRegistros/criarResolvedorTurma em Turma.js); se algum dia
+// faltar em algum payload novo, o selo simplesmente nao aparece, sem
+// precisar de parametro extra aqui (mesma funcao reaproveitada em todas as
+// telas).
 function renderizarCelulaEstagiario(reg) {
   var est = String(reg.estagiario || '').trim();
   if (est) {
@@ -1665,7 +1644,7 @@ var APP_INICIAIS = {
   busca: '',
   dfDe: '',
   dfAte: '',
-  semestreFiltro: obterSemestreAtual(),
+  turmaFiltro: '',
   ordenacao: { coluna: 'id', direcao: 'asc' },
   paginaAtual: 1,
   itensPorPagina: 20,
@@ -1687,7 +1666,7 @@ function carregarAbaIniciais() {
       }
       APP.dados.iniciais = resultado.iniciais || [];
       APP.dados.statusPicklist = resultado.statusPicklist || [];
-      popularSelectSemestreIniciais();
+      popularSelectTurmaIniciais();
       renderizarCardsIniciais();
       renderizarTabelaIniciais();
     })
@@ -1727,8 +1706,8 @@ function getRegistrosFiltradosIniciais() {
     });
   }
 
-  if (APP_INICIAIS.semestreFiltro) {
-    lista = lista.filter(function(r) { return r.semestre === APP_INICIAIS.semestreFiltro; });
+  if (APP_INICIAIS.turmaFiltro) {
+    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP_INICIAIS.turmaFiltro); });
   }
 
   lista = lista.slice().sort(function(a, b) {
@@ -1740,8 +1719,8 @@ function getRegistrosFiltradosIniciais() {
 
 function renderizarCardsIniciais() {
   var lista = APP.dados.iniciais || [];
-  if (APP_INICIAIS.semestreFiltro) {
-    lista = lista.filter(function(r) { return r.semestre === APP_INICIAIS.semestreFiltro; });
+  if (APP_INICIAIS.turmaFiltro) {
+    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP_INICIAIS.turmaFiltro); });
   }
   var c = contarPorClassificacao(lista);
 
@@ -1901,30 +1880,12 @@ function irPaginaIniciais(n) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function popularSelectSemestreIniciais() {
-  var select = document.getElementById('selectSemestreIniciais');
-  if (!select) return;
-
-  var presentes = {};
-  (APP.dados.iniciais || []).forEach(function(r) {
-    if (r.semestre) presentes[r.semestre] = true;
-  });
-
-  var semestres = Object.keys(presentes).sort().reverse();
-  var valorAtual = APP_INICIAIS.semestreFiltro;
-
-  select.innerHTML = '<option value="">— Todos os semestres —</option>';
-  semestres.forEach(function(s) {
-    var opt = document.createElement('option');
-    opt.value = s;
-    opt.textContent = s;
-    if (s === valorAtual) opt.selected = true;
-    select.appendChild(opt);
-  });
+function popularSelectTurmaIniciais() {
+  popularSelectTurmaGenerico('selectTurmaIniciais', APP.dados.iniciais, APP_INICIAIS.turmaFiltro);
 }
 
-function mudarSemestreIniciais(valor) {
-  APP_INICIAIS.semestreFiltro = valor || '';
+function mudarTurmaIniciais(valor) {
+  APP_INICIAIS.turmaFiltro = valor || '';
   APP_INICIAIS.paginaAtual = 1;
   renderizarCardsIniciais();
   renderizarTabelaIniciais();
@@ -2106,7 +2067,7 @@ var APP_ACOMPANHAMENTOS = {
   busca: '',
   dfDe: '',
   dfAte: '',
-  semestreFiltro: obterSemestreAtual(),
+  turmaFiltro: '',
   ordenacao: { coluna: 'id', direcao: 'asc' },
   paginaAtual: 1,
   itensPorPagina: 20,
@@ -2127,7 +2088,7 @@ function carregarAbaAcompanhamentos() {
       }
       APP.dados.acompanhamentos = resultado.acompanhamentos || [];
       APP.dados.statusPicklist = resultado.statusPicklist || [];
-      popularSelectSemestreAcompanhamentos();
+      popularSelectTurmaAcompanhamentos();
       renderizarCardsAcompanhamentos();
       renderizarTabelaAcompanhamentos();
     })
@@ -2167,8 +2128,8 @@ function getRegistrosFiltradosAcompanhamentos() {
     });
   }
 
-  if (APP_ACOMPANHAMENTOS.semestreFiltro) {
-    lista = lista.filter(function(r) { return r.semestre === APP_ACOMPANHAMENTOS.semestreFiltro; });
+  if (APP_ACOMPANHAMENTOS.turmaFiltro) {
+    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP_ACOMPANHAMENTOS.turmaFiltro); });
   }
 
   lista = lista.slice().sort(function(a, b) {
@@ -2180,8 +2141,8 @@ function getRegistrosFiltradosAcompanhamentos() {
 
 function renderizarCardsAcompanhamentos() {
   var lista = APP.dados.acompanhamentos || [];
-  if (APP_ACOMPANHAMENTOS.semestreFiltro) {
-    lista = lista.filter(function(r) { return r.semestre === APP_ACOMPANHAMENTOS.semestreFiltro; });
+  if (APP_ACOMPANHAMENTOS.turmaFiltro) {
+    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP_ACOMPANHAMENTOS.turmaFiltro); });
   }
   var c = contarPorClassificacao(lista);
 
@@ -2339,30 +2300,12 @@ function irPaginaAcompanhamentos(n) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function popularSelectSemestreAcompanhamentos() {
-  var select = document.getElementById('selectSemestreAcompanhamentos');
-  if (!select) return;
-
-  var presentes = {};
-  (APP.dados.acompanhamentos || []).forEach(function(r) {
-    if (r.semestre) presentes[r.semestre] = true;
-  });
-
-  var semestres = Object.keys(presentes).sort().reverse();
-  var valorAtual = APP_ACOMPANHAMENTOS.semestreFiltro;
-
-  select.innerHTML = '<option value="">— Todos os semestres —</option>';
-  semestres.forEach(function(s) {
-    var opt = document.createElement('option');
-    opt.value = s;
-    opt.textContent = s;
-    if (s === valorAtual) opt.selected = true;
-    select.appendChild(opt);
-  });
+function popularSelectTurmaAcompanhamentos() {
+  popularSelectTurmaGenerico('selectTurmaAcompanhamentos', APP.dados.acompanhamentos, APP_ACOMPANHAMENTOS.turmaFiltro);
 }
 
-function mudarSemestreAcompanhamentos(valor) {
-  APP_ACOMPANHAMENTOS.semestreFiltro = valor || '';
+function mudarTurmaAcompanhamentos(valor) {
+  APP_ACOMPANHAMENTOS.turmaFiltro = valor || '';
   APP_ACOMPANHAMENTOS.paginaAtual = 1;
   renderizarCardsAcompanhamentos();
   renderizarTabelaAcompanhamentos();
@@ -3720,6 +3663,46 @@ function turmaCasaComFiltroCliente(turma, filtro) {
   if (!t || !f) return false;
   if (t === f) return true;
   return t.indexOf(f + '-') === 0;
+}
+
+// Popula um select de Turma HIERARQUICO (Todas as turmas / Antecipado /
+// Regular para cada semestre presente em reg.turma de `lista`), a exemplo
+// de popularSelectTurmaPanorama logo abaixo — usado pelas abas Diligencias/
+// Iniciais/Acompanhamentos (popularSelectTurma/popularSelectTurmaIniciais/
+// popularSelectTurmaAcompanhamentos). Mantido como uma unica funcao
+// compartilhada em vez de tripli-la entre as tres abas.
+//
+// Substitui, desde 30/07/2026, o antigo select de Semestre dessas tres
+// abas (decisao de Thales): a opcao "semestre — Todas as turmas" (value
+// igual ao semestre puro, sem sufixo -A/-R) cobre exatamente o que o
+// select de Semestre fazia — turmaCasaComFiltroCliente ja trata esse valor
+// como prefixo, entao nenhuma capacidade de filtro foi perdida.
+//
+// Ao contrario de popularSelectTurmaPanorama, aqui a opcao em branco
+// ("— Todas as turmas —", sem filtro algum, todos os semestres) continua
+// disponivel e e o valor padrao — nao ha selecao obrigatoria.
+function popularSelectTurmaGenerico(selectId, lista, valorAtual) {
+  var select = document.getElementById(selectId);
+  if (!select) return;
+
+  var semestresPresentes = {};
+  (lista || []).forEach(function(r) {
+    var sem = String(r.turma || '').split('-')[0];
+    if (sem) semestresPresentes[sem] = true;
+  });
+
+  var semestres = Object.keys(semestresPresentes).sort().reverse();
+
+  var html = '<option value="">— Todas as turmas —</option>';
+  semestres.forEach(function(sem) {
+    var rotulos = rotulosTurma(sem);
+    html += '<option value="' + sem + '">' + rotulos.todas + '</option>';
+    html += '<option value="' + sem + '-A">' + rotulos.antecipado + '</option>';
+    html += '<option value="' + sem + '-R">' + rotulos.regular + '</option>';
+  });
+
+  select.innerHTML = html;
+  select.value = valorAtual || '';
 }
 
 // Seletor hierarquico: para cada semestre presente nos alunos, 3 opcoes

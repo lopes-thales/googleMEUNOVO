@@ -630,8 +630,14 @@ function transferirDiligencia(payload) {
 // --- Agregador usado na carga inicial ---
 
 function getDadosIniciais() {
+  var diligencias = getTodasDiligencias();
+  // Anota reg.turma (registro -> aluno -> turma) para alimentar o filtro de
+  // Turma da aba Diligencias — mesma tecnica ja usada em Panorama.js
+  // (ver Turma.js: anotarTurmaEmRegistros/criarResolvedorTurma).
+  anotarTurmaEmRegistros(diligencias, criarResolvedorTurma(), function(r) { return r.estagiario; }, function(r) { return r.df; });
+
   return {
-    diligencias: getTodasDiligencias(),
+    diligencias: diligencias,
     estagiarios: getEstagiarios(),
     picklists: getPicklists()
   };

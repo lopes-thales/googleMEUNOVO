@@ -137,6 +137,13 @@
           <button class="btn-limpar-datas" id="btnLimparDatas" onclick="limparFiltroDatas()" title="Limpar filtro de datas" style="display:none;">
             <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.limpar ?></span>
           </button>
+          <div class="busca-separador"></div>
+          <div class="seletor-semestre" id="seletorTurma">
+            <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.estagiarios ?></span>
+            <select id="selectTurma" class="select-semestre" onchange="mudarTurma(this.value)">
+              <option value="">— Todas as turmas —</option>
+            </select>
+          </div>
         </div>
 
         <!-- TABELA -->
@@ -144,12 +151,6 @@
           <div class="tabela-header-info">
             <span id="tabelaInfo"></span>
             <div id="tabelaHeaderDireita">
-              <div class="seletor-semestre" id="seletorSemestre">
-                <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.semestre ?></span>
-                <select id="selectSemestre" class="select-semestre" onchange="mudarSemestre(this.value)">
-                  <option value="">— Todos os semestres —</option>
-                </select>
-              </div>
               <div class="legenda-cores" id="legendaCores">
                 <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-atraso)"></span> Em Atraso</span>
                 <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-encaminhado)"></span> Encaminhado</span>
@@ -281,18 +282,19 @@
         <button class="btn-limpar-datas" id="btnLimparDatasIniciais" onclick="limparFiltroDatasIniciais()" title="Limpar filtro de datas" style="display:none;">
           <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.limpar ?></span>
         </button>
+        <div class="busca-separador"></div>
+        <div class="seletor-semestre" id="seletorTurmaIniciais">
+          <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.estagiarios ?></span>
+          <select id="selectTurmaIniciais" class="select-semestre" onchange="mudarTurmaIniciais(this.value)">
+            <option value="">— Todas as turmas —</option>
+          </select>
+        </div>
       </div>
 
       <div class="tabela-wrapper">
         <div class="tabela-header-info">
           <span id="tabelaInfoIniciais"></span>
           <div id="tabelaHeaderDireitaIniciais">
-            <div class="seletor-semestre" id="seletorSemestreIniciais">
-              <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.semestre ?></span>
-              <select id="selectSemestreIniciais" class="select-semestre" onchange="mudarSemestreIniciais(this.value)">
-                <option value="">— Todos os semestres —</option>
-              </select>
-            </div>
             <div class="legenda-cores" id="legendaCoresIniciais">
               <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-atraso)"></span> Em Atraso</span>
               <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-encaminhado)"></span> Encaminhado</span>
@@ -328,18 +330,19 @@
           <button class="btn-limpar-datas" id="btnLimparDatasAcompanhamentos" onclick="limparFiltroDatasAcompanhamentos()" title="Limpar filtro de datas" style="display:none;">
             <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.limpar ?></span>
           </button>
+          <div class="busca-separador"></div>
+          <div class="seletor-semestre" id="seletorTurmaAcompanhamentos">
+            <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.estagiarios ?></span>
+            <select id="selectTurmaAcompanhamentos" class="select-semestre" onchange="mudarTurmaAcompanhamentos(this.value)">
+              <option value="">— Todas as turmas —</option>
+            </select>
+          </div>
         </div>
 
         <div class="tabela-wrapper">
           <div class="tabela-header-info">
             <span id="tabelaInfoAcompanhamentos"></span>
             <div id="tabelaHeaderDireitaAcompanhamentos">
-              <div class="seletor-semestre" id="seletorSemestreAcompanhamentos">
-                <span class="material-symbols-outlined" style="font-size:16px;"><?= ICONES.semestre ?></span>
-                <select id="selectSemestreAcompanhamentos" class="select-semestre" onchange="mudarSemestreAcompanhamentos(this.value)">
-                  <option value="">— Todos os semestres —</option>
-                </select>
-              </div>
               <div class="legenda-cores" id="legendaCoresAcompanhamentos">
                 <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-atraso)"></span> Em Atraso</span>
                 <span class="legenda-item"><span class="legenda-dot" style="background:var(--cor-encaminhado)"></span> Encaminhado</span>
