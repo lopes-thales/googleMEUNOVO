@@ -93,7 +93,9 @@ function recarregarDiligencias() {
     var acesso = validarAcesso();
     if (!acesso.autorizado) return { erro: acesso.motivo };
     var diligencias = getTodasDiligencias();
-    anotarTurmaEmRegistros(diligencias, criarResolvedorTurma(), function(r) { return r.estagiario; }, function(r) { return r.df; });
+    // Resolucao de turma para a aba Diligencias: ALTERADO EM (M) com fallback
+    // para DF (G). A coluna SEMESTRE (R) continua sendo calculada a partir do DF.
+    anotarTurmaEmRegistros(diligencias, criarResolvedorTurma(), function(r) { return r.estagiario; }, function(r) { return r.alteradoEm || r.df; });
     return { diligencias: diligencias };
   } catch (e) {
     return { erro: 'Erro ao recarregar: ' + e.message };

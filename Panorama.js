@@ -120,8 +120,10 @@ function _contarProducaoComDados(nomeEstagiario, turma, diligencias, iniciais, a
     return turmaCasaComFiltro(turmaRegistro, turma);
   }
 
+  // Diligencias: a turma de referencia para producao e a mesma usada no filtro
+  // do Panorama — ALTERADO EM (M) com fallback para DF (G).
   var diligenciasDoAluno = diligencias.filter(function(d) {
-    return normalizarChave(d.estagiario) === chaveNome && casaTurma(turmaDoRegistro(d.estagiario, d.df)) && naoCancelada(d);
+    return normalizarChave(d.estagiario) === chaveNome && casaTurma(turmaDoRegistro(d.estagiario, d.alteradoEm || d.df)) && naoCancelada(d);
   });
   var qtdSimples = diligenciasDoAluno.filter(function(d) { return normalizarChave(d.subespecie) === normalizarChave(CONFIG.SUBESPECIE_VALORES.SIMPLES); }).length;
   var qtdComplexasDiligencias = diligenciasDoAluno.filter(function(d) { return normalizarChave(d.subespecie) === normalizarChave(CONFIG.SUBESPECIE_VALORES.COMPLEXA); }).length;
@@ -233,7 +235,10 @@ function getDadosPanorama() {
   var audienciasEstagiario = getTodasAudienciasEstagiario(); // AudienciasEstagiario.js
 
   var resolvedorTurma = criarResolvedorTurma(); // Turma.js
-  anotarTurmaEmRegistros(diligencias, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.df; });
+  // Resolucao de turma das diligencias: ALTERADO EM (M) com fallback para DF
+  // (G). As demais abas mantem suas datas de referencia proprias. A coluna
+  // SEMESTRE (R) das diligencias continua calculada a partir do DF.
+  anotarTurmaEmRegistros(diligencias, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.alteradoEm || r.df; });
   anotarTurmaEmRegistros(iniciais, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
   anotarTurmaEmRegistros(atendimentos, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.data; });
   anotarTurmaEmRegistros(acompanhamentos, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });

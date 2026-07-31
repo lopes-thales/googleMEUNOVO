@@ -85,8 +85,11 @@ function getDadosPainelAluno(acesso) {
   // Turma.js) — mesma tecnica usada em getDadosPanorama (Panorama.js). O
   // Painel Aluno passa a ter o mesmo seletor hierarquico de turma do
   // Panorama (AlunoScripts.html), e filtra direto em reg.turma.
+  //
+  // Diligencias: a data de referencia para resolver a turma e o ALTERADO EM (M)
+  // com fallback para DF (G), mesma regra adotada no Panorama.
   var resolvedorTurma = criarResolvedorTurma();
-  anotarTurmaEmRegistros(diligencias, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.df; });
+  anotarTurmaEmRegistros(diligencias, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.alteradoEm || r.df; });
   anotarTurmaEmRegistros(iniciais, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
   anotarTurmaEmRegistros(atendimentos, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.data; });
   anotarTurmaEmRegistros(acompanhamentos, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });

@@ -634,7 +634,11 @@ function getDadosIniciais() {
   // Anota reg.turma (registro -> aluno -> turma) para alimentar o filtro de
   // Turma da aba Diligencias — mesma tecnica ja usada em Panorama.js
   // (ver Turma.js: anotarTurmaEmRegistros/criarResolvedorTurma).
-  anotarTurmaEmRegistros(diligencias, criarResolvedorTurma(), function(r) { return r.estagiario; }, function(r) { return r.df; });
+  // Decisao de Thales: a data de referencia para resolver a turma de uma
+  // diligencia e o ALTERADO EM (coluna M), com fallback para o DF (coluna G)
+  // quando M estiver vazio. A coluna SEMESTRE (R) continua calculada a partir
+  // do DF.
+  anotarTurmaEmRegistros(diligencias, criarResolvedorTurma(), function(r) { return r.estagiario; }, function(r) { return r.alteradoEm || r.df; });
 
   return {
     diligencias: diligencias,

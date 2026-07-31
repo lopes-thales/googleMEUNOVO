@@ -16,8 +16,10 @@ function _calcularSemestreDeData(data) {
 }
 
 // Preenche a coluna SEMESTRE de uma aba a partir de sua coluna de data.
-// colData e colSemestre sao 1-indexados (numero da coluna na planilha).
-// Retorna o numero de linhas cujo semestre foi calculado e gravado.
+// colData pode ser um numero (1-indexado) ou um array de numeros, em ordem
+// de prioridade, para usar a primeira coluna nao-vazia como fallback.
+// colSemestre e 1-indexado. Retorna o numero de linhas cujo semestre foi
+// calculado e gravado.
 function _preencherSemestreAba(ss, nomeAba, colData, colSemestre) {
   var aba = ss.getSheetByName(nomeAba);
   if (!aba) return 0;
@@ -26,14 +28,14 @@ function _preencherSemestreAba(ss, nomeAba, colData, colSemestre) {
   if (ultimaLinha < 2) return 0;
 
   var numLinhas = ultimaLinha - 1;
-  var colMax = Math.max(colData, colSemestre);
+  var colunasData = Array.isArray(colData) ? colData : [colData];
+  var colMax = Math.max.apply(null, colunasData.concat([colSemestre]));
   var dados = aba.getRange(2, 1, numLinhas, colMax).getValues();
 
   var novosSemestres = [];
   var totalAtualizado = 0;
 
   for (var i = 0; i < dados.length; i++) {
-    var dataVal = dados[i][colData - 1];
     var semAtual = dados[i][colSemestre - 1];
 
     // Se ja tem semestre preenchido como texto, nao altera. Um Date na
@@ -43,6 +45,16 @@ function _preencherSemestreAba(ss, nomeAba, colData, colSemestre) {
     if (semAtual && !(semAtual instanceof Date) && String(semAtual).trim() !== '') {
       novosSemestres.push([semAtual]);
       continue;
+    }
+
+    // Busca a primeira coluna de data nao vazia, na ordem do array (fallback).
+    var dataVal = null;
+    for (var j = 0; j < colunasData.length; j++) {
+      var candidata = dados[i][colunasData[j] - 1];
+      if (candidata && candidata !== '') {
+        dataVal = candidata;
+        break;
+      }
     }
 
     if (!dataVal || dataVal === '') {
@@ -79,6 +91,11 @@ function _preencherSemestreAba(ss, nomeAba, colData, colSemestre) {
 //   atendimentos: data = A (col 1),  semestre = J (col 10)
 //   estagiarios : data = D (col 4),  semestre = F (col  6)
 //
+// A colData pode ser um numero ou um array de numeros (fallback). Para usar
+// ALTERADO EM (M, col 13) com fallback para DF (G, col 7) na aba
+// diligencias no futuro, basta trocar a configuracao abaixo para
+// { nome: CONFIG.SHEET_DILIGENCIAS, colData: [13, 7], colSemestre: 18 }.
+// Hoje mantemos G para preservar a regra atual da coluna SEMESTRE (R).
 function preencherSemestrePlanilha() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
