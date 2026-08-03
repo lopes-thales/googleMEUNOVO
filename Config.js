@@ -514,6 +514,17 @@ var CONFIG = {
   // Prefixo do ID da matricula de estagio (estagiarios!N) — ver Turma.js.
   PREFIXO_MATRICULA_ESTAGIO: 'MAT-',
 
+  // --- Execucao propria de diligencias (RN-EP, ver RN_Execucao_Propria.md) ---
+  // Uma diligencia cumprida pelo proprio Thales (sem estagiario) e marcada por
+  // uma linha gravada na NOTA da celula ADV (H) da aba diligencias — nunca no
+  // VALOR da celula, que pertence a um script externo (ver Config.js, coluna
+  // COL.ADV). A marcacao e lida/escrita por linha da nota (nunca por igualdade
+  // da nota inteira), mesma tecnica de _lerRastreioCobranca/_marcarRastreioCobranca
+  // (Mensagens.js) — ver leitor/gravador/removedor em Turma.js.
+  EXEC_PROPRIA: {
+    PREFIXO_NOTA: 'EXEC_PROPRIA'
+  },
+
   // Aba criada e alimentada por MigracaoTurmaV2.js com os registros cuja
   // matricula nao pode ser resolvida com seguranca no backfill. Thales
   // preenche a coluna H (TURMA) e roda aplicarCorrecoesAmbiguos().

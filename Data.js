@@ -117,7 +117,7 @@ function normalizarSemestreLido(valorBruto) {
 
 // --- Leitura da aba diligencias ---
 
-function rowParaObjeto(row, indice, feriadosTimestamps) {
+function rowParaObjeto(row, indice, feriadosTimestamps, execucaoPropria) {
   var dfParaAtraso = resolverDfParaAtraso(row[CONFIG.COL.DF_CLASS], row[CONFIG.COL.DF]);
   var atrasoVal = calcularAtraso(dfParaAtraso, row[CONFIG.COL.STATUS]);
   var gatilhoVal = calcularGatilhoPrazo(row[CONFIG.COL.DF], row[CONFIG.COL.STATUS], feriadosTimestamps);
@@ -151,7 +151,11 @@ function rowParaObjeto(row, indice, feriadosTimestamps) {
     // mais resolvida em tempo de leitura. O frontend filtra direto em
     // reg.turma; idMatricula e a chave forte usada pelo modal de edicao.
     idMatricula: String(row[CONFIG.COL.ID_MATRICULA] || '').trim(),
-    turma: String(row[CONFIG.COL.TURMA] || '').trim()
+    turma: String(row[CONFIG.COL.TURMA] || '').trim(),
+    // RN-EP-08: diligencia cumprida pelo proprio Thales, sem estagiario — a
+    // marcacao vem da NOTA da celula ADV/H (nunca enviada ao frontend por
+    // inteiro, so esta flag), ver notaContemExecPropria em Turma.js.
+    execucaoPropria: !!execucaoPropria
     // ADV e SINC nunca sao enviados ao frontend
   };
 }
@@ -205,26 +209,39 @@ function getTodasDiligencias() {
 
   var dados = aba.getRange(2, 1, ultimaLinha - 1, CONFIG.TOTAL_COLUNAS_DILIGENCIAS).getValues();
   var feriadosTimestamps = lerFeriados();
+  // Notas da coluna ADV (H) lidas em UM UNICO bloco (getNotes()), nao uma
+  // celula por vez — RN-EP-08 (selo "Supervisor") precisa da flag em toda
+  // linha da tabela, e getNote() por linha seria uma chamada de API por
+  // registro. Ver notaContemExecPropria em Turma.js.
+  var notasAdv = aba.getRange(2, CONFIG.COL.ADV + 1, ultimaLinha - 1, 1).getNotes();
   var lista = [];
 
   for (var i = 0; i < dados.length; i++) {
     var row = dados[i];
     if (!row[CONFIG.COL.ID] && !row[CONFIG.COL.PROCESSO]) continue;
-    lista.push(rowParaObjeto(row, i, feriadosTimestamps));
+    lista.push(rowParaObjeto(row, i, feriadosTimestamps, notaContemExecPropria(notasAdv[i][0])));
   }
   return lista;
 }
 
 // --- Escrita ---
 // Campos editaveis pelo painel: estagiario, turma, status, obs, comentario,
-// especie, vara. alteradoEm, semestre, subespecie e idMatricula sao sempre
-// calculados no servidor (nunca recebidos prontos do frontend).
+// especie, vara, execucaoPropria. alteradoEm, semestre, subespecie e
+// idMatricula sao sempre calculados no servidor (nunca recebidos prontos do
+// frontend).
 //
 // ALTERADO EM 01/08/2026 (modelo de turmas v2): o modal passa a receber
 // payload.turma. Trocar a turma aqui e permitido (RN-T06) e submetido a mesma
 // validacao da Distribuicao (RN-T05: a DF Real nao pode ser anterior ao inicio
 // da turma escolhida, e nao pode estar vazia). SEMESTRE deixou de ser
 // calculado a partir do DF e passou a ser derivado da TURMA (RN-T08).
+//
+// ALTERADO EM 03/08/2026 (RN-EP — execucao propria de diligencias): quando
+// payload.execucaoPropria e verdadeiro E nao ha estagiario, a linha e marcada
+// (nota EXEC_PROPRIA na celula ADV/H, ver Turma.js) e pode ganhar TURMA sem
+// ID_MATRICULA (excecao deliberada, ver cabecalho de Turma.js). Atribuir um
+// estagiario desfaz a marcacao sempre (RN-EP-06), mesmo que o payload ainda
+// mande execucaoPropria=true por engano.
 function salvarEdicaoDiligencia(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName(CONFIG.SHEET_DILIGENCIAS);
@@ -248,23 +265,51 @@ function salvarEdicaoDiligencia(payload) {
   var turmaAtual = String(aba.getRange(linha, CONFIG.COL.TURMA + 1).getValue() || '').trim();
   var novoSemestre = normalizarSemestreLido(aba.getRange(linha, CONFIG.COL.SEMESTRE + 1).getValue());
   var novoIdMatricula = idMatriculaAtual;
+  var dfRealAtual = aba.getRange(linha, CONFIG.COL.DF_REAL + 1).getValue();
 
-  // Um registro sem estagiario nao tem matricula: limpa as duas colunas.
-  if (!novoEstagiario) {
+  var advCell = aba.getRange(linha, CONFIG.COL.ADV + 1);
+  var marcadoAtualmente = notaContemExecPropria(advCell.getNote());
+  var novaExecPropria = !!payload.execucaoPropria;
+  var execPropriaFinal = false;
+
+  if (novoEstagiario) {
+    // RN-EP-06: atribuir um estagiario desfaz a marcacao, incondicionalmente
+    // — a atribuicao a um aluno e sempre mais forte que a execucao propria.
+    if (marcadoAtualmente) desmarcarNotaExecPropria(advCell);
+
+    if (novaTurma && (novaTurma !== turmaAtual || !idMatriculaAtual)) {
+      // Atribuicao nova ou troca de turma: valida antes de gravar qualquer coisa
+      // (RN-T05/RN-T06). Nada e escrito na linha se a validacao falhar.
+      var atribuicao = resolverAtribuicao(novoEstagiario, novaTurma, dfRealAtual);
+      if (!atribuicao.ok) return { sucesso: false, erro: atribuicao.erro };
+      novoIdMatricula = atribuicao.idMatricula;
+      novaTurma = atribuicao.turma;
+      novoSemestre = atribuicao.semestre;
+    } else if (novaTurma) {
+      novoSemestre = extrairSemestreDaTurma(novaTurma);
+    }
+  } else if (novaExecPropria) {
+    // RN-EP-02/03/04/05: marcado como execucao propria, sem estagiario. Turma
+    // e opcional no momento de salvar (RN-EP-03); se informada, vale a mesma
+    // validacao RN-T05 (RN-EP-04) — sem par (aluno, turma), resolverAtribuicao
+    // nao se aplica aqui.
+    novoIdMatricula = '';
+    if (novaTurma) {
+      var validacaoExec = validarTurmaParaRegistro(novaTurma, dfRealAtual);
+      if (!validacaoExec.valido) return { sucesso: false, erro: validacaoExec.erro };
+      novoSemestre = extrairSemestreDaTurma(novaTurma);
+    } else {
+      novoSemestre = '';
+    }
+    if (!marcadoAtualmente) marcarNotaExecPropria(advCell);
+    execPropriaFinal = true;
+  } else {
+    // Sem estagiario e sem marcacao: diligencia comum ainda nao distribuida
+    // (invariante 3 do RN-EP) — nunca fica com turma/semestre gravados.
     novoIdMatricula = '';
     novaTurma = '';
     novoSemestre = '';
-  } else if (novoEstagiario && novaTurma && (novaTurma !== turmaAtual || !idMatriculaAtual)) {
-    // Atribuicao nova ou troca de turma: valida antes de gravar qualquer coisa
-    // (RN-T05/RN-T06). Nada e escrito na linha se a validacao falhar.
-    var dfRealAtual = aba.getRange(linha, CONFIG.COL.DF_REAL + 1).getValue();
-    var atribuicao = resolverAtribuicao(novoEstagiario, novaTurma, dfRealAtual);
-    if (!atribuicao.ok) return { sucesso: false, erro: atribuicao.erro };
-    novoIdMatricula = atribuicao.idMatricula;
-    novaTurma = atribuicao.turma;
-    novoSemestre = atribuicao.semestre;
-  } else if (novaTurma) {
-    novoSemestre = extrairSemestreDaTurma(novaTurma);
+    if (marcadoAtualmente) desmarcarNotaExecPropria(advCell); // RN-EP-02, ao desmarcar
   }
 
   aba.getRange(linha, CONFIG.COL.ESTAGIARIO + 1).setValue(novoEstagiario);
@@ -302,6 +347,7 @@ function salvarEdicaoDiligencia(payload) {
     semestre: novoSemestre,
     turma: novaTurma,
     idMatricula: novoIdMatricula,
+    execucaoPropria: execPropriaFinal,
     secretaria: secretaria,
     geral: geral
   };
@@ -535,7 +581,8 @@ function buscarDiligenciaPorId(id) {
     if (normalizarChave(dados[i][CONFIG.COL.STATUS]) === 'cancelada') {
       return { sucesso: false, erro: 'Diligência ' + idAlvo + ' já está cancelada.' };
     }
-    return { sucesso: true, registro: rowParaObjeto(dados[i], i, feriadosTimestamps) };
+    var notaAdv = aba.getRange(i + 2, CONFIG.COL.ADV + 1).getNote();
+    return { sucesso: true, registro: rowParaObjeto(dados[i], i, feriadosTimestamps, notaContemExecPropria(notaAdv)) };
   }
   return { sucesso: false, erro: 'Diligência ' + idAlvo + ' não encontrada.' };
 }
@@ -721,6 +768,10 @@ function getDadosIniciais() {
     // Thales: turma especifica, ex. "2026.02-R", nao o semestre inteiro).
     // Panorama nao consome este campo — ja recebe o seu proprio turmaCorrente
     // por getDadosPanorama (Panorama.js).
-    turmaCorrente: obterTurmaCorrente()
+    turmaCorrente: obterTurmaCorrente(),
+    // RN-EP-03: turmas nao encerradas cadastradas em `turmas`, usadas pelo
+    // campo Turma do modal de Diligencia quando "Cumprida por mim" esta
+    // marcada (nao ha aluno, entao o mapa de matriculas nao se aplica).
+    turmasNaoEncerradas: listarTurmasNaoEncerradas()
   };
 }

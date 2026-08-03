@@ -1054,6 +1054,11 @@ function renderizarCelulaEstagiario(reg) {
     var selo = String(reg.turma || '').slice(-2) === '-A' ? ' <span class="selo-turma-antecipada">Antecipado</span>' : '';
     return est + selo;
   }
+  // RN-EP-08: diligencia cumprida pelo proprio Thales, sem estagiario — o
+  // selo aparece independente do STATUS (nao so quando "em aberto").
+  if (reg.execucaoPropria) {
+    return '<span class="selo-execucao-propria">Supervisor</span>';
+  }
   if (ehSemEstagiario(reg)) {
     return '<span class="estagiario-celula-vazio"><span class="material-symbols-outlined sem-estagiario-indicador">' + ICONES.semEstagiario + '</span></span>';
   }
@@ -1343,13 +1348,45 @@ function preencherEdicaoModal(reg) {
     if (this.value && !selectStatus.value) {
       selectStatus.value = 'Encaminhado';
     }
+    // RN-EP-06: atribuir um estagiario desfaz a marcacao de execucao propria
+    // — regra de mao unica, atribuicao a um aluno e sempre mais forte.
+    var checkExecPropriaAoTrocar = document.getElementById('editExecucaoPropria');
+    if (this.value && checkExecPropriaAoTrocar.checked) checkExecPropriaAoTrocar.checked = false;
     editAoTrocarEstagiario();
   };
 
+  // RN-EP-01/02: caixa "Cumprida por mim" — unico acionador da marcacao de
+  // execucao propria (diligencia cumprida pelo proprio Thales, sem
+  // estagiario). Enquanto marcada, o select de Estagiário(a) fica desabilitado
+  // (os dois caminhos sao mutuamente exclusivos na UI).
+  var checkExecPropria = document.getElementById('editExecucaoPropria');
+  checkExecPropria.checked = !!reg.execucaoPropria;
+  selectEstagiario.disabled = checkExecPropria.checked;
+
   // Modelo de turmas v2 (01/08/2026): campo Turma do modal. Trocar a turma de
   // um registro ja distribuido e permitido (RN-T06) e passa pela mesma
-  // validacao de DF Real do servidor (RN-T05).
+  // validacao de DF Real do servidor (RN-T05). Em execucao propria (RN-EP-03),
+  // a lista de turmas e outra (turmas nao encerradas, sem par com aluno) — ver
+  // editPopularSelectTurma.
   editPopularSelectTurma(reg.turma);
+}
+
+// RN-EP-02: chamado ao marcar/desmarcar "Cumprida por mim". Marcar desabilita
+// e limpa o Estagiário(a) (unico ponto de entrada da marcacao); desmarcar
+// devolve o select ao normal. Nos dois casos a selecao de Turma e reiniciada
+// — mesmo comportamento ja usado ao trocar de estagiario (editAoTrocarEstagiario).
+function editAoTrocarExecucaoPropria() {
+  var check = document.getElementById('editExecucaoPropria');
+  var selectEstagiario = document.getElementById('editEstagiario');
+
+  if (check.checked) {
+    selectEstagiario.value = '';
+    selectEstagiario.disabled = true;
+  } else {
+    selectEstagiario.disabled = false;
+  }
+
+  editPopularSelectTurma('');
 }
 
 // Popula o select de Turma do modal com as matriculas do estagiario que estiver
@@ -1358,6 +1395,15 @@ function preencherEdicaoModal(reg) {
 function editPopularSelectTurma(turmaAtual) {
   var selectTurma = document.getElementById('editTurma');
   if (!selectTurma) return;
+
+  // RN-EP-03: com "Cumprida por mim" marcada nao ha aluno, entao o campo
+  // Turma lista as turmas nao encerradas cadastradas (turmas!A), nao o mapa
+  // de matriculas do estagiario.
+  var checkExecPropria = document.getElementById('editExecucaoPropria');
+  if (checkExecPropria && checkExecPropria.checked) {
+    editPopularSelectTurmaExecPropria(turmaAtual);
+    return;
+  }
 
   var nome = document.getElementById('editEstagiario').value;
   var reg = APP.registroAtual;
@@ -1399,6 +1445,32 @@ function editPopularSelectTurma(turmaAtual) {
   }
 
   if (turmaAtual) selectTurma.value = turmaAtual;
+}
+
+// RN-EP-03: campo Turma quando "Cumprida por mim" esta marcada — lista todas
+// as turmas nao encerradas cadastradas (APP.dados.turmasNaoEncerradas, ver
+// listarTurmasNaoEncerradas em Turma.js), sem par com aluno. A escolha e
+// opcional: a diligencia pode ser marcada e salva sem turma (RN-EP-03),
+// preenchida depois numa edicao posterior.
+function editPopularSelectTurmaExecPropria(turmaAtual) {
+  var selectTurma = document.getElementById('editTurma');
+  var turmas = (APP.dados && APP.dados.turmasNaoEncerradas) || [];
+
+  selectTurma.innerHTML = '';
+  selectTurma.disabled = false;
+  selectTurma.appendChild(new Option('— Selecionar —', ''));
+
+  var achouAtual = false;
+  turmas.forEach(function(t) {
+    selectTurma.appendChild(new Option(t.rotulo, t.codigo));
+    if (t.codigo === turmaAtual) achouAtual = true;
+  });
+
+  if (turmaAtual && !achouAtual) {
+    selectTurma.appendChild(new Option(turmaAtual + ' (turma atual)', turmaAtual));
+  }
+
+  selectTurma.value = turmaAtual || '';
 }
 
 // Chamado quando o estagiario muda no modal: repovoa o select de Turma e limpa
@@ -1464,7 +1536,8 @@ function salvarModal() {
     obs: document.getElementById('editObs').value,
     comentario: document.getElementById('editComentario').value,
     especie: document.getElementById('editEspecie').value,
-    vara: document.getElementById('editVara').value
+    vara: document.getElementById('editVara').value,
+    execucaoPropria: document.getElementById('editExecucaoPropria').checked
   };
 
   var btnSalvar = document.getElementById('btnSalvar');
@@ -1505,6 +1578,10 @@ function salvarModal() {
           r.turma       = res.turma;
           r.idMatricula = res.idMatricula;
           r.semestre    = res.semestre;
+          // RN-EP: o servidor e a verdade sobre a marcacao (RN-EP-06 pode
+          // desfaze-la mesmo com a caixa marcada no payload, se um
+          // estagiario foi atribuido).
+          r.execucaoPropria = res.execucaoPropria;
         }
       });
       fecharModal();

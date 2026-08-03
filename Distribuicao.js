@@ -151,6 +151,13 @@ function salvarDistribuicao(payload) {
         return;
       }
 
+      // RN-EP-06: atribuir um estagiario desfaz a marcacao de execucao propria
+      // (nota EXEC_PROPRIA na celula ADV/H, ver Turma.js), caso a linha
+      // estivesse marcada — mesma regra aplicada no modal de edicao
+      // (salvarEdicaoDiligencia, Data.js).
+      var advCell = aba.getRange(linha, CONFIG.COL.ADV + 1);
+      if (notaContemExecPropria(advCell.getNote())) desmarcarNotaExecPropria(advCell);
+
       aba.getRange(linha, CONFIG.COL.ESTAGIARIO + 1).setValue(estagiario);
       aba.getRange(linha, CONFIG.COL.STATUS + 1).setValue('Encaminhado');
       aba.getRange(linha, CONFIG.COL.ALTERADO_EM + 1).setValue(agora);

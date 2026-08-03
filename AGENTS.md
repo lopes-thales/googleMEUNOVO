@@ -83,6 +83,7 @@ A regra de ouro é: **um arquivo = uma responsabilidade**. Cada arquivo `.js` co
 | `Geralsync.js` | Sincronização de registros pendentes com a planilha GERAL. |
 | `Icones.js` | Gerenciamento centralizado de ícones da UI. |
 | `MigracaoClassroom.js` | Scripts de migração/backfill de dados do Classroom. |
+| `MigracaoExecucaoPropria.js` | Backfill único (RN-EP-10) que marca diligências sem estagiário já em status final como execução própria do supervisor. |
 | `provisorio.js` | Scripts temporários/utilitários de manutenção. |
 | `Aluno.js` | Lógica específica do Painel Aluno no servidor. |
 | `Código.js` | Arquivo reserva/legado (apenas 29 bytes). |

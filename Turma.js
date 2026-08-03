@@ -32,6 +32,16 @@
 //   torna resolverMatriculaAtiva() deterministico.
 // - RN-T05: nao se atribui um registro a uma turma cuja DATA_INICIO seja
 //   posterior a DF REAL do registro; DF REAL vazia tambem bloqueia.
+//
+// EXCECAO DELIBERADA — Execucao propria de diligencias (RN-EP, 03/08/2026,
+// ver RN_Execucao_Propria.md; escopo restrito a diligencias!). Uma diligencia
+// cumprida pelo proprio Thales, sem estagiario, pode ter TURMA (AA) preenchida
+// e ID_MATRICULA (Z) VAZIA — a unica situacao no projeto em que essas duas
+// colunas divergem de proposito. So e valida enquanto a linha carrega a
+// marcacao EXEC_PROPRIA (nota da celula ADV/H, ver funcoes no fim deste
+// arquivo); a TURMA continua MATERIALIZADA na gravacao, nunca inferida em
+// leitura — nao e uma regressao ao modelo antigo. Atribuir um estagiario a
+// uma linha assim desfaz a marcacao e sobrescreve Z/AA/SEMESTRE normalmente.
 
 // =====================================================================
 // 1. Cadastro de turmas (aba `turmas`)
@@ -671,4 +681,67 @@ function processarEdicaoMatriculaEstagio(e) {
   } catch (err) {
     Logger.log('processarEdicaoMatriculaEstagio: ' + err.message);
   }
+}
+
+// =====================================================================
+// 6. Execucao propria de diligencias (RN-EP)
+// =====================================================================
+
+// Turmas elegiveis para escolha livre no campo Turma de uma diligencia de
+// execucao propria (RN-EP-03) — nao ha aluno, entao mapaMatriculasNaoFinalizadas
+// nao se aplica. Turma nao encerrada = DATA_FIM vazia OU >= hoje. Devolve
+// [{ codigo, rotulo }], da mais recente para a mais antiga.
+function listarTurmasNaoEncerradas() {
+  var hoje = new Date();
+  var hojeTs = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
+
+  return obterTurmas()
+    .filter(function(t) { return !t.dataFim || t.dataFim.getTime() >= hojeTs; })
+    .map(function(t) { return { codigo: t.codigo, rotulo: formatarRotuloTurma(t.codigo) }; })
+    .sort(function(a, b) { return String(b.codigo).localeCompare(String(a.codigo)); });
+}
+
+// --- Marcacao EXEC_PROPRIA (nota da celula ADV/H de diligencias, RN-EP-01) ---
+//
+// A marcacao vive na NOTA, nunca no VALOR da celula (H e escrita por um
+// script externo que sempre grava "Thales"). Leitura e escrita sao SEMPRE por
+// LINHA da nota, nunca por igualdade da nota inteira, para que outros
+// rastreios possam coexistir em H no futuro — mesma tecnica de
+// _lerRastreioCobranca/_marcarRastreioCobranca (Mensagens.js) e do
+// courseworkId guardado na celula LINK (Classroom.js).
+
+// Aceita tanto a nota bruta (string, para leitura em bloco via getNotes())
+// quanto ser chamada com o retorno de cell.getNote(). Usada por
+// getTodasDiligencias() (Data.js) para expor `execucaoPropria` em cada linha.
+function notaContemExecPropria(notaBruta) {
+  var linhas = String(notaBruta || '').split('\n');
+  for (var i = 0; i < linhas.length; i++) {
+    if (linhas[i].indexOf(CONFIG.EXEC_PROPRIA.PREFIXO_NOTA + ':') === 0) return true;
+  }
+  return false;
+}
+
+// Todas as linhas da nota, exceto a de EXEC_PROPRIA (se houver) e linhas em
+// branco. Usada internamente por marcar/desmarcar para preservar qualquer
+// outro rastreio que passe a coexistir em H.
+function _linhasNotaSemExecPropria(notaBruta) {
+  return String(notaBruta || '').split('\n').filter(function(l) {
+    return l.trim() !== '' && l.indexOf(CONFIG.EXEC_PROPRIA.PREFIXO_NOTA + ':') !== 0;
+  });
+}
+
+// Grava (ou renova) a linha EXEC_PROPRIA na nota da celula informada,
+// preservando as demais linhas existentes.
+function marcarNotaExecPropria(cell) {
+  var linhas = _linhasNotaSemExecPropria(cell.getNote());
+  var agora = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'dd/MM/yyyy HH:mm:ss');
+  linhas.push(CONFIG.EXEC_PROPRIA.PREFIXO_NOTA + ': ' + agora);
+  cell.setNote(linhas.join('\n'));
+}
+
+// Remove apenas a linha EXEC_PROPRIA da nota da celula informada, preservando
+// as demais (se houver).
+function desmarcarNotaExecPropria(cell) {
+  var linhas = _linhasNotaSemExecPropria(cell.getNote());
+  cell.setNote(linhas.length ? linhas.join('\n') : '');
 }

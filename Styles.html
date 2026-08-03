@@ -768,6 +768,15 @@
     background: var(--fundo-total); color: var(--cor-total); margin-left: 6px;
   }
 
+  /* Selo "Supervisor" (RN-EP, 03/08/2026) — identifica, na tabela de
+     Diligencias, uma linha cumprida pelo proprio Thales (execucao propria,
+     sem estagiario). Mesmo padrao visual do selo "Antecipado" acima. */
+  .selo-execucao-propria {
+    display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 20px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap;
+    background: var(--fundo-total); color: var(--cor-total); margin-left: 6px;
+  }
+
   /* Contador de pendentes na aba de navegacao (ex.: "Atendimento Online (3)") */
   .nav-tab-contador {
     display: inline-flex; align-items: center; justify-content: center;
@@ -903,6 +912,15 @@
   .modal-select:focus, .modal-textarea:focus { border-color: var(--azul-claro); }
   .modal-textarea { resize: vertical; min-height: 90px; }
   .modal-select { appearance: none; cursor: pointer; }
+
+  /* Checkbox "Cumprida por mim" (RN-EP, 03/08/2026) — unico acionador da
+     marcacao de execucao propria no modal de Diligencia. */
+  .modal-checkbox-linha {
+    display: flex; align-items: center; gap: 8px; font-size: 13px;
+    font-weight: 600; color: var(--texto-principal); cursor: pointer;
+    margin: 2px 0 10px;
+  }
+  .modal-checkbox-linha input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
 
   .modal-rodape {
     padding: 16px 24px; border-top: 1.5px solid var(--cinza-borda); display: flex;
