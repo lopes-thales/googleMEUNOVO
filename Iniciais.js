@@ -117,7 +117,10 @@ function rowParaObjetoIniciais(row, indice, nomeEstagiario, feriadosTimestamps) 
     atraso: atrasoVal,
     prazoAtraso: formatarData(dfParaAtraso), // DF CLASS (com fallback para DF) usada no calculo de atraso — consumida pelas cobrancas, ver Mensagens.js
     gatilho: gatilhoVal,
-    semestre: normalizarSemestreLido(row[CONFIG.INICIAIS_COL.SEMESTRE]) // fonte unica do semestre do registro — nao e mais recalculado ao vivo a partir de DF
+    semestre: normalizarSemestreLido(row[CONFIG.INICIAIS_COL.SEMESTRE]), // derivado da TURMA na criacao (RN-T08)
+    // Modelo de turmas v2 (01/08/2026): gravadas na criacao, lidas direto da linha.
+    idMatricula: String(row[CONFIG.INICIAIS_COL.ID_MATRICULA] || '').trim(),
+    turma: String(row[CONFIG.INICIAIS_COL.TURMA] || '').trim()
   };
 }
 
@@ -164,10 +167,10 @@ function getTodasIniciais() {
 
 function getDadosAbaIniciais() {
   var iniciais = getTodasIniciais();
-  // Anota reg.turma para alimentar o filtro de Turma da aba — ver
-  // Turma.js: anotarTurmaEmRegistros/criarResolvedorTurma (mesma tecnica
-  // ja usada em Panorama.js).
-  anotarTurmaEmRegistros(iniciais, criarResolvedorTurma(), function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
+  // Modelo de turmas v2 (01/08/2026): reg.turma vem GRAVADO na linha (coluna
+  // TURMA da aba), materializado no momento da atribuicao. Nao ha mais
+  // resolucao em tempo de leitura — anotarTurmaEmRegistros/criarResolvedorTurma
+  // foram removidos de Turma.js.
 
   return {
     iniciais: iniciais,
@@ -322,7 +325,20 @@ function criarPedidoInicialAluno(payload) {
 
   var feriados = lerFeriados();
   var df = adicionarDiasUteis(hoje, CONFIG.PRAZO_DIAS_PEDIDO_INICIAL, feriados);
-  var semestre = calcularSemestre(df);
+
+  // Modelo de turmas v2 (RN-T07): a matricula e resolvida no servidor a partir
+  // do e-mail logado e da data em que a inicial nasce. Tenta primeiro pela DF
+  // (prazo de entrega) e, se ela cair fora de qualquer janela — prazo que
+  // atravessa o fim da turma —, cai para hoje. SEMESTRE derivado da TURMA
+  // (RN-T08), nao mais calculado a partir da DF.
+  var matricula = resolverMatriculaAtiva(email, df) || resolverMatriculaAtiva(email, hoje);
+  if (!matricula) {
+    return {
+      sucesso: false,
+      erro: 'Não identifiquei uma matrícula ativa para o seu e-mail nesta data. Procure o coordenador.'
+    };
+  }
+  var semestre = extrairSemestreDaTurma(matricula.turma);
   var id = proximoNumeroPedidoInicial();
 
   // Ordem exata das colunas A:P.
@@ -343,11 +359,14 @@ function criarPedidoInicialAluno(payload) {
   novaLinha[CONFIG.INICIAIS_COL.DF_CLASS] = '';
   novaLinha[CONFIG.INICIAIS_COL.PROCESSO] = ''; // preenchida pelo cruzamento diario com protocolos (ver verificarProtocolosIniciais)
   novaLinha[CONFIG.INICIAIS_COL.VARA] = '';
+  novaLinha[CONFIG.INICIAIS_COL.ID_MATRICULA] = matricula.idMatricula;
+  novaLinha[CONFIG.INICIAIS_COL.TURMA] = matricula.turma;
 
   var proximaLinhaPlanilha = aba.getLastRow() + 1;
   // Forca a celula SEMESTRE como Texto simples antes de gravar — mesma
   // precaucao usada em criarAcompanhamento (Acompanhamentos.js).
   aba.getRange(proximaLinhaPlanilha, CONFIG.INICIAIS_COL.SEMESTRE + 1, 1, 1).setNumberFormat('@');
+  aba.getRange(proximaLinhaPlanilha, CONFIG.INICIAIS_COL.ID_MATRICULA + 1, 1, 2).setNumberFormat('@');
   aba.getRange(proximaLinhaPlanilha, 1, 1, CONFIG.TOTAL_COLUNAS_INICIAIS).setValues([novaLinha]);
 
   var resultado = {

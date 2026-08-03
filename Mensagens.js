@@ -300,12 +300,10 @@ function _linhaEstagiarioPorNomeTurma(abaEstagiarios, nome, turma) {
   var chaveNome = normalizarChave(nome);
   for (var i = 0; i < dados.length; i++) {
     var linhaNome = normalizarChave(dados[i][CONFIG.ESTAGIARIOS_COL.NOME]);
+    // Modelo de turmas v2 (01/08/2026): TURMA e lida direto de estagiarios!M,
+    // sem derivacao a partir de DATA_INICIO. Uma linha sem TURMA e um cadastro
+    // incompleto e simplesmente nao casa — melhor nao casar do que casar errado.
     var linhaTurma = String(dados[i][CONFIG.ESTAGIARIOS_COL.TURMA] || '').trim();
-    if (!linhaTurma) {
-      var dataInicio = dados[i][CONFIG.ESTAGIARIOS_COL.DATA_INICIO];
-      var semestre = normalizarSemestreLido(dados[i][CONFIG.ESTAGIARIOS_COL.SEMESTRE]);
-      linhaTurma = calcularTurma(dataInicio, semestre);
-    }
     if (linhaNome === chaveNome && linhaTurma === turma) return i + 2;
   }
   return null;
@@ -885,8 +883,13 @@ function _marcarConsolidadoAudienciasEnviado(turma, dataFimFormatada) {
 // nunca disparam para o aluno/turma afetado, sem erro, sem log, sem sintoma
 // ate o fim do semestre. Reaproveita o mesmo gatilho e a mesma infraestrutura
 // de e-mail ja existentes (decisao de Thales — nao criar gatilho novo).
+// Modelo de turmas v2: o alerta passa a considerar a data de fim EFETIVA — um
+// aluno so entra aqui quando NEM a coluna L dele NEM a DATA_FIM da turma dele
+// no cadastro estao preenchidas. Na pratica isso agora sinaliza turma sem
+// cadastro (ou aluno sem TURMA), nao mais o esquecimento de repetir a data em
+// cada linha.
 function _alertarEstagiariosSemDataFim(estagiariosAtivos) {
-  var semDataFim = (estagiariosAtivos || []).filter(function(e) { return !_dataFimValida(e.dataFim); });
+  var semDataFim = (estagiariosAtivos || []).filter(function(e) { return !_dataFimValida(e.dataFimEfetiva); });
   if (!semDataFim.length) return;
 
   var linhas = semDataFim.map(function(e) {
@@ -919,7 +922,14 @@ function verificarEncerramentoEstagioAutomatico() {
 
   _alertarEstagiariosSemDataFim(estagiariosAtivos);
 
-  var comDataFim = estagiariosAtivos.filter(function(e) { return _dataFimValida(e.dataFim); });
+  // Modelo de turmas v2: usa a data de fim EFETIVA (override individual em
+  // estagiarios!L, ou a DATA_FIM da turma no cadastro). Antes, uma linha sem
+  // a coluna L preenchida ficava de fora de toda a mensageria de encerramento.
+  var comDataFim = estagiariosAtivos.filter(function(e) {
+    if (!_dataFimValida(e.dataFimEfetiva)) return false;
+    e.dataFim = e.dataFimEfetiva;
+    return true;
+  });
 
   // --- Mensagens 4/5: por aluno, contra o proprio DATA_FIM ---
   comDataFim.forEach(function(estagiario) {
@@ -952,10 +962,10 @@ function verificarEncerramentoEstagioAutomatico() {
   });
 
   // --- A-6: consolidado de pendencias de audiencias, uma vez por TURMA ---
-  // Agrupa os alunos ativos com DATA_FIM valida por turma. Assume-se que
-  // todos os alunos de uma mesma turma compartilham a mesma DATA_FIM (e uma
-  // data de coorte, nao individual) — usa-se a data do primeiro aluno
-  // encontrado como representante da turma.
+  // ALTERADO EM 01/08/2026: a data de encerramento da turma vem do CADASTRO
+  // (aba `turmas`), nao mais "do primeiro aluno encontrado como representante".
+  // A data de fim sempre foi uma propriedade da coorte; a heuristica antiga
+  // dependia de a coluna estar repetida corretamente em cada linha de aluno.
   var estagiariosPorTurma = {};
   comDataFim.forEach(function(e) {
     if (!e.turma) return;
@@ -965,7 +975,11 @@ function verificarEncerramentoEstagioAutomatico() {
 
   Object.keys(estagiariosPorTurma).forEach(function(turma) {
     var estagiariosDaTurma = estagiariosPorTurma[turma];
-    var dataFimTurma = estagiariosDaTurma[0].dataFim;
+    var cadastroTurma = obterTurmaPorCodigo(turma); // Turma.js
+    var dataFimTurma = (cadastroTurma && cadastroTurma.dataFim) ||
+                       estagiariosDaTurma[0].dataFimEfetiva ||
+                       estagiariosDaTurma[0].dataFim;
+    if (!_dataFimValida(dataFimTurma)) return;
     var diasRestantes = _diasCorridosAte(dataFimTurma);
     if (diasRestantes !== CONFIG.ENCERRAMENTO_ESTAGIO.DIAS_AVISO_PRODUCAO) return;
 

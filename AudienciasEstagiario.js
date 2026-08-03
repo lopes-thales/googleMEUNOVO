@@ -13,7 +13,10 @@
 //
 // Regras de negocio principais (decididas por Thales, 24/07/2026):
 //  - Metas fixas por tipo (Escritório Escola/Externa/Tribunal do Júri) vivem
-//    em bd!X:Z (ver lerParametrosAudiencias) — nunca codificadas aqui.
+//    em bd!X:Z (ver lerParametrosAudiencias) — nunca codificadas aqui. O teto
+//    de bloqueio por tipo (bd!AF, RN nova de 03/08/2026, ver _erroLimiteAudiencia)
+//    e independente da meta: a meta e so informativa e pode ser excedida
+//    (RN-06), o teto bloqueia o registro assim que atingido.
 //  - SEMESTRE e ESTATICO: gravado uma unica vez na criacao a partir do
 //    semestre do proprio estagiario (estagiarios!F), nunca recalculado a
 //    partir de DATA (RN-02) — permite registrar audiencia com data anterior
@@ -49,10 +52,14 @@ function rowParaObjetoAudienciaEstagiario(row, indice) {
     estagiario: row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.ESTAGIARIO],
     email: String(row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.EMAIL] || '').trim(),
     tipo: row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.TIPO],
+    especie: String(row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.ESPECIE] || '').trim(),
     vara: row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.VARA],
     processo: row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.PROCESSO],
     partes: row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.PARTES],
     obs: row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.OBS],
+    // Modelo de turmas v2: gravadas na criacao, lidas direto da linha.
+    idMatricula: String(row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.ID_MATRICULA] || '').trim(),
+    turma: String(row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.TURMA] || '').trim(),
     status: String(row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.STATUS] || '').trim(),
     obsAprovacao: row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.OBS_APROVACAO],
     alteradoEm: formatarDataHora(row[CONFIG.AUDIENCIAS_ESTAGIARIO_COL.ALTERADO_EM]),
@@ -78,9 +85,12 @@ function getTodasAudienciasEstagiario() {
   return lista;
 }
 
-// --- Parametros (bd!X:Z) — fonte unica de tipo/meta/horas ---
+// --- Parametros (bd!X:Z + bd!AF) — fonte unica de tipo/meta/horas/limite ---
 // Linhas com a coluna X (tipo) vazia sao ignoradas. Nenhum outro arquivo deve
 // ler estas celulas diretamente (RN do documento de requisitos).
+// AF nao e contigua a X:Z (ha outras celulas unicas entre elas — AA2, etc.),
+// por isso e lida numa segunda chamada e casada por INDICE de linha com X:Z.
+// limite <= 0 (vazio/nao numerico) significa "sem teto" — so a meta (Y) vale.
 function lerParametrosAudiencias() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName(CONFIG.SHEET_BD);
@@ -92,16 +102,21 @@ function lerParametrosAudiencias() {
   var faixa = CONFIG.BD_COL.AUDIENCIA_TIPO + '2:' + CONFIG.BD_COL.AUDIENCIA_HORAS + ultimaLinha;
   var dados = aba.getRange(faixa).getValues();
 
+  var faixaLimite = CONFIG.BD_COL.AUDIENCIA_LIMITE + '2:' + CONFIG.BD_COL.AUDIENCIA_LIMITE + ultimaLinha;
+  var dadosLimite = aba.getRange(faixaLimite).getValues();
+
   var lista = [];
   for (var i = 0; i < dados.length; i++) {
     var tipo = String(dados[i][0] || '').trim();
     if (!tipo) continue;
     var meta = parseInt(dados[i][1], 10);
     var horas = Number(dados[i][2]);
+    var limite = parseInt(dadosLimite[i] && dadosLimite[i][0], 10);
     lista.push({
       tipo: tipo,
       meta: isNaN(meta) ? 0 : meta,
-      horas: isNaN(horas) ? 0 : horas
+      horas: isNaN(horas) ? 0 : horas,
+      limite: isNaN(limite) ? 0 : limite
     });
   }
   return lista;
@@ -125,53 +140,57 @@ function proximoNumeroAudienciaEstagiario() {
 }
 
 // --- Resolucao segura do estagiario/turma alvo (nunca confia em nome/e-mail do payload) ---
-// O SEMESTRE gravado no registro e ESTATICO (RN-02) e depende de qual linha
-// de "estagiarios" esta selecionada no Painel Aluno — por isso o payload
-// precisa identificar essa linha sem ambiguidade. Ate 27/07/2026 a chave era
-// payload.semestre (par email+semestre), mas isso e ambiguo quando o aluno
-// tem duas linhas no MESMO semestre (antecipado e regular — ver Turma.js):
-// o filtro pegava a primeira que casasse, podendo gravar a audiencia na
-// turma errada. A chave passou a ser payload.turma (par email+turma, casamento
-// exato — um aluno tem no maximo uma linha por turma), exigido e validado
-// contra a planilha tanto para o proprio aluno quanto para Thales agindo em
-// nome de um aluno (mesmo padrao de validacao ja usado em
-// acaoCriarAtendimentoOnline/acaoCriarPedidoInicial, Code.js).
-function _resolverEstagiarioAlvoAudiencia(payload, emailUsuario, ehThales) {
-  var turmaInformada = String((payload && payload.turma) || '').trim();
-  if (!turmaInformada) return null;
-
+//
+// ALTERADO EM 01/08/2026 (modelo de turmas v2, RN-T07): o payload NAO informa
+// mais a turma. A matricula e resolvida no servidor pela janela em que a
+// audiencia ocorreu — e deterministico porque um aluno nunca tem duas
+// matriculas ativas ao mesmo tempo (RN-T02). Isso eliminou tambem as duas
+// guardas "Você tem mais de uma matrícula neste semestre..." do
+// AlunoScripts.html, que existiam so para desambiguar o par email+turma.
+//
+// Devolve { nome, email, idMatricula, turma, semestre } ou null.
+function _resolverEstagiarioAlvoAudiencia(payload, emailUsuario, ehThales, dataReferencia) {
   var emailAlvo = ehThales
     ? normalizarChave((payload && payload.emailAluno) || '')
     : normalizarChave(emailUsuario);
   if (!emailAlvo) return null;
 
-  var achado = getTodosEstagiariosCompletos().filter(function(e) {
-    return normalizarChave(e.email) === emailAlvo && e.turma === turmaInformada;
-  })[0];
-  if (!achado) return null;
+  var mat = resolverMatriculaAtiva(emailAlvo, dataReferencia);
+  if (!mat) return null;
 
-  return { nome: achado.nome, email: achado.email, semestre: achado.semestre };
+  return {
+    nome: mat.nome,
+    email: mat.email,
+    idMatricula: mat.idMatricula,
+    turma: mat.turma,
+    semestre: extrairSemestreDaTurma(mat.turma)
+  };
 }
 
-// --- Validacao de payload (campos obrigatorios, data futura, tipo da picklist) ---
+// --- Validacao de payload (campos obrigatorios, data futura, tipo/especie da picklist) ---
 // Reaproveitada tanto na criacao quanto no reenvio — mesma regra nos dois
 // fluxos (RN-08/campos obrigatorios valem sempre, mesmo corrigindo um
 // registro reprovado).
-function _validarPayloadAudiencia(payload, parametros) {
+// `especies` e a lista solta de bd!AB2:AB (ver lerColunaBd/CONFIG.BD_COL.AUDIENCIA_ESPECIE) —
+// independente de `parametros` (bd!X:Z/AF), que continua sendo so do TIPO.
+function _validarPayloadAudiencia(payload, parametros, especies) {
   if (!parametros || !parametros.length) {
     return { valido: false, erro: 'Nenhum tipo de audiência cadastrado. Procure o coordenador.' };
   }
+  if (!especies || !especies.length) {
+    return { valido: false, erro: 'Nenhuma espécie de audiência cadastrada. Procure o coordenador.' };
+  }
 
   var tipo = String((payload && payload.tipo) || '').trim();
+  var especie = String((payload && payload.especie) || '').trim();
   var vara = String((payload && payload.vara) || '').trim();
   var processo = String((payload && payload.processo) || '').trim();
-  var hora = String((payload && payload.hora) || '').trim();
   var partes = String((payload && payload.partes) || '').trim();
   var obs = String((payload && payload.obs) || '').trim();
   var dataInformada = (payload && payload.data) ? new Date(payload.data + 'T00:00:00') : null;
 
-  if (!dataInformada || isNaN(dataInformada.getTime()) || !tipo || !vara || !processo) {
-    return { valido: false, erro: 'Informe a data, o tipo, a vara e o número do processo.' };
+  if (!dataInformada || isNaN(dataInformada.getTime()) || !tipo || !especie || !vara || !processo) {
+    return { valido: false, erro: 'Informe a data, o tipo, a espécie, a vara e o número do processo.' };
   }
 
   var hoje = new Date();
@@ -185,16 +204,54 @@ function _validarPayloadAudiencia(payload, parametros) {
     return { valido: false, erro: 'Tipo de audiência inválido. Selecione uma das opções disponíveis.' };
   }
 
+  var especieValida = especies.some(function(e) { return normalizarChave(e) === normalizarChave(especie); });
+  if (!especieValida) {
+    return { valido: false, erro: 'Espécie de audiência inválida. Selecione uma das opções disponíveis.' };
+  }
+
   return {
     valido: true,
     data: dataInformada,
-    hora: hora,
     tipo: tipo,
+    especie: especie,
     vara: vara,
     processo: processo,
     partes: partes,
     obs: obs
   };
+}
+
+// --- Limite por tipo (bd!AF, RN nova de 03/08/2026) ---
+// Diferente da meta (Y, informativa — RN-06 permite exceder), o limite BLOQUEIA
+// um novo registro assim que atingido. Conta Aprovada + Pendente (nao so
+// Aprovada) para nao deixar o aluno acumular pendentes alem do teto enquanto
+// aguarda aprovacao — Reprovada nunca conta. `linhaIgnorar` exclui o proprio
+// registro sendo editado (reenvio), senao ele se autobloquearia.
+function _contarAudienciasParaLimite(nomeEstagiario, turma, tipo, lista, linhaIgnorar) {
+  var chaveNome = normalizarChave(nomeEstagiario);
+  var chaveTipo = normalizarChave(tipo);
+  return (lista || []).filter(function(a) {
+    if (linhaIgnorar && a._linha === linhaIgnorar) return false;
+    if (normalizarChave(a.estagiario) !== chaveNome) return false;
+    if (normalizarChave(a.tipo) !== chaveTipo) return false;
+    var statusChave = normalizarChave(a.status);
+    var contaStatus = statusChave === normalizarChave(CONFIG.STATUS_AUDIENCIA_ESTAGIARIO.APROVADA) ||
+      statusChave === normalizarChave(CONFIG.STATUS_AUDIENCIA_ESTAGIARIO.PENDENTE);
+    if (!contaStatus) return false;
+    return turmaCasaComFiltro(a.turma, turma);
+  }).length;
+}
+
+// Devolve uma mensagem de erro se o limite do TIPO ja foi atingido, ou null
+// se pode prosseguir. parametros vem de lerParametrosAudiencias (bd!X:Z/AF).
+function _erroLimiteAudiencia(nomeEstagiario, turma, tipo, parametros, linhaIgnorar) {
+  var parametroTipo = (parametros || []).filter(function(p) { return normalizarChave(p.tipo) === normalizarChave(tipo); })[0];
+  if (!parametroTipo || !(parametroTipo.limite > 0)) return null;
+
+  var atual = _contarAudienciasParaLimite(nomeEstagiario, turma, tipo, getTodasAudienciasEstagiario(), linhaIgnorar);
+  if (atual < parametroTipo.limite) return null;
+
+  return 'Você já atingiu o limite de audiências do tipo "' + tipo + '" (' + parametroTipo.limite + '). Não é possível registrar outra.';
 }
 
 // Numero do processo "despido de pontuacao e mascara" (RN-07) — mantem so
@@ -222,15 +279,27 @@ function _audienciaDuplicada(nomeEstagiario, processoNormalizado, dataFormatada,
 }
 
 // --- Criacao (Painel Aluno) ---
-// payload: { data, hora, tipo, vara, processo, partes, obs, turma,
-// emailAluno (so quando ehThales) }.
+// payload: { data, tipo, especie, vara, processo, partes, obs,
+// emailAluno (so quando ehThales) }. A turma NAO vem do payload — e resolvida
+// no servidor pela data da audiencia (RN-T07). HORA deixou de ser coletada
+// pelo Painel Aluno em 03/08/2026 — a coluna C continua existindo na
+// planilha (registros antigos), mas linhas novas gravam sempre vazia.
 function criarAudienciaEstagiario(payload, emailUsuario, ehThales) {
   var parametros = lerParametrosAudiencias();
-  var validacao = _validarPayloadAudiencia(payload, parametros);
+  var especies = lerColunaBd(CONFIG.BD_COL.AUDIENCIA_ESPECIE);
+  var validacao = _validarPayloadAudiencia(payload, parametros, especies);
   if (!validacao.valido) return { sucesso: false, erro: validacao.erro };
 
-  var alvo = _resolverEstagiarioAlvoAudiencia(payload, emailUsuario, ehThales);
-  if (!alvo) return { sucesso: false, erro: 'Não foi possível identificar o estagiário(a) e a turma selecionados.' };
+  var alvo = _resolverEstagiarioAlvoAudiencia(payload, emailUsuario, ehThales, validacao.data);
+  if (!alvo) {
+    return {
+      sucesso: false,
+      erro: 'Não identifiquei uma matrícula ativa na data desta audiência. Verifique com o coordenador se a turma está cadastrada corretamente.'
+    };
+  }
+
+  var erroLimite = _erroLimiteAudiencia(alvo.nome, alvo.turma, validacao.tipo, parametros, null);
+  if (erroLimite) return { sucesso: false, erro: erroLimite };
 
   var processoNormalizado = _normalizarProcessoAudiencia(validacao.processo);
   var dataFormatada = formatarData(validacao.data);
@@ -250,10 +319,11 @@ function criarAudienciaEstagiario(payload, emailUsuario, ehThales) {
   var novaLinha = [];
   novaLinha[col.ID] = id;
   novaLinha[col.DATA] = validacao.data;
-  novaLinha[col.HORA] = validacao.hora;
+  novaLinha[col.HORA] = '';
   novaLinha[col.ESTAGIARIO] = alvo.nome;
   novaLinha[col.EMAIL] = alvo.email;
   novaLinha[col.TIPO] = validacao.tipo;
+  novaLinha[col.ESPECIE] = validacao.especie;
   novaLinha[col.VARA] = validacao.vara;
   novaLinha[col.PROCESSO] = validacao.processo;
   novaLinha[col.PARTES] = validacao.partes;
@@ -262,9 +332,20 @@ function criarAudienciaEstagiario(payload, emailUsuario, ehThales) {
   novaLinha[col.OBS_APROVACAO] = '';
   novaLinha[col.ALTERADO_EM] = agora;
   novaLinha[col.SEMESTRE] = alvo.semestre;
+  novaLinha[col.ID_MATRICULA] = alvo.idMatricula;
+  novaLinha[col.TURMA] = alvo.turma;
+
+  // O (indice 14) fica fora do mapa do Config — e coluna que este projeto
+  // nao conhece. Sem preencher esse buraco, novaLinha vira um array esparso e
+  // setValues rejeita os `undefined`. Grava string vazia: linha NOVA, entao
+  // nao ha nada a sobrescrever nessa coluna.
+  for (var iCol = 0; iCol < CONFIG.TOTAL_COLUNAS_AUDIENCIAS_ESTAGIARIO; iCol++) {
+    if (novaLinha[iCol] === undefined) novaLinha[iCol] = '';
+  }
 
   var proximaLinhaPlanilha = aba.getLastRow() + 1;
   aba.getRange(proximaLinhaPlanilha, col.SEMESTRE + 1, 1, 1).setNumberFormat('@');
+  aba.getRange(proximaLinhaPlanilha, col.ID_MATRICULA + 1, 1, 2).setNumberFormat('@');
   aba.getRange(proximaLinhaPlanilha, 1, 1, CONFIG.TOTAL_COLUNAS_AUDIENCIAS_ESTAGIARIO).setValues([novaLinha]);
 
   return { sucesso: true, id: id, linha: proximaLinhaPlanilha };
@@ -279,7 +360,8 @@ function reenviarAudienciaEstagiario(payload, emailUsuario, ehThales) {
   if (isNaN(linha) || linha < 2) return { sucesso: false, erro: 'Registro inválido.' };
 
   var parametros = lerParametrosAudiencias();
-  var validacao = _validarPayloadAudiencia(payload, parametros);
+  var especies = lerColunaBd(CONFIG.BD_COL.AUDIENCIA_ESPECIE);
+  var validacao = _validarPayloadAudiencia(payload, parametros, especies);
   if (!validacao.valido) return { sucesso: false, erro: validacao.erro };
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -300,6 +382,9 @@ function reenviarAudienciaEstagiario(payload, emailUsuario, ehThales) {
     return { sucesso: false, erro: 'Este registro não pertence a você.' };
   }
 
+  var erroLimite = _erroLimiteAudiencia(reg.estagiario, reg.turma, validacao.tipo, parametros, linha);
+  if (erroLimite) return { sucesso: false, erro: erroLimite };
+
   var processoNormalizado = _normalizarProcessoAudiencia(validacao.processo);
   var dataFormatada = formatarData(validacao.data);
   var conflito = _audienciaDuplicada(reg.estagiario, processoNormalizado, dataFormatada, linha);
@@ -309,8 +394,8 @@ function reenviarAudienciaEstagiario(payload, emailUsuario, ehThales) {
 
   var agora = new Date();
   aba.getRange(linha, col.DATA + 1).setValue(validacao.data);
-  aba.getRange(linha, col.HORA + 1).setValue(validacao.hora);
   aba.getRange(linha, col.TIPO + 1).setValue(validacao.tipo);
+  aba.getRange(linha, col.ESPECIE + 1).setValue(validacao.especie);
   aba.getRange(linha, col.VARA + 1).setValue(validacao.vara);
   aba.getRange(linha, col.PROCESSO + 1).setValue(validacao.processo);
   aba.getRange(linha, col.PARTES + 1).setValue(validacao.partes);
@@ -357,7 +442,7 @@ function aprovarAudienciaEstagiario(linha) {
   var avisoEmail = null;
   if (reg.email) {
     var parametros = lerParametrosAudiencias();
-    var turmaRegistro = resolverTurmaDoRegistro(reg.estagiario || reg.email, parseDataBR(reg.data));
+    var turmaRegistro = reg.turma; // gravada na propria linha (modelo de turmas v2)
     var contagens = contarAudienciasPorTipo(reg.estagiario, turmaRegistro, getTodasAudienciasEstagiario(), parametros);
     var contagemTipo = contagens.filter(function(c) { return normalizarChave(c.tipo) === normalizarChave(reg.tipo); })[0];
     var progressoTexto = contagemTipo ? (contagemTipo.realizado + '/' + contagemTipo.meta) : '';
@@ -439,18 +524,19 @@ function reprovarAudienciasEmLote(linhas, motivo) {
 // — a barra de progresso trava em 100% no frontend, mas o numero real
 // (realizado) e sempre exibido e conta integralmente na Parcial de Horas.
 //
-// A turma de cada registro e resolvida em tempo de leitura a partir do
-// estagiario e da data da audiencia, sem materializar TURMA na aba
-// transacional (decisao de arquitetura, 27/07/2026).
+// ALTERADO EM 01/08/2026 (modelo de turmas v2): a turma vem GRAVADA na coluna
+// R da aba, materializada no registro da audiencia. A resolucao em tempo de
+// leitura foi removida — ela criava um resolvedor NOVO a cada chamada desta
+// funcao, e esta funcao e chamada dentro do laco por estagiario do Panorama e
+// da mensageria, o que significava uma leitura completa da aba estagiarios por
+// aluno agregado.
 function contarAudienciasPorTipo(nomeEstagiario, turma, lista, parametros) {
   var chaveNome = normalizarChave(nomeEstagiario);
-  var resolvedorTurma = criarResolvedorTurma();
 
   var aprovadas = (lista || []).filter(function(a) {
     if (normalizarChave(a.estagiario) !== chaveNome) return false;
     if (normalizarChave(a.status) !== normalizarChave(CONFIG.STATUS_AUDIENCIA_ESTAGIARIO.APROVADA)) return false;
-    var turmaRegistro = resolvedorTurma(a.estagiario || a.email, parseDataBR(a.data));
-    return turmaCasaComFiltro(turmaRegistro, turma);
+    return turmaCasaComFiltro(a.turma, turma);
   });
 
   return (parametros || []).map(function(p) {

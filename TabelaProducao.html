@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tabela de Produção</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Display:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+
+  <style>
+    /* ===========================================================
+       TABELA DE PRODUÇÃO — página autônoma de impressão.
+
+       Estilos propositalmente LOCAIS (não usam Styles.html): esta
+       página não tem tema escuro, não tem cards, não tem nada do
+       design system do painel. É um documento para papel, em A4
+       paisagem, com as mesmas margens do modelo .docx original
+       (2,5 cm laterais).
+       =========================================================== */
+
+    @page {
+      size: A4 landscape;
+      margin: 1cm 2.5cm 1.5cm 2.5cm;
+    }
+
+    :root {
+      --tinta: #111111;
+      --borda: #333333;
+      --cinza-fundo: #EDEDED;
+      --cinza-tela: #F1F3F4;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Google Sans', Arial, sans-serif;
+      color: var(--tinta);
+      background: var(--cinza-tela);
+    }
+
+    .folha {
+      width: 25.7cm;
+      margin: 0 auto;
+      padding: 1cm 0 2cm;
+    }
+
+    /* --- Barra de ações: só existe na tela --- */
+    .barra-acoes {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 12px 0;
+    }
+
+    .btn-imprimir {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      background: #0D1B4B;
+      color: #FFFFFF;
+      font-family: 'Google Sans', Arial, sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-imprimir:hover { background: #16297A; }
+    .btn-imprimir .material-symbols-outlined { font-size: 18px; }
+
+    /* --- Documento --- */
+    .documento {
+      background: #FFFFFF;
+      padding: 1.2cm 1cm;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+    }
+
+    .doc-titulo {
+      text-align: center;
+      font-family: 'Google Sans Display', 'Google Sans', Arial, sans-serif;
+      font-size: 15pt;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin: 0 0 14px;
+    }
+
+    .doc-identificacao {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 22px;
+    }
+    .doc-identificacao td {
+      border: 1px solid var(--borda);
+      padding: 7px 10px;
+      font-size: 10pt;
+      vertical-align: middle;
+    }
+    .doc-identificacao .rotulo {
+      font-weight: 700;
+      white-space: nowrap;
+      background: var(--cinza-fundo);
+      width: 1%;
+    }
+
+    .secao { margin-bottom: 24px; }
+
+    .secao-titulo {
+      font-size: 11pt;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin: 0 0 6px;
+    }
+
+    table.producao {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    table.producao th,
+    table.producao td {
+      border: 1px solid var(--borda);
+      padding: 5px 7px;
+      font-size: 9pt;
+      line-height: 1.3;
+      text-align: left;
+      vertical-align: top;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+    }
+    table.producao th {
+      background: var(--cinza-fundo);
+      font-weight: 700;
+      text-align: center;
+      font-size: 8.5pt;
+      letter-spacing: 0.02em;
+    }
+    /* Coluna de numeração: sempre a primeira, sempre centralizada. */
+    table.producao td:first-child {
+      text-align: center;
+      font-weight: 500;
+    }
+    /* Célula em branco (VISTO, ASSISTIDO de acompanhamento etc.): mantém
+       altura suficiente para escrita à mão. */
+    table.producao td:empty { height: 26px; }
+
+    .observacoes {
+      margin-top: 30px;
+      page-break-inside: avoid;
+    }
+    .observacoes-titulo {
+      font-size: 10pt;
+      font-weight: 700;
+      margin: 0 0 8px;
+    }
+    .observacoes ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .observacoes li {
+      font-size: 8.5pt;
+      line-height: 1.45;
+      margin-bottom: 5px;
+    }
+
+    .assinatura {
+      margin-top: 46px;
+      display: flex;
+      justify-content: center;
+      page-break-inside: avoid;
+    }
+    .assinatura-linha {
+      width: 9cm;
+      border-top: 1px solid var(--tinta);
+      padding-top: 5px;
+      text-align: center;
+      font-size: 9pt;
+    }
+
+    .aviso-vazio {
+      padding: 40px;
+      text-align: center;
+      font-size: 11pt;
+    }
+
+    /* --- Ajustes de impressão --- */
+    @media print {
+      html, body { background: #FFFFFF; }
+      .barra-acoes { display: none !important; }
+      .folha { width: auto; margin: 0; padding: 0; }
+      .documento { padding: 0; box-shadow: none; }
+      .secao { page-break-inside: auto; }
+      .secao-titulo { page-break-after: avoid; }
+      /* Repete o cabeçalho da tabela quando a seção quebra de página. */
+      table.producao thead { display: table-header-group; }
+      table.producao tr { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="folha">
+
+    <div class="barra-acoes">
+      <button class="btn-imprimir" onclick="window.print()">
+        <span class="material-symbols-outlined"><?= ICONES.imprimir ?></span>
+        Imprimir
+      </button>
+    </div>
+
+    <div class="documento">
+
+      <h1 class="doc-titulo"><?= dados.titulo ?></h1>
+
+      <table class="doc-identificacao">
+        <tr>
+          <td class="rotulo">NOME</td>
+          <td><?= dados.aluno.nome ?></td>
+          <td class="rotulo">PERÍODO</td>
+          <td style="width:12%;"><?= dados.aluno.periodo ?></td>
+          <td class="rotulo">SUPERVISOR</td>
+          <td style="width:18%;"><?= dados.aluno.supervisor ?></td>
+        </tr>
+      </table>
+
+      <? if (dados.vazio) { ?>
+        <div class="aviso-vazio">
+          Nenhum registro encontrado para a turma selecionada.
+        </div>
+      <? } ?>
+
+      <? dados.secoes.forEach(function(secao) { ?>
+        <div class="secao">
+          <div class="secao-titulo"><?= secao.titulo ?></div>
+          <table class="producao">
+            <thead>
+              <tr>
+                <? secao.colunas.forEach(function(coluna) { ?>
+                  <th style="width:<?= coluna.largura ?>;"><?= coluna.rotulo ?></th>
+                <? }); ?>
+              </tr>
+            </thead>
+            <tbody>
+              <? secao.linhas.forEach(function(linha) { ?>
+                <tr>
+                  <? linha.forEach(function(valor) { ?>
+                    <td><?= valor ?></td>
+                  <? }); ?>
+                </tr>
+              <? }); ?>
+            </tbody>
+          </table>
+        </div>
+      <? }); ?>
+
+      <? if (dados.observacoes && dados.observacoes.length) { ?>
+        <div class="observacoes">
+          <div class="observacoes-titulo">OBSERVAÇÕES:</div>
+          <ol>
+            <? dados.observacoes.forEach(function(texto) { ?>
+              <li><?= texto ?></li>
+            <? }); ?>
+          </ol>
+        </div>
+      <? } ?>
+
+      <div class="assinatura">
+        <div class="assinatura-linha">
+          <?= dados.aluno.supervisor ?> — Supervisor(a)
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Abre o diálogo de impressão sozinho na primeira carga. O timeout dá
+    // tempo de a Google Sans terminar de carregar — sem ele o Chrome
+    // ocasionalmente gera o PDF com a fonte de fallback.
+    window.addEventListener('load', function() {
+      setTimeout(function() { window.print(); }, 700);
+    });
+  </script>
+
+</body>
+</html>

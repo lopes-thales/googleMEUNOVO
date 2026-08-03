@@ -80,6 +80,8 @@ var ICONES = {
   sincronizar:          'sync',
   transferir:           'swap_horiz',
   cobrancas:            'campaign',
+  acompanhamentoSemanal: 'mark_email_read', // Mensagem 6 (AcompanhamentoSemanal.js) — e-mail semanal de producao
+
   organizarPastas:      'drive_file_move',
   arquivarPastas:       'archive',
   verificarEntregas:    'move_to_inbox',
@@ -88,6 +90,7 @@ var ICONES = {
   novaPeticao:          'note_add',
   solicitarDiligencia:  'assignment_add',
   gerenciar:            'tune',
+  imprimir:             'print',
   dropdown:             'arrow_drop_down',
   preencherSemestre:    'event_repeat',
   preencherDfFinal:     'edit_calendar',
@@ -126,6 +129,7 @@ var ICONES = {
   buscar:               'search',
   filtroData:           'date_range',
   semestre:             'event',
+  turma:                'groups',  // seletor/coluna de TURMA (modelo de turmas v2, 01/08/2026)
   paginaAnterior:       'chevron_left',
   paginaProxima:        'chevron_right',
   temaEscuro:           'dark_mode',

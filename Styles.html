@@ -587,6 +587,21 @@
   }
   .btn-gerenciar:hover { background: var(--azul-escuro); }
   .btn-gerenciar.aberto { background: var(--azul-escuro); }
+  /* Variante contornada, para acoes que dividem a barra com o botao primario
+     "Registrar" sem competir com ele (ex.: "Imprimir" no Painel Aluno). */
+  .btn-gerenciar-secundario {
+    background: transparent;
+    color: var(--azul-medio);
+    border: 1px solid var(--azul-medio);
+    flex-shrink: 0;
+  }
+  .btn-gerenciar-secundario:hover { background: var(--azul-medio); color: #fff; }
+  .btn-gerenciar-secundario:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: transparent;
+    color: var(--azul-medio);
+  }
   .menu-gerenciar {
     position: absolute; top: calc(100% + 6px); right: 0; min-width: 240px;
     background: var(--superficie); border-radius: var(--radius-sm); box-shadow: var(--sombra-modal);
@@ -612,6 +627,20 @@
     background: var(--superficie); outline: none; cursor: pointer; transition: border-color 0.18s;
   }
   .select-semestre:focus { border-color: var(--azul-claro); }
+  /* 02/08/2026: aluno com uma unica matricula — o seletor de turma continua
+     visivel (para ele saber em que periodo esta), mas sem nada a escolher.
+     Aparencia de rotulo, nao de campo quebrado. */
+  .select-semestre:disabled {
+    cursor: default;
+    opacity: 1;
+    border-color: transparent;
+    background: var(--cinza-fundo);
+    color: var(--cinza-texto);
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding-right: 10px;
+  }
 
   /* Estagiario(a) ja finalizado(a) num picklist (ex.: seletor de aluno do
      Panorama) — mantem o rotulo "— Finalizado" mas com menos destaque visual,

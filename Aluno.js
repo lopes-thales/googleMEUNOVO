@@ -80,21 +80,10 @@ function getDadosPainelAluno(acesso) {
     audienciasEstagiario = filtrarRegistrosPorEstagiarios(audienciasEstagiario, estagiariosVisiveis, ['estagiario'], ['email']);
   }
 
-  // TURMA (27/07/2026): cada lista recebe aqui a turma JA RESOLVIDA (registro
-  // -> aluno -> turma, ver anotarTurmaEmRegistros/criarResolvedorTurma em
-  // Turma.js) — mesma tecnica usada em getDadosPanorama (Panorama.js). O
-  // Painel Aluno passa a ter o mesmo seletor hierarquico de turma do
-  // Panorama (AlunoScripts.html), e filtra direto em reg.turma.
-  //
-  // Diligencias: a data de referencia para resolver a turma e o ALTERADO EM (M)
-  // com fallback para DF (G), mesma regra adotada no Panorama.
-  var resolvedorTurma = criarResolvedorTurma();
-  anotarTurmaEmRegistros(diligencias, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.alteradoEm || r.df; });
-  anotarTurmaEmRegistros(iniciais, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
-  anotarTurmaEmRegistros(atendimentos, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.data; });
-  anotarTurmaEmRegistros(acompanhamentos, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
-  anotarTurmaEmRegistros(atendimentosOnline, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.data; });
-  anotarTurmaEmRegistros(audienciasEstagiario, resolvedorTurma, function(r) { return r.estagiario || r.email; }, function(r) { return r.data; });
+  // TURMA — modelo v2: todas as listas transacionais trazem reg.turma gravado
+  // na propria linha, inclusive `atendimentos` (coluna L, desde 02/08/2026).
+  // O seletor hierarquico do Painel Aluno (AlunoScripts.html) filtra direto em
+  // reg.turma.
 
   // Atividades ainda sem Atendimento Online vinculado, calculadas a partir
   // das MESMAS listas ja filtradas acima (ver AtendimentoOnline.js) — o
@@ -117,8 +106,19 @@ function getDadosPainelAluno(acesso) {
     atendimentosOnline: atendimentosOnline,
     atividadesElegiveisAO: atividadesElegiveisAO,
     audienciasEstagiario: audienciasEstagiario, // AudienciasEstagiario.js
-    parametrosAudiencias: lerParametrosAudiencias(), // bd!X:Z — tipo/meta/horas (AudienciasEstagiario.js)
+    parametrosAudiencias: lerParametrosAudiencias(), // bd!X:Z + AF — tipo/meta/horas/limite (AudienciasEstagiario.js)
+    // Picklist de ESPECIE do modal de audiencia do estagiario (bd!AB2:AB) —
+    // campo novo (03/08/2026), independente do TIPO (que continua controlando
+    // meta/limite). Gravada em audiencias_estagiario!P.
+    especiePicklistAudiencias: lerColunaBd(CONFIG.BD_COL.AUDIENCIA_ESPECIE),
     turmaCorrente: obterTurmaCorrente(), // TURMA ativa hoje (Turma.js) — padrao do seletor hierarquico
+    // RN-P10 (Producao.js): { idMatricula: { liberado, disponivelEm, ordem,
+    // motivo } }. Diz ao frontend se o botao "Imprimir" da Tabela de Producao
+    // pode ficar ativo para cada matricula. Vem pronto do servidor porque a
+    // regra depende da data de encerramento da turma, que NAO trafega no
+    // payload (objeto Date quebra a serializacao — ver getTodosEstagiariosParaCliente,
+    // Turma.js). Para Thales o frontend ignora este mapa: ele imprime sempre.
+    liberacaoImpressao: getLiberacaoImpressaoProducao(),
     // RN-13: aviso obrigatorio sobre a ata/declaracao, com o e-mail sempre
     // interpolado a partir de CONFIG.EMAIL_AUTORIZADO — nunca digitado fixo
     // no HTML (ver modal/confirmacao/legenda em AlunoScripts.html).

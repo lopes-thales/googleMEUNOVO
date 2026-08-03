@@ -69,8 +69,12 @@
 //(so conta na producao do estagiario — Panorama.js/Graficos.js — quando
 //STATUS = 'Aprovado'.)
 //
-//aba audiencias_estagiario (colunas A:N, base 0) — ver AudienciasEstagiario.js:
-//ID	DATA	HORA	ESTAGIARIO	EMAIL	TIPO	VARA	PROCESSO	PARTES	OBS	STATUS	OBS_APROVACAO	ALTERADO_EM	SEMESTRE
+//aba audiencias_estagiario (colunas A:R, base 0) — ver AudienciasEstagiario.js:
+//ID	DATA	HORA	ESTAGIARIO	EMAIL	TIPO	VARA	PROCESSO	PARTES	OBS	STATUS	OBS_APROVACAO	ALTERADO_EM	SEMESTRE	(O nao mapeada)	ESPECIE	ID_MATRICULA	TURMA
+//(coluna P = ESPECIE: picklist bd!AB2:AB, adicionada em 03/08/2026 — campo
+//livre de classificacao, distinto do TIPO/F, que continua controlando a
+//meta/limite. HORA/C deixou de ser coletada pelo Painel Aluno na mesma data,
+//mas a coluna continua existindo na planilha para os registros antigos.)
 //(modulo INDEPENDENTE da aba "audiencias" — pauta do escritorio, domínio
 //distinto, somente leitura, ver Audiencias.js — e que NUNCA deve ser lida ou
 //escrita por AudienciasEstagiario.js, nem vice-versa. Nao ha vinculo entre um
@@ -91,11 +95,18 @@
 //aba bd, bloco X:Z (picklist + parametros de audiencias_estagiario, ver
 //lerParametrosAudiencias em AudienciasEstagiario.js): X2:X = tipo de
 //audiencia (fonte unica da picklist do modal do estagiario), Y2:Y = meta
-//daquele tipo (inteiro), Z2:Z = quantas horas cada audiencia daquele tipo
-//vale no calculo de "Parcial de Horas" (aba Panorama). Linhas com X vazio sao
-//ignoradas. Nenhum tipo/meta/hora e codificado no JavaScript — se o bloco
-//estiver vazio, o modulo se comporta como se nao houvesse tipos cadastrados.
+//daquele tipo (inteiro, informativa — pode ser excedida, RN-06), Z2:Z =
+//quantas horas cada audiencia daquele tipo vale no calculo de "Parcial de
+//Horas" (aba Panorama). Linhas com X vazio sao ignoradas. Nenhum tipo/meta/
+//hora e codificado no JavaScript — se o bloco estiver vazio, o modulo se
+//comporta como se nao houvesse tipos cadastrados.
 //aa2: contador para numeracao AU-XXXX (Audiencia do Estagiario), mesmo padrao de i2/j2/k2/r2.
+//ab2:ab: picklist de ESPECIE do modal de audiencia do estagiario
+//(audiencias_estagiario!P) — lista solta, sem alinhamento de linha com X:Z.
+//af2:af: teto (inteiro) de audiencias por TIPO, alinhado por LINHA com X
+//(mesma logica de Y/Z). Ao ser atingido (Aprovadas + Pendentes daquele tipo),
+//BLOQUEIA um novo registro daquele tipo — diferente da meta Y, que so
+//informa o progresso e pode ser excedida. Linha com AF vazio/0 = sem teto.
 //
 //OBS: onde tiver aluno, considere Estagiários, ou seja, aluno=estagiário
 
@@ -123,14 +134,35 @@ var CONFIG = {
   // --- Roteamento do Web App (doGet) ---
   // O mesmo deployment atende duas paginas: o Painel de Thales (padrao, sem
   // parametro) e o Painel Aluno (?pagina=aluno). Ver Code.js.
+  // ALTERADO EM 02/08/2026: terceira rota — ?pagina=producao devolve a
+  // "Tabela de Producao" pronta para impressao (ver Producao.js e
+  // TabelaProducao.html). E uma pagina AUTONOMA, renderizada no servidor: o
+  // aluno recebe HTML ja montado, nao os dados brutos, justamente para que a
+  // tabela nao possa ser alterada antes da entrega (decisao de Thales).
   ROTA: {
     PARAM: 'pagina',
-    VALOR_ALUNO: 'aluno'
+    VALOR_ALUNO: 'aluno',
+    VALOR_PRODUCAO: 'producao',
+    // Parametros aceitos por ?pagina=producao. EMAIL so e respeitado quando
+    // quem acessa e Thales; para um estagiario o servidor SEMPRE sobrepoe com
+    // o proprio e-mail logado (ver montarDadosTabelaProducao, Producao.js).
+    PARAM_EMAIL: 'email',
+    PARAM_TURMA: 'turma'
   },
 
   // --- Abas da planilha ---
   SHEET_DILIGENCIAS: 'diligencias',
   SHEET_ESTAGIARIOS: 'estagiarios',
+
+  // --- Aba turmas (colunas A:D) — NOVA em 01/08/2026 ---
+  // Cadastro das turmas de estagio. Fonte UNICA das janelas de cada turma e
+  // da turma corrente. Substitui a antiga derivacao de obterTurmaCorrente() a
+  // partir das linhas de estagiarios e o uso do "primeiro aluno da turma" como
+  // representante da data de encerramento (Mensagens.js).
+  // Janelas oficiais (RN-T01): -A e sempre janeiro (.01) ou julho (.02), mes
+  // inteiro; -R vai de fevereiro a junho (.01) ou de agosto a dezembro (.02).
+  // Somente Turma.js le ou escreve esta aba.
+  SHEET_TURMAS: 'turmas',
   SHEET_BD: 'bd',
   SHEET_AUDIENCIAS: 'audiencias',
 
@@ -162,9 +194,11 @@ var CONFIG = {
     DRIVE: 21,        // V  ('S' quando o PDF do processo ja foi organizado na pasta do estagiario — ver Drive.js)
     DI_CLASS: 22,     // W  (data de criacao da atividade no Classroom — preenchida com o valor retornado pela API, nao com DI/hoje)
     DF_CLASS: 23,     // X  (data de entrega/dueDate da atividade no Classroom — preenchida com o valor retornado pela API, nao com DF)
+    ID_MATRICULA: 25, // Z  (ID da matricula de estagio — estagiarios!N. Chave forte do vinculo registro -> matricula; gravada pelo servidor na atribuicao, NUNCA inferida em leitura. Ver Turma.js)
+    TURMA: 26,        // AA (codigo da turma, espelho legivel de ID_MATRICULA: "AAAA.SS-A" ou "AAAA.SS-R". Gravada junto com ID_MATRICULA, nunca editada a mao na planilha)
     COMENTARIO: 24    // Y  (campo "Comentário" do modal — observacao adicional que, quando preenchida, entra nas Instrucoes da Atividade do Classroom, ver montarDescricaoAtividade em Classroom.js)
   },
-  TOTAL_COLUNAS_DILIGENCIAS: 25, // A ate Y
+  TOTAL_COLUNAS_DILIGENCIAS: 27, // A ate AA
 
   SHEET_SECRETARIA: 'secretaria',
 
@@ -185,12 +219,36 @@ var CONFIG = {
   // F = SEMESTRE (texto simples, ex. "2026.01") — preenchido manualmente por
   // Thales; continua sendo a dimensao das telas operacionais (Diligencias,
   // Distribuicao).
-  // K = DATA_INICIO (Date) — origem da derivacao de TURMA.
-  // L = DATA_FIM (Date) — substitui bd!P2 na mensageria de encerramento.
-  // M = TURMA (texto "AAAA.SS-A" ou "AAAA.SS-R") — dimensao das telas de
-  // metrica (Panorama, Graficos, Painel Aluno). Nunca editada manualmente.
+  // ALTERADO EM 01/08/2026 (modelo de turmas v2):
+  // A = ID permanece INTOCADO pelo painel. Nenhuma funcao deste projeto
+  // escreve nessa coluna — ela e lida por planilhas/scripts EXTERNOS e
+  // continua sendo o identificador do aluno usado por eles.
+  // N = MATRICULA_ESTAGIO ("MAT-0001") e o ID DA MATRICULA DE ESTAGIO, unico
+  // por LINHA (nao por aluno): o mesmo aluno em duas turmas tem dois valores
+  // diferentes. E a chave forte gravada nas abas transacionais. Preenchida
+  // automaticamente (gatilho onEdit ao digitar o NOME) e tambem pelo botao
+  // "Gerar Matrículas de Estágio" do dropdown Gerenciar.
+  // J = MATRICULA e a matricula ACADEMICA do aluno, preenchida manualmente
+  // quando ele se apresenta (pode levar semanas). E OPCIONAL e nunca bloqueia
+  // nenhuma operacao (RN-T09). Nao desempata turma: a mesma matricula
+  // academica se repete em todas as linhas do mesmo aluno.
+  // K = DATA_INICIO e L = DATA_FIM deixam de ser a origem da TURMA e passam a
+  // ser OVERRIDES OPCIONAIS: vazias por padrao; preenchidas apenas em
+  // extensao/excecao individual, quando prevalecem sobre a janela da aba
+  // turmas.
+  // M = TURMA passa a ser ESCOLHIDA no cadastro (validada contra turmas!A) em
+  // vez de derivada de DATA_INICIO. Entrar no antecipado e uma decisao de
+  // matricula, nao uma inferencia a partir do mes de uma data.
+  TURMAS_COL: {
+    CODIGO: 0,       // A  ("AAAA.SS-A" ou "AAAA.SS-R") — chave da aba
+    DATA_INICIO: 1,  // B  (Date) inicio oficial da turma
+    DATA_FIM: 2,     // C  (Date) fim oficial da turma
+    ATIVA: 3         // D  ('S' força esta turma como corrente; vazio = derivada das datas)
+  },
+  TOTAL_COLUNAS_TURMAS: 4, // A ate D
+
   ESTAGIARIOS_COL: {
-    ID: 0,          // A
+    ID: 0,          // A  (identificador do aluno usado por planilhas EXTERNAS — o painel NUNCA escreve aqui)
     NOME: 1,        // B
     EMAIL: 2,       // C
     TRIMESTRE: 3,   // D
@@ -199,12 +257,13 @@ var CONFIG = {
     DRIVE: 6,       // G  (ID da pasta do estagiario dentro de bd!L2 — ver Drive.js)
     ARQUIVADO: 7,   // H  ('S' quando a pasta (coluna G) ja foi movida de bd!L2 para bd!Q2 — botao "Arquivar Pastas", ver Drive.js)
     PERIODO: 8,     // I  (periodo do aluno na IES — NAO e a turma de estagio)
-    MATRICULA: 9,   // J
-    DATA_INICIO: 10, // K  (origem da derivacao de TURMA)
-    DATA_FIM: 11,    // L  (substitui bd!P2 na mensageria)
-    TURMA: 12        // M  ("AAAA.SS-A" ou "AAAA.SS-R", derivado e gravado como texto)
+    MATRICULA: 9,   // J  (matricula ACADEMICA do aluno — opcional, ver RN-T09)
+    DATA_INICIO: 10, // K  (override opcional da janela da turma)
+    DATA_FIM: 11,    // L  (override opcional da janela da turma)
+    TURMA: 12,       // M  ("AAAA.SS-A" ou "AAAA.SS-R") — escolhida, validada contra turmas!A
+    MATRICULA_ESTAGIO: 13 // N  ("MAT-XXXX") — ID da matricula de estagio, unico por LINHA
   },
-  TOTAL_COLUNAS_ESTAGIARIOS: 13, // A ate M
+  TOTAL_COLUNAS_ESTAGIARIOS: 14, // A ate N
 
   // --- Colunas da aba bd (picklists e parametros), base A:H ---
   BD_COL: {
@@ -217,8 +276,10 @@ var CONFIG = {
     ID_PLANILHA_GERAL: 'G', // celula unica: nao usado neste desenvolvimento
     COMPLEXAS: 'H',         // valores de ESPECIE (coluna D) que geram SUBESPECIE = "Complexa"
     AUDIENCIA_TIPO: 'X',    // picklist de TIPO de audiencia do estagiario — ver lerParametrosAudiencias, AudienciasEstagiario.js
-    AUDIENCIA_META: 'Y',    // meta (inteiro) de cada TIPO de audiencia (coluna X, mesma linha)
-    AUDIENCIA_HORAS: 'Z'    // horas que cada audiencia daquele TIPO vale no calculo de "Parcial de Horas" (coluna X, mesma linha)
+    AUDIENCIA_META: 'Y',    // meta (inteiro) de cada TIPO de audiencia (coluna X, mesma linha) — informativa, pode ser excedida (RN-06)
+    AUDIENCIA_HORAS: 'Z',   // horas que cada audiencia daquele TIPO vale no calculo de "Parcial de Horas" (coluna X, mesma linha)
+    AUDIENCIA_ESPECIE: 'AB', // picklist manual de ESPECIE do modal de audiencia do estagiario (audiencias_estagiario!P) — lista solta, sem vinculo de linha com X:Z
+    AUDIENCIA_LIMITE: 'AF'  // teto (inteiro) de audiencias daquele TIPO (coluna X, mesma linha) — ao ser atingido, BLOQUEIA novo registro (distinto da meta Y, que so orienta o progresso)
   },
 
   // Celulas unicas (nao sao listas) dentro da aba bd.
@@ -236,6 +297,7 @@ var CONFIG = {
     CONTROLE_AO: 'R2', // contador para numeracao AO-XXXX (Atendimento Online) — guarda apenas o numero inteiro atual, ver AtendimentoOnline.js
     ID_PASTA_ACOMPANHAMENTOS: 'W2', // ID da pasta no Drive com os PDFs de acompanhamentos recebidos, ainda soltos — botao "Organizar Pastas" (Drive.js). O destino continua sendo a MESMA pasta do estagiario usada pelas diligencias (estagiarios!G, dentro de bd!L2).
     CONTROLE_AU: 'AA2', // contador para numeracao AU-XXXX (Audiencia do Estagiario) — guarda apenas o numero inteiro atual, ver AudienciasEstagiario.js
+    CONTROLE_MAT: 'AH2', // contador para numeracao MAT-XXXX (ID da matricula de estagio, estagiarios!N) — guarda apenas o numero inteiro atual, ver Turma.js
     CONSOLIDADO_AUDIENCIAS_TURMA: 'AE2', // ancoradouro da guarda de duplicidade do A-6 (consolidado de pendencias de audiencias por turma), substituindo a antiga nota em bd!P2 — ver Mensagens.js
 
     // Pesos usados no calculo de "Parcial de Horas" da aba Panorama (ver
@@ -303,9 +365,11 @@ var CONFIG = {
     DI_CLASS: 12,    // M  (data de criacao da atividade no Classroom — preenchida com o valor retornado pela API, nao com DATA/hoje)
     DF_CLASS: 13,    // N  (data de entrega/dueDate da atividade no Classroom — preenchida com o valor retornado pela API, nao com DF)
     PROCESSO: 14,    // O  (Nº do processo — preenchido pelo cruzamento diario com protocolos!B, ver verificarProtocolosIniciais em Iniciais.js)
-    VARA: 15         // P  (vara — preenchida pelo cruzamento diario com protocolos!C, ver verificarProtocolosIniciais em Iniciais.js)
+    VARA: 15,        // P  (vara — preenchida pelo cruzamento diario com protocolos!C, ver verificarProtocolosIniciais em Iniciais.js)
+    ID_MATRICULA: 16, // Q  (ID da matricula de estagio — estagiarios!N)
+    TURMA: 17        // R  (codigo da turma, espelho legivel)
   },
-  TOTAL_COLUNAS_INICIAIS: 16,
+  TOTAL_COLUNAS_INICIAIS: 18,
 
   // --- Aba protocolos (colunas A:E), usada para cruzar com iniciais ---
   SHEET_PROTOCOLOS: 'protocolos',
@@ -330,9 +394,23 @@ var CONFIG = {
     EMPREGO: 6,     // G
     RAMO: 7,        // H
     ESTAGIARIO: 8,  // I (nome do aluno — cruzado com estagiarios!B na aba Panorama)
-    SEMESTRE: 9     // J (texto simples, ex. "2026.01") — preenchido manualmente por Thales
+    SEMESTRE_LEGADO: 9, // J (antiga coluna de semestre; mantida so como fallback de leitura)
+    SEMESTRE: 10,   // K (texto simples, ex. "2026.02") — devolvido por formula
+    TURMA: 11       // L (texto simples, ex. "2026.02-R") — devolvido por formula
   },
-  TOTAL_COLUNAS_ATENDIMENTOS: 10, // A ate J
+  // ALTERADO EM 02/08/2026: a aba passou a trazer SEMESTRE (K) e TURMA (L)
+  // por formula. Com isso, `atendimentos` deixou de ser a excecao do modelo de
+  // turmas v2 — TODAS as abas transacionais agora carregam a turma na propria
+  // linha, e a inferencia por data (anotarTurmaEmAtendimentos) foi removida.
+  //
+  // Motivo: a inferencia casava o aluno pelo NOME e, quando ele tinha uma
+  // unica matricula cadastrada, devolvia essa matricula qualquer que fosse a
+  // data do atendimento. Um aluno que nao era estagiario no periodo anterior
+  // via os atendimentos daquele periodo migrarem para a turma atual.
+  //
+  // A aba inteira e READ-ONLY para o painel: nenhuma funcao deste projeto
+  // escreve em `atendimentos`.
+  TOTAL_COLUNAS_ATENDIMENTOS: 12, // A ate L
 
   // --- Aba acompanhamentos (colunas A:K, base 0) ---
   // NOME e EMAIL sao gravados diretamente na linha (mesma fonte de
@@ -354,9 +432,11 @@ var CONFIG = {
     CLASS: 10,                 // K  ('S' quando a atividade ja foi criada no Classroom, senao vazio)
     DI_CLASS: 11,              // L  (data de criacao da atividade no Classroom — preenchida com o valor retornado pela API, nao com DATA/hoje)
     DF_CLASS: 12,              // M  (data de entrega/dueDate da atividade no Classroom — preenchida com o valor retornado pela API, nao com DATA_ENTREGA)
-    DRIVE: 13                  // N  ('S' quando o PDF do acompanhamento ja foi organizado na pasta do estagiario — ver Drive.js)
+    DRIVE: 13,                 // N  ('S' quando o PDF do acompanhamento ja foi organizado na pasta do estagiario — ver Drive.js)
+    ID_MATRICULA: 14,          // O  (ID da matricula de estagio — estagiarios!N)
+    TURMA: 15                  // P  (codigo da turma, espelho legivel)
   },
-  TOTAL_COLUNAS_ACOMPANHAMENTOS: 14, // A ate N
+  TOTAL_COLUNAS_ACOMPANHAMENTOS: 16, // A ate P
 
   PREFIXO_ACOMPANHAMENTO: 'AC-',
 
@@ -379,9 +459,11 @@ var CONFIG = {
     STATUS: 8,             // I  ('Pendente' | 'Aprovado' | 'Reprovado')
     OBS_APROVACAO: 9,      // J  (motivo informado por Thales ao reprovar)
     ALTERADO_EM: 10,        // K
-    SEMESTRE: 11            // L  (estatico, calculado uma unica vez a partir de DATA na criacao)
+    SEMESTRE: 11,           // L  (estatico — derivado da TURMA na criacao, ver RN-T08)
+    ID_MATRICULA: 12,       // M  (ID da matricula de estagio — estagiarios!N)
+    TURMA: 13               // N  (codigo da turma, espelho legivel)
   },
-  TOTAL_COLUNAS_ATENDIMENTO_ONLINE: 12, // A ate L
+  TOTAL_COLUNAS_ATENDIMENTO_ONLINE: 14, // A ate N
 
   PREFIXO_ATENDIMENTO_ONLINE: 'AO-',
 
@@ -416,11 +498,26 @@ var CONFIG = {
     STATUS: 10,           // K  ('Pendente' | 'Aprovada' | 'Reprovada')
     OBS_APROVACAO: 11,    // L  (motivo informado por Thales ao reprovar — obrigatorio ao reprovar)
     ALTERADO_EM: 12,      // M
+    // O (14) NAO e mapeada: e coluna da planilha que este projeto nao conhece
+    // nem escreve. Ao montar uma linha nova em criarAudienciaEstagiario, esse
+    // indice e preenchido com string vazia para nao gerar array esparso
+    // (setValues rejeita `undefined`).
+    ESPECIE: 15,           // P  (picklist bd!AB2:AB — classificacao livre, distinta do TIPO/meta/limite)
+    ID_MATRICULA: 16,     // Q  (ID da matricula de estagio — estagiarios!N)
+    TURMA: 17,            // R  (codigo da turma, espelho legivel)
     SEMESTRE: 13          // N  (ESTATICO — gravado uma unica vez na criacao a partir do semestre do estagiario, nunca recalculado a partir de DATA, ver RN-02)
   },
-  TOTAL_COLUNAS_AUDIENCIAS_ESTAGIARIO: 14, // A ate N
+  TOTAL_COLUNAS_AUDIENCIAS_ESTAGIARIO: 18, // A ate R
 
   PREFIXO_AUDIENCIA_ESTAGIARIO: 'AU-',
+
+  // Prefixo do ID da matricula de estagio (estagiarios!N) — ver Turma.js.
+  PREFIXO_MATRICULA_ESTAGIO: 'MAT-',
+
+  // Aba criada e alimentada por MigracaoTurmaV2.js com os registros cuja
+  // matricula nao pode ser resolvida com seguranca no backfill. Thales
+  // preenche a coluna H (TURMA) e roda aplicarCorrecoesAmbiguos().
+  SHEET_MIGRACAO_AMBIGUOS: '_migracao_ambiguos',
 
   STATUS_AUDIENCIA_ESTAGIARIO: {
     PENDENTE: 'Pendente',
@@ -477,6 +574,112 @@ var CONFIG = {
       'Levar o Relatório Final de Estágio para minha assinatura.',
       'Lembrem-se que OS ATENDIMENTOS ONLINE devem ser validados por mim e só serão contados AQUELES RELACIONADOS A PROCESSOS ENVIADOS POR MIM no Classroom. Qualquer outro atendimento online que não esteja relacionado diretamente aos processos e partes de diligências enviadas por mim NÃO SERÁ ACEITO.',
       'Dar entrada no referido Relatório na Central de Atendimento CEST.'
+    ]
+  },
+
+  // --- Mensagem 6: acompanhamento semanal (AcompanhamentoSemanal.js) ---
+  // NOVO EM 02/08/2026. E-mail semanal, individual, com o quadro-resumo da
+  // producao acumulada do estagiario e as tabelas detalhadas de cada bloco.
+  // Todas as regras de negocio (RN-S01 a RN-S11) estao no cabecalho de
+  // AcompanhamentoSemanal.js — este bloco guarda apenas os parametros.
+  //
+  // DIA_SEMANA e o nome da constante em ScriptApp.WeekDay ('MONDAY' ..
+  // 'SUNDAY'), lido em configurarGatilhoAcompanhamentoSemanal(). Alterar aqui
+  // e RODAR DE NOVO aquela funcao — mudar a constante sozinha nao remaneja um
+  // gatilho ja instalado.
+  //
+  // HORA e a FAIXA de hora do Apps Script: 18 dispara entre 18:00 e 19:00.
+  // Nao existe agendamento de horario exato na plataforma.
+  ACOMPANHAMENTO_SEMANAL: {
+    DIA_SEMANA: 'FRIDAY',
+    HORA: 18,
+    ASSUNTO: 'Acompanhamento semanal do seu estágio',
+    ASSUNTO_CONSOLIDADO: 'Consolidado do acompanhamento semanal'
+  },
+
+  // --- Tabela de Producao (Producao.js / TabelaProducao.html) ---
+  // Documento SEPARADO do Relatorio Final de Estagio (decisao de Thales,
+  // 02/08/2026): e a tabela que o estagiario imprime periodicamente e leva
+  // para o visto do supervisor, replicando o modelo em .docx fornecido
+  // ("TABELA DE PRODUÇÃO"), em A4 paisagem.
+  //
+  // Regras de negocio fechadas com Thales em 02/08/2026:
+  //  RN-P01 O recorte e SEMPRE a selecao corrente do Painel Aluno (filtro de
+  //         turma + aluno em foco) — nunca a producao acumulada do estagio.
+  //  RN-P02 Entram todos os registros EXCETO os de STATUS "Cancelada".
+  //  RN-P03 Atendimentos presenciais (aba atendimentos) e Atendimentos Online
+  //         (aba atendimentos_online, somente STATUS "Aprovado") ocupam a
+  //         MESMA tabela, distinguidos pela coluna TIPO DE ATENDIMENTO.
+  //  RN-P04 A coluna AÇÃO das pecas e a ESPECIE do registro (diligencias!L /
+  //         iniciais!F), nunca o campo DILIGENCIA.
+  //  RN-P05 Uma diligencia de ESPECIE de acordo (ver ESPECIES_ACORDO) entra
+  //         SOMENTE na secao ACORDOS — nunca tambem em Peca Simples/Complexa.
+  //         Sem essa regra o mesmo registro seria contado duas vezes.
+  //  RN-P06 So sao impressas as linhas existentes: nao ha preenchimento ate
+  //         uma quantidade fixa como no modelo .docx original.
+  //  RN-P07 Secao sem nenhum registro e omitida por inteiro.
+  //  RN-P08 As horas do titulo de cada secao vem de bd!S2:V2 (os MESMOS pesos
+  //         do "Parcial de Horas" da aba Panorama — ver
+  //         getPesosPontuacaoPanorama, Panorama.js), nunca fixas no codigo.
+  //         ACORDOS nao tem celula propria e usa o peso de COMPLEXA.
+  //  RN-P09 Nao ha totalizador de horas no rodape: so as tabelas e as
+  //         OBSERVACOES.
+  //  RN-P10 O estagiario so consegue imprimir nos DIAS_LIBERACAO dias corridos
+  //         que antecedem a data de encerramento do estagio, e dali em diante
+  //         indefinidamente (a conferencia na Secretaria acontece DEPOIS do
+  //         termino). Antes disso o botao fica inativo, com a data de
+  //         liberacao no tooltip. Quando o filtro corrente abrange mais de uma
+  //         matricula (antecipado + regular no mesmo semestre), basta UMA
+  //         delas estar liberada. Matricula cuja turma esteja sem DATA_FIM
+  //         cadastrada NAO libera — a lacuna de cadastro precisa aparecer.
+  //         Thales NUNCA e submetido a esta regra. A checagem existe em dois
+  //         lugares de proposito: no botao (AlunoScripts.html) e dentro de
+  //         montarDadosTabelaProducao (Producao.js) — sem a segunda, bastaria
+  //         colar a URL ?pagina=producao no navegador para furar o bloqueio.
+  PRODUCAO: {
+    TITULO: 'TABELA DE PRODUÇÃO',
+
+    // RN-P10 — dias corridos antes do fim do estagio em que a impressao e
+    // liberada para o estagiario.
+    //
+    // Constante PROPRIA, deliberadamente separada de
+    // CONFIG.ENCERRAMENTO_ESTAGIO.DIAS_AVISO_PRODUCAO (que hoje tambem vale
+    // 15 e dispara a Mensagem 4). Sao decisoes independentes: mudar o momento
+    // do e-mail de resumo nao pode arrastar junto o momento em que a tabela
+    // fica imprimivel. Decisao de Thales, 02/08/2026.
+    DIAS_LIBERACAO: 15,
+
+    // Valores de ESPECIE (diligencias!L, picklist bd!D2:D) que classificam a
+    // diligencia como ACORDO. Comparacao por chave normalizada (sem acento,
+    // minuscula) — acrescentar aqui qualquer variacao que passe a existir na
+    // picklist, nunca no meio do codigo.
+    ESPECIES_ACORDO: ['ACORDO'],
+
+    // Rotulo de cada secao e de qual peso de bd!S2:V2 ela tira as horas.
+    // A chave `peso` casa com as chaves devolvidas por
+    // getPesosPontuacaoPanorama() (Panorama.js).
+    SECOES: {
+      ATENDIMENTOS:    { rotulo: 'ATENDIMENTOS',    peso: 'atendimento' },
+      SIMPLES:         { rotulo: 'PEÇA SIMPLES',    peso: 'simples' },
+      COMPLEXA:        { rotulo: 'PEÇA COMPLEXA',   peso: 'complexa' },
+      ACOMPANHAMENTOS: { rotulo: 'ACOMPANHAMENTOS', peso: 'acompanhamento' },
+      ACORDOS:         { rotulo: 'ACORDOS',         peso: 'complexa' } // RN-P08
+    },
+
+    // Rotulos da coluna "TIPO DE ATENDIMENTO" (RN-P03).
+    TIPO_ATENDIMENTO: {
+      PRESENCIAL: 'Presencial',
+      ONLINE: 'On line'
+    },
+
+    // OBSERVACOES do rodape, transcritas do modelo .docx (a numeracao e
+    // gerada pela propria lista ordenada do HTML, por isso nao aparece aqui).
+    OBSERVACOES: [
+      'RELATÓRIO TEM QUE SER ENTREGUE 1 (UMA) SEMANA ANTES DO TÉRMINO DO ESTÁGIO.',
+      'OS DIVÓRCIOS E ACORDOS DEVERÃO SER ASSINADOS E RUBRICADOS POR TODAS AS PARTES, ESTAGIÁRIOS E SUPERVISORES, SOB PENA DE NÃO SEREM PROTOCOLADOS OU ACEITOS.',
+      'O Nº DOS ACORDOS DEVEM SER OBTIDOS NA SECRETARIA E FAZER CONSTAR NOS ACORDOS.',
+      'A CADA CONCLUSÃO DAS TAREFAS APRESENTAR ESTA PRODUÇÃO PARA VISTO DO SUPERVISOR.',
+      'A CADA 15 DIAS APRESENTAR ESTA TABELA AO SEU SUPERVISOR.'
     ]
   }
 };

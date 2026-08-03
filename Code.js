@@ -24,6 +24,13 @@ function doGet(e) {
     return doGetPainelAluno();
   }
 
+  // ALTERADO EM 02/08/2026: ?pagina=producao devolve a Tabela de Producao
+  // pronta para impressao (ver Producao.js). Precisa do objeto `e` porque le
+  // os parametros de recorte (email + turma) da propria URL.
+  if (parametro === CONFIG.ROTA.VALOR_PRODUCAO) {
+    return doGetTabelaProducao(e);
+  }
+
   var acesso = validarAcesso();
   if (!acesso.autorizado) {
     return paginaAcessoNegado('Painel de Thales', acesso.motivo);
@@ -46,11 +53,51 @@ function doGetPainelAluno() {
 
   var template = HtmlService.createTemplateFromFile('PainelAluno');
   template.nomeUsuario = acesso.nome;
+  // URL do proprio web app, injetada na carga da pagina para que o botao
+  // "Imprimir" possa abrir a rota ?pagina=producao SINCRONAMENTE dentro do
+  // clique. Buscar essa URL via google.script.run seria assincrono e o
+  // window.open resultante cairia no bloqueador de pop-up do navegador.
+  // O `|| ''` evita que a string "null" chegue ao cliente caso a implantacao
+  // ainda nao exista — o botao "Imprimir" checa URL_APP e avisa o usuario.
+  template.urlApp = ScriptApp.getService().getUrl() || '';
 
   return template.evaluate()
     .setTitle('Painel de ' + acesso.nome)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// Rota ?pagina=producao — pagina autonoma de impressao da Tabela de Producao.
+// Mesmo controle de acesso do Painel Aluno (Thales ou estagiario cadastrado);
+// o recorte por aluno e reforcado no servidor em montarDadosTabelaProducao
+// (Producao.js), que ignora o parametro `email` quando quem acessa e aluno.
+//
+// Nao usa setXFrameOptionsMode(ALLOWALL) de proposito: e um documento para
+// impressao, aberto em aba propria, e nao ha motivo para permitir que seja
+// embutido em outra pagina.
+function doGetTabelaProducao(e) {
+  var acesso = validarAcessoAluno();
+  if (!acesso.autorizado) {
+    return paginaAcessoNegado('Tabela de Produção', acesso.motivo);
+  }
+
+  var parametros = (e && e.parameter) ? e.parameter : {};
+  var dados = montarDadosTabelaProducao(
+    acesso,
+    parametros[CONFIG.ROTA.PARAM_EMAIL],
+    parametros[CONFIG.ROTA.PARAM_TURMA]
+  );
+
+  if (dados.erro) {
+    return paginaAcessoNegado('Tabela de Produção', dados.erro);
+  }
+
+  var template = HtmlService.createTemplateFromFile('TabelaProducao');
+  template.dados = dados;
+
+  return template.evaluate()
+    .setTitle(dados.tituloPagina)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
 function include(filename) {
@@ -61,6 +108,11 @@ function onEdit(e) {
   processarEdicaoSecretaria(e);
   processarEdicaoGeralSync(e);
   processarEdicaoClassStatusOk(e);
+  // Modelo de turmas v2 (01/08/2026): ao digitar o NOME de um estagiario,
+  // gera a MATRICULA_ESTAGIO (estagiarios!N) da linha se ela estiver vazia —
+  // mesmo padrao de SUBESPECIE, que se calcula sozinha a partir de ESPECIE.
+  // Nunca escreve na coluna A (reservada a planilhas externas). Ver Turma.js.
+  processarEdicaoMatriculaEstagio(e);
 }
 
 // Chamado pelo frontend na inicializacao da pagina.
@@ -87,15 +139,44 @@ function recarregarListaEstagiarios() {
   }
 }
 
+// Modelo de turmas v2 (01/08/2026): devolve o mapa
+// { chaveNormalizadaDoNome: [ { idMatricula, turma, rotulo, dataInicio } ] }
+// com todas as matriculas NAO finalizadas. Alimenta o select de Turma da aba
+// Distribuicao e o campo Turma do modal de edicao de Diligencia — o frontend
+// monta os selects a partir deste mapa, sem uma chamada ao servidor por linha.
+function getMapaMatriculas() {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { erro: acesso.motivo };
+    return { mapa: mapaMatriculasNaoFinalizadas() };
+  } catch (e) {
+    return { erro: 'Erro ao carregar as turmas dos estagiários: ' + e.message };
+  }
+}
+
+// Botao "Gerar Matrículas de Estágio" do dropdown Gerenciar. Rede de seguranca
+// do gatilho onEdit: linhas coladas em lote, ou criadas antes deste modelo
+// existir, podem ficar sem MATRICULA_ESTAGIO. Quando nao ha nada pendente,
+// devolve gerados = 0 e o frontend mostra um toast informativo em vez de
+// simular um trabalho que nao aconteceu.
+function acaoGerarMatriculasEstagio() {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    var resultado = preencherMatriculasEstagioPendentes();
+    return { sucesso: true, gerados: resultado.gerados, total: resultado.total };
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao gerar matrículas de estágio: ' + e.message };
+  }
+}
+
 // Chamado para recarregar apos salvar uma edicao, sem tela cheia de loading.
 function recarregarDiligencias() {
   try {
     var acesso = validarAcesso();
     if (!acesso.autorizado) return { erro: acesso.motivo };
     var diligencias = getTodasDiligencias();
-    // Resolucao de turma para a aba Diligencias: ALTERADO EM (M) com fallback
-    // para DF (G). A coluna SEMESTRE (R) continua sendo calculada a partir do DF.
-    anotarTurmaEmRegistros(diligencias, criarResolvedorTurma(), function(r) { return r.estagiario; }, function(r) { return r.alteradoEm || r.df; });
+    // Modelo de turmas v2: reg.turma ja vem gravado na linha (coluna AA).
     return { diligencias: diligencias };
   } catch (e) {
     return { erro: 'Erro ao recarregar: ' + e.message };
@@ -163,6 +244,47 @@ function acaoEnviarCobrancas() {
     return enviarCobrancasPendentes();
   } catch (e) {
     return { sucesso: false, erro: 'Erro ao enviar cobranças: ' + e.message };
+  }
+}
+
+// Chamado pelo card "Enviar Acompanhamento" na aba Utilitarios > Classroom
+// (execucao manual, sob demanda — alem do gatilho semanal de sexta-feira as
+// 18h em AcompanhamentoSemanal.js). Envia a Mensagem 6 (quadro-resumo +
+// tabelas detalhadas da producao acumulada) a cada estagiario com matricula
+// ativa dentro da janela, e o consolidado a Thales ao final.
+function acaoEnviarAcompanhamentoSemanal() {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return enviarAcompanhamentoSemanal();
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao enviar acompanhamento semanal: ' + e.message };
+  }
+}
+
+// Chamado pelo modal "Enviar Relatório de Acompanhamento" (aba Utilitarios >
+// Relatório), ao abrir — lista os estagiarios elegiveis para a Mensagem 6
+// nesta data, para Thales escolher quais recebem.
+function acaoListarElegiveisAcompanhamentoSemanal() {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    return { sucesso: true, elegiveis: listarElegiveisAcompanhamentoSemanal() };
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao carregar estagiários elegíveis: ' + e.message };
+  }
+}
+
+// Chamado pelo botao "Enviar" do modal "Enviar Relatório de Acompanhamento"
+// — envia a Mensagem 6 somente para as matriculas marcadas (idsMatricula).
+function acaoEnviarAcompanhamentoSemanalSelecionados(idsMatricula) {
+  try {
+    var acesso = validarAcesso();
+    if (!acesso.autorizado) return { sucesso: false, erro: acesso.motivo };
+    if (!idsMatricula || !idsMatricula.length) return { sucesso: false, erro: 'Selecione ao menos um aluno.' };
+    return enviarAcompanhamentoSemanal(null, idsMatricula);
+  } catch (e) {
+    return { sucesso: false, erro: 'Erro ao enviar acompanhamento semanal: ' + e.message };
   }
 }
 

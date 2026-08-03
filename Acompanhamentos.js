@@ -37,6 +37,9 @@ function rowParaObjetoAcompanhamento(row, indice, feriadosTimestamps) {
     dfClass: formatarData(row[CONFIG.ACOMPANHAMENTOS_COL.DF_CLASS]), // data de entrega/dueDate real no Classroom, ver Classroom.js
     df: formatarData(dataEntrega), // reaproveita "df" (data de entrega)
     semestre: normalizarSemestreLido(row[CONFIG.ACOMPANHAMENTOS_COL.SEMESTRE]),
+    // Modelo de turmas v2 (01/08/2026): gravadas na criacao, lidas direto da linha.
+    idMatricula: String(row[CONFIG.ACOMPANHAMENTOS_COL.ID_MATRICULA] || '').trim(),
+    turma: String(row[CONFIG.ACOMPANHAMENTOS_COL.TURMA] || '').trim(),
     atraso: atrasoVal,
     prazoAtraso: formatarData(dfParaAtraso), // DF CLASS (com fallback para DATA_ENTREGA) usada no calculo de atraso — consumida pelas cobrancas, ver Mensagens.js
     gatilho: gatilhoVal // null | 'gatilho1' | 'gatilho2' | 'gatilho3'
@@ -68,10 +71,10 @@ function getTodosAcompanhamentos() {
 
 function getDadosAbaAcompanhamentos() {
   var acompanhamentos = getTodosAcompanhamentos();
-  // Anota reg.turma para alimentar o filtro de Turma da aba — ver
-  // Turma.js: anotarTurmaEmRegistros/criarResolvedorTurma (mesma tecnica
-  // ja usada em Panorama.js).
-  anotarTurmaEmRegistros(acompanhamentos, criarResolvedorTurma(), function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
+  // Modelo de turmas v2 (01/08/2026): reg.turma vem GRAVADO na linha (coluna
+  // TURMA da aba), materializado no momento da atribuicao. Nao ha mais
+  // resolucao em tempo de leitura — anotarTurmaEmRegistros/criarResolvedorTurma
+  // foram removidos de Turma.js.
 
   return {
     acompanhamentos: acompanhamentos,
@@ -155,7 +158,22 @@ function criarAcompanhamento(payload) {
 
   var feriados = lerFeriados();
   var dataEntrega = adicionarDiasUteis(hoje, prazoDias, feriados);
-  var semestre = calcularSemestre(dataEntrega);
+
+  // Modelo de turmas v2: a matricula e resolvida pela janela em que o
+  // acompanhamento nasce (data de entrega, com fallback para hoje quando o
+  // prazo atravessa o fim da turma). Nao ha seletor de turma neste fluxo — o
+  // acompanhamento e sempre criado dentro da turma corrente do aluno; uma
+  // eventual realocacao e feita depois, no modal de edicao (RN-T06).
+  var matricula = resolverMatriculaAtiva(emailEstagiario, dataEntrega) ||
+                  resolverMatriculaAtiva(emailEstagiario, hoje);
+  if (!matricula) {
+    return {
+      sucesso: false,
+      erro: 'Nao consegui identificar a turma de "' + estagiario +
+            '". Verifique se ele tem uma matricula ativa na aba estagiarios com a coluna TURMA preenchida.'
+    };
+  }
+  var semestre = extrairSemestreDaTurma(matricula.turma);
   var id = proximoNumeroAcompanhamento();
 
   // Ordem exata das colunas A:K.
@@ -174,12 +192,15 @@ function criarAcompanhamento(payload) {
   novaLinha[CONFIG.ACOMPANHAMENTOS_COL.DI_CLASS] = '';
   novaLinha[CONFIG.ACOMPANHAMENTOS_COL.DF_CLASS] = '';
   novaLinha[CONFIG.ACOMPANHAMENTOS_COL.DRIVE] = '';
+  novaLinha[CONFIG.ACOMPANHAMENTOS_COL.ID_MATRICULA] = matricula.idMatricula;
+  novaLinha[CONFIG.ACOMPANHAMENTOS_COL.TURMA] = matricula.turma;
 
   var proximaLinhaPlanilha = aba.getLastRow() + 1;
   // Forca a celula SEMESTRE como Texto simples antes de gravar — evita que o
   // Sheets reinterprete "2026.02" como uma data de verdade caso a coluna
   // esteja formatada como Data (ver normalizarSemestreLido em Data.js).
   aba.getRange(proximaLinhaPlanilha, CONFIG.ACOMPANHAMENTOS_COL.SEMESTRE + 1, 1, 1).setNumberFormat('@');
+  aba.getRange(proximaLinhaPlanilha, CONFIG.ACOMPANHAMENTOS_COL.ID_MATRICULA + 1, 1, 2).setNumberFormat('@');
   aba.getRange(proximaLinhaPlanilha, 1, 1, CONFIG.TOTAL_COLUNAS_ACOMPANHAMENTOS).setValues([novaLinha]);
 
   return { sucesso: true, id: id, linha: proximaLinhaPlanilha, dataEntrega: formatarData(dataEntrega) };

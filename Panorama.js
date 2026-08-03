@@ -57,7 +57,15 @@ function getTodosAtendimentos() {
       emprego: row[CONFIG.ATENDIMENTOS_COL.EMPREGO],
       ramo: row[CONFIG.ATENDIMENTOS_COL.RAMO],
       estagiario: nomeAluno,
-      semestre: normalizarSemestreLido(row[CONFIG.ATENDIMENTOS_COL.SEMESTRE])
+      // ALTERADO EM 02/08/2026: SEMESTRE e TURMA passaram a vir da propria
+      // planilha (colunas K e L, por formula). A inferencia por data foi
+      // removida — ela casava o aluno pelo nome e, para quem tinha uma unica
+      // matricula cadastrada, devolvia essa matricula qualquer que fosse a
+      // data, importando atendimentos de periodos anteriores para a turma
+      // atual. SEMESTRE_LEGADO (J) fica so como fallback de leitura.
+      semestre: normalizarSemestreLido(row[CONFIG.ATENDIMENTOS_COL.SEMESTRE]) ||
+                normalizarSemestreLido(row[CONFIG.ATENDIMENTOS_COL.SEMESTRE_LEGADO]),
+      turma: String(row[CONFIG.ATENDIMENTOS_COL.TURMA] || '').trim()
     });
   }
   return lista;
@@ -75,9 +83,12 @@ function getTodosAtendimentos() {
 // entram em nenhuma contagem (diligencias, iniciais e acompanhamentos);
 // atendimentos nao tem coluna STATUS, entao nao ha o que filtrar ali.
 //
-// A turma de cada registro e resolvida em tempo de leitura pelo
-// resolvedorTurma (registro -> aluno -> turma), evitando materializar a
-// coluna TURMA nas abas transacionais (decisao de arquitetura, 27/07/2026).
+// ALTERADO EM 01/08/2026 (modelo de turmas v2): a turma de cada registro vem
+// GRAVADA na propria linha (colunas ID_MATRICULA/TURMA), materializada no
+// momento da atribuicao. A resolucao em tempo de leitura foi eliminada — ela
+// custava DUAS leituras completas da aba estagiarios por estagiario agregado
+// (uma aqui, outra dentro de contarAudienciasPorTipo). Desde 02/08/2026 nao ha
+// mais excecao: `atendimentos` tambem traz a turma na propria linha.
 //
 // A logica de contagem propriamente dita mora em _contarProducaoComDados,
 // que recebe as 4 listas ja lidas — isso permite que getProducaoPorEstagiarios
@@ -106,47 +117,40 @@ function getContagemProducaoEstagiario(nomeEstagiario, turma) {
 // atendimentos nem entre si.
 function _contarProducaoComDados(nomeEstagiario, turma, diligencias, iniciais, atendimentos, acompanhamentos, atendimentosOnline, audienciasEstagiario, parametrosAudiencias) {
   var chaveNome = normalizarChave(nomeEstagiario);
-  var resolvedorTurma = criarResolvedorTurma();
 
   function naoCancelada(reg) { return normalizarChave(reg.status) !== 'cancelada'; }
 
-  // Resolve a turma de um registro a partir do nome/e-mail do aluno e da data
-  // de referencia apropriada para cada aba (decidido em 27/07/2026).
-  function turmaDoRegistro(chaveAluno, dataRef) {
-    return resolvedorTurma(chaveAluno, parseDataBR(dataRef));
+  // Modelo de turmas v2: reg.turma ja vem gravado em cada registro. O filtro e
+  // uma comparacao de string — sem resolucao, sem leitura de planilha.
+  function casaTurma(reg) {
+    return turmaCasaComFiltro(reg.turma, turma);
   }
 
-  function casaTurma(turmaRegistro) {
-    return turmaCasaComFiltro(turmaRegistro, turma);
-  }
-
-  // Diligencias: a turma de referencia para producao e a mesma usada no filtro
-  // do Panorama — ALTERADO EM (M) com fallback para DF (G).
   var diligenciasDoAluno = diligencias.filter(function(d) {
-    return normalizarChave(d.estagiario) === chaveNome && casaTurma(turmaDoRegistro(d.estagiario, d.alteradoEm || d.df)) && naoCancelada(d);
+    return normalizarChave(d.estagiario) === chaveNome && casaTurma(d) && naoCancelada(d);
   });
   var qtdSimples = diligenciasDoAluno.filter(function(d) { return normalizarChave(d.subespecie) === normalizarChave(CONFIG.SUBESPECIE_VALORES.SIMPLES); }).length;
   var qtdComplexasDiligencias = diligenciasDoAluno.filter(function(d) { return normalizarChave(d.subespecie) === normalizarChave(CONFIG.SUBESPECIE_VALORES.COMPLEXA); }).length;
 
   var qtdIniciais = iniciais.filter(function(ini) {
-    return normalizarChave(ini.estagiario) === chaveNome && casaTurma(turmaDoRegistro(ini.email || ini.estagiario, ini.di)) && naoCancelada(ini);
+    return normalizarChave(ini.estagiario) === chaveNome && casaTurma(ini) && naoCancelada(ini);
   }).length;
 
   var qtdComplexas = qtdComplexasDiligencias + qtdIniciais;
 
   var qtdAtendimentosPresenciais = atendimentos.filter(function(a) {
-    return normalizarChave(a.estagiario) === chaveNome && casaTurma(turmaDoRegistro(a.estagiario, a.data));
+    return normalizarChave(a.estagiario) === chaveNome && casaTurma(a);
   }).length;
 
   var qtdAtendimentosOnlineAprovados = (atendimentosOnline || []).filter(function(ao) {
-    return normalizarChave(ao.estagiario) === chaveNome && casaTurma(turmaDoRegistro(ao.email || ao.estagiario, ao.data)) &&
+    return normalizarChave(ao.estagiario) === chaveNome && casaTurma(ao) &&
       normalizarChave(ao.status) === normalizarChave(CONFIG.STATUS_ATENDIMENTO_ONLINE.APROVADO);
   }).length;
 
   var qtdAtendimentos = qtdAtendimentosPresenciais + qtdAtendimentosOnlineAprovados;
 
   var qtdAcompanhamentos = acompanhamentos.filter(function(c) {
-    return normalizarChave(c.estagiario) === chaveNome && casaTurma(turmaDoRegistro(c.email || c.estagiario, c.di)) && naoCancelada(c);
+    return normalizarChave(c.estagiario) === chaveNome && casaTurma(c) && naoCancelada(c);
   }).length;
 
   // audiencias: [{ tipo, meta, horas, realizado, faltante, percentual, excedente }],
@@ -219,31 +223,22 @@ function getPesosPontuacaoPanorama() {
 // tal como esta (ver preencherModalInicial em Scripts.html) e depende dessa
 // lista — que so seria carregada se a aba Iniciais tivesse sido aberta antes.
 //
-// Cada lista transacional recebe aqui a turma JA RESOLVIDA (registro ->
-// aluno -> turma, ver anotarTurmaEmRegistros/criarResolvedorTurma em
-// Turma.js) antes de seguir para o cliente — decisao de arquitetura,
-// 27/07/2026: o seletor hierarquico do Panorama (Scripts.html) filtra direto
-// em reg.turma, por REGISTRO, nunca por um conjunto de nomes/e-mails de
-// estagiarios (evita a dupla contagem quando um aluno tem duas linhas no
-// mesmo semestre — antecipado e regular).
+// Cada lista transacional chega ao cliente com reg.turma preenchido, lido da
+// propria linha (modelo de turmas v2, 01/08/2026). O seletor hierarquico do
+// Panorama (Scripts.html) filtra direto em reg.turma, por REGISTRO, nunca por
+// um conjunto de nomes/e-mails de estagiarios — e o que evita a dupla contagem
+// quando um aluno tem duas matriculas no mesmo semestre (antecipado e regular).
 function getDadosPanorama() {
   var diligencias = getTodasDiligencias();
   var iniciais = getTodasIniciais();
-  var atendimentos = getTodosAtendimentos();
   var acompanhamentos = getTodosAcompanhamentos(); // Acompanhamentos.js
   var atendimentosOnline = getTodosAtendimentosOnline(); // AtendimentoOnline.js
   var audienciasEstagiario = getTodasAudienciasEstagiario(); // AudienciasEstagiario.js
 
-  var resolvedorTurma = criarResolvedorTurma(); // Turma.js
-  // Resolucao de turma das diligencias: ALTERADO EM (M) com fallback para DF
-  // (G). As demais abas mantem suas datas de referencia proprias. A coluna
-  // SEMESTRE (R) das diligencias continua calculada a partir do DF.
-  anotarTurmaEmRegistros(diligencias, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.alteradoEm || r.df; });
-  anotarTurmaEmRegistros(iniciais, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
-  anotarTurmaEmRegistros(atendimentos, resolvedorTurma, function(r) { return r.estagiario; }, function(r) { return r.data; });
-  anotarTurmaEmRegistros(acompanhamentos, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.di; });
-  anotarTurmaEmRegistros(atendimentosOnline, resolvedorTurma, function(r) { return r.email || r.estagiario; }, function(r) { return r.data; });
-  anotarTurmaEmRegistros(audienciasEstagiario, resolvedorTurma, function(r) { return r.estagiario || r.email; }, function(r) { return r.data; });
+  // Modelo de turmas v2: TODAS as listas transacionais ja trazem reg.turma
+  // gravado na propria linha — inclusive `atendimentos`, desde 02/08/2026
+  // (coluna L, por formula). Nada a resolver aqui.
+  var atendimentos = getTodosAtendimentos();
 
   return {
     // getTodosEstagiariosParaCliente() (Turma.js), NUNCA getTodosEstagiariosCompletos()

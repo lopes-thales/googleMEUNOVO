@@ -34,6 +34,14 @@
       <span class="material-symbols-outlined"><?= ICONES.meusRegistros ?></span>
       Meus Registros
     </div>
+    <!-- Botao proprio (nao entra no dropdown "Registrar": imprimir nao e
+         registrar nada). Abre ?pagina=producao em aba nova — ver
+         paImprimirProducao em AlunoScripts.html. -->
+    <button class="btn-gerenciar btn-gerenciar-secundario" id="btnImprimirProducao" onclick="paImprimirProducao()" disabled title="Carregando...">
+      <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.imprimir ?></span>
+      Imprimir
+    </button>
+
     <div class="dropdown-gerenciar" id="paDropdownRegistrar">
       <button class="btn-gerenciar" id="btnPaRegistrar" onclick="paAlternarMenuRegistrar()">
         <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.gerenciar ?></span>
@@ -634,8 +642,8 @@
               <div class="modal-campo-valor" id="auViewData">—</div>
             </div>
             <div>
-              <div class="modal-campo-label">Hora</div>
-              <div class="modal-campo-valor" id="auViewHora">—</div>
+              <div class="modal-campo-label">Espécie</div>
+              <div class="modal-campo-valor" id="auViewEspecie">—</div>
             </div>
             <div>
               <div class="modal-campo-label">Vara</div>
@@ -668,16 +676,18 @@
                 <input type="date" class="modal-select" id="auEditData">
               </div>
             </div>
-            <div>
-              <div class="modal-campo-label">Hora</div>
-              <div class="modal-campo-editavel">
-                <input type="time" class="modal-select" id="auEditHora">
-              </div>
-            </div>
             <div style="grid-column: 1 / -1;">
               <div class="modal-campo-label">Tipo</div>
               <div class="modal-campo-editavel">
                 <select class="modal-select" id="auEditTipo">
+                  <option value="">— Selecione —</option>
+                </select>
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Espécie</div>
+              <div class="modal-campo-editavel">
+                <select class="modal-select" id="auEditEspecie">
                   <option value="">— Selecione —</option>
                 </select>
               </div>
@@ -741,16 +751,18 @@
                 <input type="date" class="modal-select" id="auNovaData">
               </div>
             </div>
-            <div>
-              <div class="modal-campo-label">Hora</div>
-              <div class="modal-campo-editavel">
-                <input type="time" class="modal-select" id="auNovaHora">
-              </div>
-            </div>
             <div style="grid-column: 1 / -1;">
               <div class="modal-campo-label">Tipo</div>
               <div class="modal-campo-editavel">
                 <select class="modal-select" id="auNovaTipo">
+                  <option value="">— Selecione —</option>
+                </select>
+              </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <div class="modal-campo-label">Espécie</div>
+              <div class="modal-campo-editavel">
+                <select class="modal-select" id="auNovaEspecie">
                   <option value="">— Selecione —</option>
                 </select>
               </div>
@@ -852,6 +864,15 @@
        Decisao de 25/07/2026. -->
   <script>
     var ICONES = <?!= obterMapaIcones() ?>;
+    // URL do proprio web app (ScriptApp.getService().getUrl(), definida em
+    // doGetPainelAluno — Code.js). Injetada aqui, e nao buscada via
+    // google.script.run, para que window.open aconteca DENTRO do clique e nao
+    // seja barrado como pop-up. Ver paImprimirProducao (AlunoScripts.html).
+    var URL_APP = '<?= urlApp ?>';
+    var ROTA_PRODUCAO = '<?= CONFIG.ROTA.VALOR_PRODUCAO ?>';
+    var ROTA_PARAM = '<?= CONFIG.ROTA.PARAM ?>';
+    var ROTA_PARAM_EMAIL = '<?= CONFIG.ROTA.PARAM_EMAIL ?>';
+    var ROTA_PARAM_TURMA = '<?= CONFIG.ROTA.PARAM_TURMA ?>';
   </script>
 
   <?!= include('AlunoScripts') ?>

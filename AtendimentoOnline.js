@@ -32,7 +32,11 @@ function rowParaObjetoAtendimentoOnline(row, indice) {
     status: String(row[CONFIG.ATENDIMENTO_ONLINE_COL.STATUS] || '').trim(),
     obsAprovacao: row[CONFIG.ATENDIMENTO_ONLINE_COL.OBS_APROVACAO],
     alteradoEm: formatarDataHora(row[CONFIG.ATENDIMENTO_ONLINE_COL.ALTERADO_EM]),
-    semestre: normalizarSemestreLido(row[CONFIG.ATENDIMENTO_ONLINE_COL.SEMESTRE])
+    semestre: normalizarSemestreLido(row[CONFIG.ATENDIMENTO_ONLINE_COL.SEMESTRE]),
+    // Modelo de turmas v2 (01/08/2026): gravadas na criacao, lidas direto da
+    // linha — o Panorama e o Painel Aluno filtram por reg.turma sem resolver nada.
+    idMatricula: String(row[CONFIG.ATENDIMENTO_ONLINE_COL.ID_MATRICULA] || '').trim(),
+    turma: String(row[CONFIG.ATENDIMENTO_ONLINE_COL.TURMA] || '').trim()
   };
 }
 
@@ -224,7 +228,19 @@ function criarAtendimentoOnline(payload, nomeEstagiario, emailEstagiario) {
   if (!aba) return { sucesso: false, erro: 'Aba atendimentos_online não encontrada.' };
 
   var id = proximoNumeroAtendimentoOnline();
-  var semestre = calcularSemestre(dataInformada);
+
+  // Modelo de turmas v2 (RN-T07): a matricula e resolvida no servidor pela
+  // janela em que o atendimento ocorreu — deterministico porque um aluno nunca
+  // tem duas matriculas ativas ao mesmo tempo (RN-T02). SEMESTRE passa a ser
+  // derivado da TURMA (RN-T08), nao mais calculado da data.
+  var matricula = resolverMatriculaAtiva(emailEstagiario || nomeEstagiario, dataInformada);
+  if (!matricula) {
+    return {
+      sucesso: false,
+      erro: 'Não identifiquei uma matrícula ativa na data deste atendimento. Procure o coordenador.'
+    };
+  }
+  var semestre = extrairSemestreDaTurma(matricula.turma);
   var agora = new Date();
 
   var novaLinha = [];
@@ -240,9 +256,12 @@ function criarAtendimentoOnline(payload, nomeEstagiario, emailEstagiario) {
   novaLinha[CONFIG.ATENDIMENTO_ONLINE_COL.OBS_APROVACAO] = '';
   novaLinha[CONFIG.ATENDIMENTO_ONLINE_COL.ALTERADO_EM] = agora;
   novaLinha[CONFIG.ATENDIMENTO_ONLINE_COL.SEMESTRE] = semestre;
+  novaLinha[CONFIG.ATENDIMENTO_ONLINE_COL.ID_MATRICULA] = matricula.idMatricula;
+  novaLinha[CONFIG.ATENDIMENTO_ONLINE_COL.TURMA] = matricula.turma;
 
   var proximaLinhaPlanilha = aba.getLastRow() + 1;
   aba.getRange(proximaLinhaPlanilha, CONFIG.ATENDIMENTO_ONLINE_COL.SEMESTRE + 1, 1, 1).setNumberFormat('@');
+  aba.getRange(proximaLinhaPlanilha, CONFIG.ATENDIMENTO_ONLINE_COL.ID_MATRICULA + 1, 1, 2).setNumberFormat('@');
   aba.getRange(proximaLinhaPlanilha, 1, 1, CONFIG.TOTAL_COLUNAS_ATENDIMENTO_ONLINE).setValues([novaLinha]);
 
   return { sucesso: true, id: id, linha: proximaLinhaPlanilha };
@@ -281,7 +300,12 @@ function reenviarAtendimentoOnline(payload, emailUsuario, ehThales) {
     return { sucesso: false, erro: 'Este registro não pertence a você.' };
   }
 
-  var semestre = calcularSemestre(dataInformada);
+  // Modelo de turmas v2: no REENVIO a matricula/turma do registro NAO e
+  // recalculada — ela e estatica desde a criacao, mesma decisao ja vigente
+  // para SEMESTRE. Corrigir um registro reprovado nao pode move-lo de turma.
+  var semestre = normalizarSemestreLido(
+    aba.getRange(linha, CONFIG.ATENDIMENTO_ONLINE_COL.SEMESTRE + 1).getValue()
+  );
   var agora = new Date();
 
   aba.getRange(linha, CONFIG.ATENDIMENTO_ONLINE_COL.ATENDIDO + 1).setValue(atendido);

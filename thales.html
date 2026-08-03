@@ -192,6 +192,10 @@
         <div class="distribuicao-rodape">
           <span class="distribuicao-contagem" id="distribuicaoContagemSelecionados"></span>
           <div class="distribuicao-botoes">
+            <button class="btn btn-secundario" id="btnAplicarTurmaTodos" onclick="distAplicarTurmaATodos()">
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.turma ?></span>
+              Aplicar turma a todos
+            </button>
             <button class="btn btn-salvar" id="btnSalvarDistribuicao" onclick="acaoSalvarDistribuicaoClique(false)" disabled>
               <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
               Salvar
@@ -441,7 +445,7 @@
               <thead>
                 <tr>
                   <th style="width:34px;"><input type="checkbox" id="checkTodosAU" onchange="alternarTodosAudiencias(this.checked)"></th>
-                  <th>ID</th><th>ESTAGIÁRIO(A)</th><th>DATA</th><th>HORA</th><th>TIPO</th>
+                  <th>ID</th><th>ESTAGIÁRIO(A)</th><th>DATA</th><th>ESPÉCIE</th><th>TIPO</th>
                   <th>VARA</th><th>PROCESSO</th><th>PARTES</th>
                 </tr>
               </thead>
@@ -674,6 +678,12 @@
                 </div>
                 <div class="util-card-label">Gerenciar Estagiários</div>
               </div>
+              <div class="util-card" id="cardGerarMatriculasEstagio" onclick="acaoGerarMatriculasEstagio()" title="Gera a Matrícula de Estágio (MAT-XXXX) das linhas de estagiarios que ainda estiverem sem — rede de segurança do preenchimento automático">
+                <div class="util-card-icone">
+                  <span class="material-symbols-outlined"><?= ICONES.turma ?></span>
+                </div>
+                <div class="util-card-label">Gerar Matrículas de Estágio</div>
+              </div>
               <div class="util-card" id="cardVerificarProtocolos" onclick="acaoVerificarProtocolosIniciais()">
                 <div class="util-card-icone">
                   <span class="material-symbols-outlined"><?= ICONES.verificarProtocolos ?></span>
@@ -702,6 +712,12 @@
                     <span class="material-symbols-outlined"><?= ICONES.cobrancas ?></span>
                   </div>
                   <div class="util-card-label">Enviar Cobranças</div>
+                </div>
+                <div class="util-card" id="cardEnviarAcompanhamento" onclick="acaoGerenciarEnviarAcompanhamento()" title="Enviar agora o acompanhamento semanal de produção a todos os estagiários com matrícula ativa">
+                  <div class="util-card-icone">
+                    <span class="material-symbols-outlined"><?= ICONES.acompanhamentoSemanal ?></span>
+                  </div>
+                  <div class="util-card-label">Enviar Acompanhamento</div>
                 </div>
                 <div class="util-card" id="cardTransferirAtividade" onclick="abrirModalTransferirBusca()">
                   <div class="util-card-icone">
@@ -764,7 +780,14 @@
                 <span class="material-symbols-outlined"><?= ICONES.relatorio ?></span>
                 Relatório
               </div>
-              <div class="utilitarios-cards"></div>
+              <div class="utilitarios-cards">
+                <div class="util-card" id="cardEnviarRelatorioAcompanhamento" onclick="abrirModalRelatorioAcompanhamento()" title="Escolher alunos e enviar agora o acompanhamento semanal de produção (Mensagem 6) para eles">
+                  <div class="util-card-icone">
+                    <span class="material-symbols-outlined"><?= ICONES.acompanhamentoSemanal ?></span>
+                  </div>
+                  <div class="util-card-label">Enviar Relatório</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -872,8 +895,16 @@
               <div>
                 <div class="modal-campo-label">Estagiário(a)</div>
                 <div class="modal-campo-editavel">
-                  <select class="modal-select" id="editEstagiario">
+                  <select class="modal-select" id="editEstagiario" onchange="editAoTrocarEstagiario()">
                     <option value="">— Não atribuído —</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div class="modal-campo-label">Turma</div>
+                <div class="modal-campo-editavel">
+                  <select class="modal-select" id="editTurma" disabled>
+                    <option value="">—</option>
                   </select>
                 </div>
               </div>
@@ -1119,8 +1150,8 @@
               <div class="modal-campo-valor" id="dauData">—</div>
             </div>
             <div>
-              <div class="modal-campo-label">Hora</div>
-              <div class="modal-campo-valor" id="dauHora">—</div>
+              <div class="modal-campo-label">Espécie</div>
+              <div class="modal-campo-valor" id="dauEspecie">—</div>
             </div>
             <div>
               <div class="modal-campo-label">Vara</div>
@@ -1406,6 +1437,38 @@
         <button class="btn btn-salvar" id="btnSalvarGerenciarEstagiarios" onclick="salvarGerenciarEstagiarios()">
           <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.salvar ?></span>
           Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ENVIAR RELATORIO DE ACOMPANHAMENTO (aba Utilitarios > Relatorio) -->
+  <div class="modal-overlay" id="modalRelatorioAcompanhamentoOverlay">
+    <div class="modal modal-estreito">
+      <div class="modal-header">
+        <div class="modal-processo">RELATÓRIO</div>
+        <div class="modal-assistido">Enviar Relatório</div>
+        <button class="modal-fechar" onclick="fecharModalRelatorioAcompanhamento()">
+          <span class="material-symbols-outlined" style="font-size:18px;"><?= ICONES.fechar ?></span>
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        <div class="modal-secao">
+          <p class="ge-instrucao">
+            Marque os alunos que devem receber agora o acompanhamento semanal de produção (Mensagem 6).
+          </p>
+          <div class="ge-lista" id="raListaAlunos">
+            <div class="ge-vazio" id="raCarregando">Carregando...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-cancelar" onclick="fecharModalRelatorioAcompanhamento()">Cancelar</button>
+        <button class="btn btn-salvar" id="btnEnviarRelatorioAcompanhamento" onclick="enviarRelatorioAcompanhamentoSelecionados()">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;"><?= ICONES.enviar ?></span>
+          Enviar
         </button>
       </div>
     </div>

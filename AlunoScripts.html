@@ -169,6 +169,102 @@ function paAcaoRegistrarEmBreve(nomeAcao) {
   mostrarToast(nomeAcao + ' — funcionalidade ainda em desenvolvimento.', '');
 }
 
+// === TABELA DE PRODUCAO (impressao) ===
+
+// RN-P10 — quando o botao "Imprimir" pode ficar ativo para o aluno em foco.
+//
+// Toda a regra ja veio decidida do servidor em PA.dados.liberacaoImpressao
+// (ver getLiberacaoImpressaoProducao, Producao.js): aqui so se escolhe, entre
+// as matriculas do aluno dentro do filtro corrente, se alguma esta liberada
+// (basta uma) e qual e a data mais proxima para o tooltip.
+//
+// Thales nunca e barrado — nem por esta funcao, nem no servidor.
+function paLiberacaoImpressao(alunoAtual) {
+  if (PA.tipo === 'thales') {
+    return { liberado: true, titulo: 'Imprimir a Tabela de Produção da turma selecionada' };
+  }
+  if (!alunoAtual) {
+    return { liberado: false, titulo: 'Selecione um aluno para imprimir.' };
+  }
+
+  var mapa = PA.dados.liberacaoImpressao || {};
+  var chaveEmail = normalizarChave(alunoAtual.email);
+  var linhas = (PA.dados.estagiarios || []).filter(function(e) {
+    return normalizarChave(e.email) === chaveEmail &&
+           turmaCasaComFiltroCliente(e.turma, PA.turmaFiltro);
+  });
+
+  var liberado = false;
+  var maisCedo = null;
+  var motivoSemData = '';
+
+  linhas.forEach(function(e) {
+    var info = mapa[e.idMatricula];
+    if (!info) return;
+    if (info.liberado) liberado = true;
+    if (info.ordem) {
+      if (!maisCedo || info.ordem < maisCedo.ordem) maisCedo = info;
+    } else if (!motivoSemData && info.motivo) {
+      motivoSemData = info.motivo;
+    }
+  });
+
+  if (liberado) {
+    return { liberado: true, titulo: 'Imprimir a Tabela de Produção da turma selecionada' };
+  }
+  if (maisCedo) {
+    return { liberado: false, titulo: 'Disponível a partir de ' + maisCedo.disponivelEm + '.' };
+  }
+  return {
+    liberado: false,
+    titulo: motivoSemData || 'A Tabela de Produção ainda não está disponível.'
+  };
+}
+
+// Abre ?pagina=producao em aba nova, com o MESMO recorte que esta na tela:
+// turma selecionada + aluno em foco (RN-P01, ver Producao.js).
+//
+// O window.open acontece de forma sincrona dentro do clique — a URL do web
+// app ja veio injetada em URL_APP na carga da pagina (PainelAluno.html). Uma
+// chamada google.script.run aqui tornaria a abertura assincrona e o navegador
+// a trataria como pop-up nao solicitado.
+//
+// Nenhum dado da tabela trafega por esta funcao: a pagina de destino e
+// montada inteiramente no servidor. O e-mail so vai na URL para o caso de
+// Thales imprimir a producao de um aluno; quando quem acessa e o proprio
+// estagiario, o servidor ignora o parametro e usa o e-mail logado. A RN-P10
+// tambem e reconferida la — o botao inativo aqui protege so a interface.
+function paImprimirProducao() {
+  var alunoAtual = paResolverAlunoAtual();
+  if (!alunoAtual) {
+    mostrarToast('Selecione um aluno antes de imprimir.', 'erro');
+    return;
+  }
+  if (!PA.turmaFiltro) {
+    mostrarToast('Selecione uma turma antes de imprimir.', 'erro');
+    return;
+  }
+  var liberacao = paLiberacaoImpressao(alunoAtual);
+  if (!liberacao.liberado) {
+    mostrarToast(liberacao.titulo, 'erro');
+    return;
+  }
+  if (!URL_APP) {
+    mostrarToast('Não foi possível localizar o endereço do painel.', 'erro');
+    return;
+  }
+
+  var url = URL_APP +
+    '?' + ROTA_PARAM + '=' + encodeURIComponent(ROTA_PRODUCAO) +
+    '&' + ROTA_PARAM_EMAIL + '=' + encodeURIComponent(alunoAtual.email) +
+    '&' + ROTA_PARAM_TURMA + '=' + encodeURIComponent(PA.turmaFiltro);
+
+  var aba = window.open(url, '_blank');
+  if (!aba) {
+    mostrarToast('Libere os pop-ups deste site para abrir a impressão.', 'erro');
+  }
+}
+
 // === ESTADO GLOBAL ===
 var PA = {
   tipo: '',
@@ -184,7 +280,9 @@ var PA = {
     atividadesElegiveisAO: [],
     audienciasEstagiario: [],
     parametrosAudiencias: [],
-    especiePicklistIniciais: []
+    especiePicklistIniciais: [],
+    especiePicklistAudiencias: [],
+    liberacaoImpressao: {}
   },
   avisoComprovanteAudiencia: '',
   // Valor de turma/semestre selecionado no seletor hierarquico: um codigo de
@@ -257,6 +355,8 @@ function paCarregarDados() {
       PA.dados.audienciasEstagiario = resultado.audienciasEstagiario || [];
       PA.dados.parametrosAudiencias = resultado.parametrosAudiencias || [];
       PA.dados.especiePicklistIniciais = resultado.especiePicklistIniciais || [];
+      PA.dados.especiePicklistAudiencias = resultado.especiePicklistAudiencias || [];
+      PA.dados.liberacaoImpressao = resultado.liberacaoImpressao || {};
       PA.avisoComprovanteAudiencia = resultado.avisoComprovanteAudiencia || '';
       PA.dados.turmaCorrente = resultado.turmaCorrente || '';
 
@@ -280,6 +380,8 @@ function paMostrarErroCarregamento(msg) {
   vazio.querySelector('.estado-vazio-titulo').textContent = 'Não foi possível carregar seus dados';
   vazio.querySelector('.estado-vazio-desc').textContent = msg || 'Tente recarregar a página.';
   document.getElementById('btnCriarPeticaoInicial').disabled = true;
+  var btnImprimir = document.getElementById('btnImprimirProducao');
+  if (btnImprimir) btnImprimir.disabled = true;
 }
 
 // === SELETORES DE TURMA / ALUNO ===
@@ -306,23 +408,86 @@ function turmaCasaComFiltroCliente(turma, filtro) {
   return t.indexOf(f + '-') === 0;
 }
 
-function paPopularSeletores() {
-  var wrapper = document.getElementById('paSeletores');
-  var estagiarios = PA.dados.estagiarios || [];
+// Fallback client-side de formatarRotuloMatricula (Turma.js) para o caso de o
+// payload nao trazer `rotulo` — degrada para o rotulo simples da turma.
+function rotuloTurmaCliente(codigo) {
+  var partes = String(codigo || '').split('-');
+  var r = rotulosTurma(partes[0] || '');
+  if (partes[1] === 'A') return r.antecipado;
+  if (partes[1] === 'R') return r.regular;
+  return r.todas;
+}
 
+// --- Seletor de turma: VISAO DO ALUNO ---
+// 02/08/2026 — correcao. A versao anterior derivava apenas o SEMESTRE BASE de
+// cada linha do aluno e emitia, para cada semestre, as 3 opcoes fixas
+// (Todas as turmas / Antecipado / Regular), independentemente de quais turmas
+// o aluno realmente cursou. Um aluno com duas matriculas (ex.: 2026.01-R e
+// 2026.02-R) via SEIS opcoes, quatro delas levando a uma tela vazia.
+//
+// Agora a lista vem das TURMAS de fato presentes em estagiarios!M para o
+// e-mail logado (o recorte por aluno ja e feito no servidor, ver
+// getEstagiariosVisiveisPainelAluno em Aluno.js). Decisoes de Thales:
+//   1) matricula unica -> seletor continua visivel, porem desabilitado;
+//   2) turma ainda nao iniciada aparece normalmente;
+//   3) padrao = matricula mais recente, mesmo que ainda nao iniciada
+//      (NAO usa turmaCorrente, que e global e pode nem estar na lista dele);
+//   5) "Todas as turmas" so entra em semestre com 2+ turmas do proprio aluno.
+// Devolve true se ha ao menos uma opcao.
+function paPopularSelectTurmaAluno(estagiarios) {
+  var rotuloPorTurma = {};
+  estagiarios.forEach(function(e) {
+    var t = String(e.turma || '').trim();
+    if (!t || rotuloPorTurma[t]) return;
+    rotuloPorTurma[t] = e.rotulo || rotuloTurmaCliente(t);
+  });
+
+  var turmas = Object.keys(rotuloPorTurma).sort().reverse();
+  if (!turmas.length) return false;
+
+  var turmasPorSemestre = {};
+  turmas.forEach(function(t) {
+    var sem = t.split('-')[0];
+    turmasPorSemestre[sem] = (turmasPorSemestre[sem] || 0) + 1;
+  });
+
+  var opcoes = [];
+  var semestreAnterior = null;
+  turmas.forEach(function(t) {
+    var sem = t.split('-')[0];
+    if (sem !== semestreAnterior) {
+      if (turmasPorSemestre[sem] > 1) {
+        opcoes.push({ valor: sem, rotulo: rotulosTurma(sem).todas });
+      }
+      semestreAnterior = sem;
+    }
+    opcoes.push({ valor: t, rotulo: rotuloPorTurma[t] });
+  });
+
+  var valoresValidos = opcoes.map(function(o) { return o.valor; });
+  if (valoresValidos.indexOf(PA.turmaFiltro) === -1) PA.turmaFiltro = turmas[0];
+
+  var selSem = document.getElementById('paSelectSemestre');
+  selSem.innerHTML = opcoes.map(function(o) {
+    return '<option value="' + o.valor + '">' + o.rotulo + '</option>';
+  }).join('');
+  selSem.value = PA.turmaFiltro;
+  selSem.disabled = (opcoes.length <= 1);
+
+  return true;
+}
+
+// --- Seletor de turma: VISAO DE THALES ---
+// Mantido exatamente como estava (decisao de Thales, item 6): ele navega por
+// todas as turmas, inclusive as que ainda nao tem aluno cadastrado.
+function paPopularSelectTurmaThales(estagiarios) {
   var semestresPresentes = {};
   estagiarios.forEach(function(e) {
     var sem = String(e.turma || '').split('-')[0];
     if (sem) semestresPresentes[sem] = true;
   });
   var semestres = Object.keys(semestresPresentes).sort().reverse();
-
-  if (!semestres.length) {
-    wrapper.style.display = 'none';
-    PA.turmaFiltro = '';
-    return;
-  }
-  wrapper.style.display = 'flex';
+  if (!semestres.length) return false;
 
   var valoresValidos = [];
   var htmlSem = '';
@@ -342,8 +507,27 @@ function paPopularSeletores() {
   var selSem = document.getElementById('paSelectSemestre');
   selSem.innerHTML = htmlSem;
   selSem.value = PA.turmaFiltro;
+  selSem.disabled = false;
 
+  return true;
+}
+
+function paPopularSeletores() {
+  var wrapper = document.getElementById('paSeletores');
+  var estagiarios = PA.dados.estagiarios || [];
   var mostrarAluno = (PA.tipo === 'thales');
+
+  var temOpcoes = mostrarAluno
+    ? paPopularSelectTurmaThales(estagiarios)
+    : paPopularSelectTurmaAluno(estagiarios);
+
+  if (!temOpcoes) {
+    wrapper.style.display = 'none';
+    PA.turmaFiltro = '';
+    return;
+  }
+  wrapper.style.display = 'flex';
+
   document.getElementById('paSepAluno').style.display = mostrarAluno ? 'inline-block' : 'none';
   document.getElementById('paIconeAluno').style.display = mostrarAluno ? 'inline' : 'none';
   document.getElementById('paLabelAluno').style.display = mostrarAluno ? 'inline' : 'none';
@@ -436,6 +620,15 @@ function paRenderizarTudo() {
   var alunoAtual = paResolverAlunoAtual();
   paAtualizarCabecalho(alunoAtual);
   document.getElementById('btnCriarPeticaoInicial').disabled = !alunoAtual;
+  // Mesmo criterio do botao de peticao: sem aluno em foco nao ha o que
+  // imprimir. Alem disso, para o aluno, vale a RN-P10 — o botao so destrava
+  // nos dias que antecedem o encerramento do estagio (ver paLiberacaoImpressao).
+  var btnImprimir = document.getElementById('btnImprimirProducao');
+  if (btnImprimir) {
+    var liberacao = paLiberacaoImpressao(alunoAtual);
+    btnImprimir.disabled = !alunoAtual || !liberacao.liberado;
+    btnImprimir.title = liberacao.titulo;
+  }
 
   if (!alunoAtual) {
     document.getElementById('paSemAluno').style.display = 'block';
@@ -698,7 +891,7 @@ function paRenderizarTabelas(alunoAtual) {
 
   // Audiências
   document.getElementById('paCabecalhoAudiencias').innerHTML =
-    '<tr><th>ID</th><th>DATA</th><th>HORA</th><th>TIPO</th><th>VARA</th><th>PROCESSO</th><th>PARTES</th><th>STATUS</th></tr>';
+    '<tr><th>ID</th><th>DATA</th><th>ESPÉCIE</th><th>TIPO</th><th>VARA</th><th>PROCESSO</th><th>PARTES</th><th>STATUS</th></tr>';
   var corpoAu = document.getElementById('paCorpoAudiencias');
   if (!PA._audienciasAtuais.length) {
     corpoAu.innerHTML = paCelulaVazia(8, 'Nenhuma audiência encontrada');
@@ -708,7 +901,7 @@ function paRenderizarTabelas(alunoAtual) {
       htmlAu += '<tr onclick="paAbrirModalDetalheAudiencia(' + idx + ')">' +
         '<td class="td-numero">' + (reg.id || '') + '</td>' +
         '<td>' + (reg.data || '') + '</td>' +
-        '<td>' + (reg.hora || '<span class="celula-vazio">—</span>') + '</td>' +
+        '<td>' + (reg.especie || '<span class="celula-vazio">—</span>') + '</td>' +
         '<td>' + (reg.tipo || '') + '</td>' +
         '<td>' + (reg.vara || '') + '</td>' +
         '<td class="td-processo">' + (reg.processo || '') + '</td>' +
@@ -1135,15 +1328,12 @@ function paAbrirModalNovaAudiencia() {
     return;
   }
 
-  // Mesma checagem de paSalvarNovaAudiencia — bloqueia mais cedo, antes de
-  // abrir o modal, quando "Todas as turmas" deixa o aluno em foco ambiguo
-  // (mais de uma matricula no mesmo semestre).
-  var linhasDoAluno = paAlunosDaTurma().filter(function(a) { return a.email === alunoAtual.email; });
-  if (linhasDoAluno.length > 1) {
-    mostrarToast('Você tem mais de uma matrícula neste semestre. Selecione a turma específica (Antecipado ou Regular) antes de registrar a audiência.', 'erro');
-    return;
-  }
-
+  // Modelo de turmas v2 (01/08/2026): a guarda de "mais de uma matricula neste
+  // semestre" foi REMOVIDA. Ela existia porque a audiencia precisava do par
+  // email+turma vindo do cliente para achar a linha exata de "estagiarios".
+  // Agora a matricula e resolvida no servidor pela data da audiencia
+  // (resolverMatriculaAtiva, Turma.js) — deterministico, ja que um aluno nunca
+  // tem duas matriculas ativas ao mesmo tempo (RN-T02).
   var parametros = PA.dados.parametrosAudiencias || [];
   if (!parametros.length) {
     mostrarToast('Nenhum tipo de audiência cadastrado. Procure o coordenador.', 'erro');
@@ -1151,8 +1341,8 @@ function paAbrirModalNovaAudiencia() {
   }
 
   paPopularSelectTipoAudiencia(document.getElementById('auNovaTipo'), '');
+  popularSelectSimples(document.getElementById('auNovaEspecie'), PA.dados.especiePicklistAudiencias, '', '— Selecione —');
   document.getElementById('auNovaData').value = '';
-  document.getElementById('auNovaHora').value = '';
   document.getElementById('auNovaVara').value = '';
   document.getElementById('auNovaProcesso').value = '';
   document.getElementById('auNovaPartes').value = '';
@@ -1177,27 +1367,16 @@ function paSalvarNovaAudiencia() {
     return;
   }
 
-  // A audiencia precisa ser gravada contra uma linha EXATA de "estagiarios"
-  // (RN-02 — SEMESTRE e ESTATICO, copiado da linha no momento da criacao).
-  // Com "Todas as turmas" selecionado, paResolverAlunoAtual() pode devolver a
-  // primeira linha do aluno (ambiguo se ele fez antecipado E regular no mesmo
-  // semestre) — nesse caso, exige que uma turma especifica seja escolhida no
-  // seletor antes de registrar, em vez de arriscar gravar na turma errada.
-  var linhasDoAluno = paAlunosDaTurma().filter(function(a) { return a.email === alunoAtual.email; });
-  if (linhasDoAluno.length > 1) {
-    mostrarToast('Você tem mais de uma matrícula neste semestre. Selecione a turma específica (Antecipado ou Regular) antes de registrar a audiência.', 'erro');
-    return;
-  }
-
+  // Modelo de turmas v2: o payload NAO manda mais a turma. O servidor resolve
+  // a matricula pela data informada da audiencia (RN-T07).
   var payload = {
     data: document.getElementById('auNovaData').value,
-    hora: document.getElementById('auNovaHora').value,
     tipo: document.getElementById('auNovaTipo').value,
+    especie: document.getElementById('auNovaEspecie').value,
     vara: document.getElementById('auNovaVara').value,
     processo: document.getElementById('auNovaProcesso').value,
     partes: document.getElementById('auNovaPartes').value,
     obs: document.getElementById('auNovaObs').value,
-    turma: linhasDoAluno[0].turma,
     emailAluno: alunoAtual.email
   };
 
@@ -1257,8 +1436,8 @@ function paAbrirModalDetalheAudiencia(idx) {
     document.getElementById('auViewSomenteLeitura').style.display = 'none';
     document.getElementById('auEditWrapper').style.display = 'block';
     document.getElementById('auEditData').value = '';
-    document.getElementById('auEditHora').value = '';
     paPopularSelectTipoAudiencia(document.getElementById('auEditTipo'), reg.tipo);
+    popularSelectSimples(document.getElementById('auEditEspecie'), PA.dados.especiePicklistAudiencias, reg.especie || '', '— Selecione —');
     document.getElementById('auEditVara').value = reg.vara || '';
     document.getElementById('auEditProcesso').value = reg.processo || '';
     document.getElementById('auEditPartes').value = reg.partes || '';
@@ -1271,7 +1450,7 @@ function paAbrirModalDetalheAudiencia(idx) {
   } else {
     document.getElementById('auViewSomenteLeitura').style.display = 'block';
     document.getElementById('auViewData').textContent = reg.data || '—';
-    document.getElementById('auViewHora').textContent = reg.hora || '—';
+    document.getElementById('auViewEspecie').textContent = reg.especie || '—';
     document.getElementById('auViewVara').textContent = reg.vara || '—';
     document.getElementById('auViewProcesso').textContent = reg.processo || '—';
     document.getElementById('auViewPartes').textContent = reg.partes || '—';
@@ -1290,8 +1469,8 @@ function paReenviarAudiencia() {
   var payload = {
     _linha: reg._linha,
     data: document.getElementById('auEditData').value,
-    hora: document.getElementById('auEditHora').value,
     tipo: document.getElementById('auEditTipo').value,
+    especie: document.getElementById('auEditEspecie').value,
     vara: document.getElementById('auEditVara').value,
     processo: document.getElementById('auEditProcesso').value,
     partes: document.getElementById('auEditPartes').value,

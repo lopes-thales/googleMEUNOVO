@@ -90,12 +90,18 @@ var APP = {
   dfDe: '',
   dfAte: '',
   turmaFiltro: '',
+  // 02/08/2026: marca que o filtro de Turma desta aba ja recebeu o valor
+  // padrao (a turma corrente) na primeira carga. Depois disso a escolha do
+  // usuario manda — inclusive se ele voltar para "— Todas as turmas —".
+  // Ver aplicarTurmaPadraoUmaVez().
+  turmaPadraoAplicado: false,
   ordenacao: { coluna: 'id', direcao: 'asc' },
   paginaAtual: 1,
   itensPorPagina: 20,
   dados: {
     diligencias: [],
     estagiarios: [],
+    turmaCorrente: '',
     picklists: { status: [], vara: [], especie: [], complexas: [] },
     iniciais: [],
     acompanhamentos: [],
@@ -526,6 +532,53 @@ function notificarNovosAtendimentosOnline(mensagemBase, tipoBase) {
     .carregarDadosAprovacaoAtendimentoOnline();
 }
 
+// Card "Enviar Acompanhamento" (Utilitarios > Classroom). Dispara sob demanda
+// a Mensagem 6 — a mesma que o gatilho semanal de sexta-feira as 18h envia
+// (ver enviarAcompanhamentoSemanal, AcompanhamentoSemanal.js). Mesmo padrao
+// visual de acaoGerenciarEnviarCobrancas abaixo: o card entra em estado
+// "carregando" e o rotulo vira "Enviando...".
+function acaoGerenciarEnviarAcompanhamento() {
+  var card = document.getElementById('cardEnviarAcompanhamento');
+  if (!card || card.classList.contains('carregando')) return;
+
+  card.classList.add('carregando');
+  var labelEl = card.querySelector('.util-card-label');
+  var labelOriginal = labelEl.textContent;
+  labelEl.textContent = 'Enviando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+
+      if (!res.sucesso) {
+        mostrarToast(res.erro || 'Erro ao enviar o acompanhamento semanal.', 'erro');
+        return;
+      }
+
+      var totalEnviados = (res.enviados || []).length;
+      var totalErros = (res.erros || []).length;
+
+      if (totalEnviados === 0 && totalErros === 0) {
+        mostrarToast(res.mensagem || 'Nenhum estagiário elegível nesta data.', '');
+      } else if (totalErros === 0) {
+        mostrarToast('Acompanhamento enviado a ' + totalEnviados + ' estagiário(s).', 'sucesso');
+      } else if (totalEnviados === 0) {
+        mostrarToast('Falha ao enviar para ' + totalErros + ' estagiário(s). Veja o console.', 'erro');
+        console.error('Erros no acompanhamento semanal:', res.erros);
+      } else {
+        mostrarToast(totalEnviados + ' enviado(s), ' + totalErros + ' com erro. Veja o console.', '');
+        console.error('Erros no acompanhamento semanal:', res.erros);
+      }
+    })
+    .withFailureHandler(function(err) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      mostrarToast('Erro ao enviar o acompanhamento semanal: ' + err.message, 'erro');
+    })
+    .acaoEnviarAcompanhamentoSemanal();
+}
+
 function acaoGerenciarEnviarCobrancas() {
   var card = document.getElementById('cardEnviarCobrancas');
   if (!card || card.classList.contains('carregando')) return;
@@ -639,6 +692,8 @@ function carregarDados() {
         return;
       }
       APP.dados = resultado;
+      // 02/08/2026: filtro de Turma ja abre na turma corrente (uma vez so).
+      aplicarTurmaPadraoUmaVez(APP);
       popularSelectTurma();
       mostrarLoading(false);
       renderizarCards();
@@ -785,7 +840,7 @@ function getRegistrosFiltrados() {
   }
 
   if (APP.turmaFiltro) {
-    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP.turmaFiltro); });
+    lista = lista.filter(function(r) { return registroPassaFiltroTurma(r.turma, APP.turmaFiltro); });
   }
 
   lista = lista.slice().sort(function(a, b) {
@@ -832,7 +887,7 @@ function normalizar(str) {
 // Semestre (removido em 30/07/2026 por decisao de Thales — redundante com
 // a opcao "semestre — Todas as turmas" deste seletor).
 function popularSelectTurma() {
-  popularSelectTurmaGenerico('selectTurma', APP.dados.diligencias, APP.turmaFiltro);
+  popularSelectTurmaGenerico('selectTurma', APP.dados.diligencias, APP.turmaFiltro, APP.dados.turmaCorrente);
 }
 
 function mudarTurma(valor) {
@@ -949,7 +1004,7 @@ function contarPorClassificacao(lista) {
 function renderizarCards() {
   var lista = APP.dados.diligencias || [];
   if (APP.turmaFiltro) {
-    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP.turmaFiltro); });
+    lista = lista.filter(function(r) { return registroPassaFiltroTurma(r.turma, APP.turmaFiltro); });
   }
   var c = contarPorClassificacao(lista);
 
@@ -1288,7 +1343,68 @@ function preencherEdicaoModal(reg) {
     if (this.value && !selectStatus.value) {
       selectStatus.value = 'Encaminhado';
     }
+    editAoTrocarEstagiario();
   };
+
+  // Modelo de turmas v2 (01/08/2026): campo Turma do modal. Trocar a turma de
+  // um registro ja distribuido e permitido (RN-T06) e passa pela mesma
+  // validacao de DF Real do servidor (RN-T05).
+  editPopularSelectTurma(reg.turma);
+}
+
+// Popula o select de Turma do modal com as matriculas do estagiario que estiver
+// selecionado, desabilitando as turmas cuja DATA_INICIO seja posterior a DF Real
+// do registro. `turmaAtual` preserva a turma ja gravada no registro.
+function editPopularSelectTurma(turmaAtual) {
+  var selectTurma = document.getElementById('editTurma');
+  if (!selectTurma) return;
+
+  var nome = document.getElementById('editEstagiario').value;
+  var reg = APP.registroAtual;
+  var tsDfReal = reg ? distDataParaTs(reg.dfReal) : null;
+  var matriculas = distMatriculasDoAluno(nome);
+
+  selectTurma.innerHTML = '';
+  selectTurma.disabled = !nome;
+
+  if (!nome) {
+    selectTurma.appendChild(new Option('— Não atribuído —', ''));
+    return;
+  }
+
+  if (matriculas.length === 0) {
+    // Pode acontecer com registro historico cujo aluno ja foi finalizado: a
+    // turma gravada continua valendo e e mantida como unica opcao.
+    selectTurma.appendChild(new Option(turmaAtual || 'sem matrícula ativa', turmaAtual || ''));
+    selectTurma.disabled = true;
+    return;
+  }
+
+  selectTurma.appendChild(new Option('— Selecionar —', ''));
+
+  var achouAtual = false;
+  matriculas.forEach(function(m) {
+    var tsInicio = distDataParaTs(m.dataInicio);
+    var bloqueada = (tsDfReal === null) || (tsInicio !== null && tsDfReal < tsInicio);
+    var opt = new Option(m.rotulo + (bloqueada ? ' (DF Real anterior ao início)' : ''), m.turma);
+    // A turma ja gravada nunca e bloqueada — senao seria impossivel reabrir e
+    // salvar um registro antigo sem troca-lo de turma.
+    if (m.turma === turmaAtual) { bloqueada = false; achouAtual = true; }
+    opt.disabled = bloqueada;
+    selectTurma.appendChild(opt);
+  });
+
+  if (turmaAtual && !achouAtual) {
+    selectTurma.appendChild(new Option(turmaAtual + ' (turma atual)', turmaAtual));
+  }
+
+  if (turmaAtual) selectTurma.value = turmaAtual;
+}
+
+// Chamado quando o estagiario muda no modal: repovoa o select de Turma e limpa
+// a selecao anterior (a turma de um aluno nao vale para outro).
+function editAoTrocarEstagiario() {
+  editPopularSelectTurma('');
 }
 
 function fecharModal() {
@@ -1343,6 +1459,7 @@ function salvarModal() {
   var payload = {
     _linha: reg._linha,
     estagiario: document.getElementById('editEstagiario').value,
+    turma: document.getElementById('editTurma') ? document.getElementById('editTurma').value : '',
     status: normalizarStatusParaUI(document.getElementById('editStatus').value),
     obs: document.getElementById('editObs').value,
     comentario: document.getElementById('editComentario').value,
@@ -1382,6 +1499,12 @@ function salvarModal() {
           r.obs        = payload.obs;
           r.comentario = payload.comentario;
           r.alteradoEm = res.alteradoEm;
+          // Modelo de turmas v2: a turma/matricula/semestre devolvidos pelo
+          // servidor sao a verdade — o filtro de Turma da aba passa a refletir
+          // a troca imediatamente, sem esperar o recarregamento.
+          r.turma       = res.turma;
+          r.idMatricula = res.idMatricula;
+          r.semestre    = res.semestre;
         }
       });
       fecharModal();
@@ -1475,13 +1598,14 @@ function renderizarTabelaDistribuicao() {
       '<th>DF REAL</th>' +
       '<th>DF</th>' +
       '<th>ESTAGIÁRIO(A)</th>' +
+      '<th>TURMA</th>' +
     '</tr>';
 
   var corpo = document.getElementById('tabelaCorpoDistribuicao');
 
   if (lista.length === 0) {
     corpo.innerHTML =
-      '<tr><td colspan="10">' +
+      '<tr><td colspan="11">' +
         '<div class="estado-vazio">' +
           '<span class="material-symbols-outlined">' + ICONES.semPendencias + '</span>' +
           '<div class="estado-vazio-titulo">Nenhum registro pendente</div>' +
@@ -1506,8 +1630,13 @@ function renderizarTabelaDistribuicao() {
       '<td>' + (reg.dfReal || '<span class="celula-vazio">—</span>') + '</td>' +
       '<td>' + (reg.df || '<span class="celula-vazio">—</span>') + '</td>' +
       '<td>' +
-        '<select class="select-inline-tabela" id="distEst_' + reg._linha + '" onchange="atualizarContagemDistribuicao()" onclick="event.stopPropagation()">' +
+        '<select class="select-inline-tabela" id="distEst_' + reg._linha + '" onchange="distAoTrocarEstagiario(' + reg._linha + ')" onclick="event.stopPropagation()">' +
           '<option value="">— Selecionar —</option>' +
+        '</select>' +
+      '</td>' +
+      '<td>' +
+        '<select class="select-inline-tabela" id="distTurma_' + reg._linha + '" onchange="atualizarContagemDistribuicao()" onclick="event.stopPropagation()" disabled>' +
+          '<option value="">—</option>' +
         '</select>' +
       '</td>' +
     '</tr>';
@@ -1525,6 +1654,129 @@ function renderizarTabelaDistribuicao() {
   atualizarContagemDistribuicao();
 }
 
+// --- Selecao de turma na Distribuicao (modelo de turmas v2, 01/08/2026) ---
+//
+// A turma deixou de ser inferida no servidor e passou a ser escolhida aqui,
+// explicitamente. E este o momento em que a decisao "esta diligencia de junho
+// vai contar para o antecipado de julho" e registrada (RN-T04).
+//
+// As opcoes vem de APP.dados.matriculas — mapa { chaveNome: [matriculas] }
+// devolvido por getDadosIniciais (Data.js). Turmas cuja DATA_INICIO seja
+// posterior a DF Real do registro aparecem DESABILITADAS (RN-T05); a validacao
+// definitiva continua no servidor, esta e so a dica visual.
+
+// Normalizacao equivalente a normalizarChave (Data.js) — mesma chave usada
+// pelo servidor para montar o mapa de matriculas.
+function distChaveNome(valor) {
+  return String(valor || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+// Converte "dd/MM/yyyy" em timestamp de data pura. Retorna null se invalida.
+function distDataParaTs(texto) {
+  var m = String(texto || '').split(' ')[0].trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  var d = new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+function distMatriculasDoAluno(nome) {
+  var mapa = (APP.dados && APP.dados.matriculas) || {};
+  return mapa[distChaveNome(nome)] || [];
+}
+
+// Repovoa o select de turma de UMA linha quando o estagiario dela muda.
+function distAoTrocarEstagiario(linhaRegistro) {
+  var selectEst = document.getElementById('distEst_' + linhaRegistro);
+  var selectTurma = document.getElementById('distTurma_' + linhaRegistro);
+  if (!selectEst || !selectTurma) return;
+
+  var nome = selectEst.value;
+  var matriculas = distMatriculasDoAluno(nome);
+
+  var reg = getRegistrosFiltradosDistribuicao().filter(function(r) {
+    return r._linha === linhaRegistro;
+  })[0];
+  var tsDfReal = reg ? distDataParaTs(reg.dfReal) : null;
+
+  selectTurma.innerHTML = '';
+  selectTurma.disabled = !nome;
+
+  if (!nome) {
+    selectTurma.appendChild(new Option('—', ''));
+    atualizarContagemDistribuicao();
+    return;
+  }
+
+  if (matriculas.length === 0) {
+    selectTurma.appendChild(new Option('sem matrícula ativa', ''));
+    selectTurma.disabled = true;
+    atualizarContagemDistribuicao();
+    return;
+  }
+
+  selectTurma.appendChild(new Option('— Selecionar —', ''));
+
+  var primeiraValida = '';
+  matriculas.forEach(function(m) {
+    var tsInicio = distDataParaTs(m.dataInicio);
+    var bloqueada = (tsDfReal === null) || (tsInicio !== null && tsDfReal < tsInicio);
+    var opt = new Option(m.rotulo + (bloqueada ? ' (DF Real anterior ao início)' : ''), m.turma);
+    opt.disabled = bloqueada;
+    selectTurma.appendChild(opt);
+    if (!bloqueada && !primeiraValida) primeiraValida = m.turma;
+  });
+
+  // Pre-seleciona a unica opcao valida — o caso comum, em que a diligencia
+  // fica na turma corrente do aluno e nao ha decisao a tomar.
+  if (primeiraValida) selectTurma.value = primeiraValida;
+
+  atualizarContagemDistribuicao();
+}
+
+// Aplica a turma escolhida na primeira linha preenchida a TODAS as demais
+// linhas que tenham essa turma disponivel e valida. Atalho para o caso comum
+// de um lote inteiro ir para a mesma turma.
+function distAplicarTurmaATodos() {
+  var lista = getRegistrosFiltradosDistribuicao();
+  var referencia = '';
+
+  for (var i = 0; i < lista.length && !referencia; i++) {
+    var sel = document.getElementById('distTurma_' + lista[i]._linha);
+    if (sel && sel.value) referencia = sel.value;
+  }
+
+  if (!referencia) {
+    mostrarToast('Escolha a turma em uma das linhas primeiro.', 'alerta');
+    return;
+  }
+
+  var aplicadas = 0;
+  var ignoradas = 0;
+
+  lista.forEach(function(reg) {
+    var sel = document.getElementById('distTurma_' + reg._linha);
+    if (!sel || sel.disabled) return;
+    var opcao = null;
+    for (var j = 0; j < sel.options.length; j++) {
+      if (sel.options[j].value === referencia) { opcao = sel.options[j]; break; }
+    }
+    if (!opcao) return;
+    if (opcao.disabled) { ignoradas++; return; }
+    sel.value = referencia;
+    aplicadas++;
+  });
+
+  atualizarContagemDistribuicao();
+
+  var msg = aplicadas + ' linha(s) com a turma aplicada';
+  if (ignoradas > 0) msg += '. ' + ignoradas + ' ignorada(s) por DF Real anterior ao início da turma';
+  mostrarToast(msg + '.', ignoradas > 0 ? 'alerta' : 'sucesso');
+}
+
 // Habilita/desabilita os botoes de rodape e mostra quantos registros ja tem
 // um estagiario escolhido na tela (ainda nao salvo).
 function atualizarContagemDistribuicao() {
@@ -1533,7 +1785,7 @@ function atualizarContagemDistribuicao() {
   var elContagem = document.getElementById('distribuicaoContagemSelecionados');
   if (elContagem) {
     elContagem.textContent = selecionados > 0
-      ? selecionados + ' registro(s) com estagiário selecionado'
+      ? selecionados + ' registro(s) com estagiário e turma selecionados'
       : '';
   }
 
@@ -1550,8 +1802,13 @@ function coletarSelecionadosDistribuicao() {
   var selecionados = [];
   lista.forEach(function(reg) {
     var select = document.getElementById('distEst_' + reg._linha);
+    var selectTurma = document.getElementById('distTurma_' + reg._linha);
     var valor = select ? select.value : '';
-    if (valor) selecionados.push({ _linha: reg._linha, id: reg.id, estagiario: valor });
+    var turma = selectTurma ? selectTurma.value : '';
+    // Modelo de turmas v2: uma linha so entra no payload com estagiario E
+    // turma escolhidos — nao ha mais inferencia no servidor para cobrir a
+    // ausencia da turma.
+    if (valor && turma) selecionados.push({ _linha: reg._linha, id: reg.id, estagiario: valor, turma: turma });
   });
   return selecionados;
 }
@@ -1563,7 +1820,7 @@ function coletarSelecionadosDistribuicao() {
 function acaoSalvarDistribuicaoClique(enviar) {
   var selecionados = coletarSelecionadosDistribuicao();
   if (selecionados.length === 0) {
-    mostrarToast('Selecione ao menos um estagiário antes de salvar.', 'alerta');
+    mostrarToast('Selecione o estagiário e a turma de ao menos um registro antes de salvar.', 'alerta');
     return;
   }
 
@@ -1645,6 +1902,7 @@ var APP_INICIAIS = {
   dfDe: '',
   dfAte: '',
   turmaFiltro: '',
+  turmaPadraoAplicado: false, // ver aplicarTurmaPadraoUmaVez (02/08/2026)
   ordenacao: { coluna: 'id', direcao: 'asc' },
   paginaAtual: 1,
   itensPorPagina: 20,
@@ -1666,6 +1924,8 @@ function carregarAbaIniciais() {
       }
       APP.dados.iniciais = resultado.iniciais || [];
       APP.dados.statusPicklist = resultado.statusPicklist || [];
+      // 02/08/2026: filtro de Turma ja abre na turma corrente (uma vez so).
+      aplicarTurmaPadraoUmaVez(APP_INICIAIS);
       popularSelectTurmaIniciais();
       renderizarCardsIniciais();
       renderizarTabelaIniciais();
@@ -1707,7 +1967,7 @@ function getRegistrosFiltradosIniciais() {
   }
 
   if (APP_INICIAIS.turmaFiltro) {
-    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP_INICIAIS.turmaFiltro); });
+    lista = lista.filter(function(r) { return registroPassaFiltroTurma(r.turma, APP_INICIAIS.turmaFiltro); });
   }
 
   lista = lista.slice().sort(function(a, b) {
@@ -1720,7 +1980,7 @@ function getRegistrosFiltradosIniciais() {
 function renderizarCardsIniciais() {
   var lista = APP.dados.iniciais || [];
   if (APP_INICIAIS.turmaFiltro) {
-    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP_INICIAIS.turmaFiltro); });
+    lista = lista.filter(function(r) { return registroPassaFiltroTurma(r.turma, APP_INICIAIS.turmaFiltro); });
   }
   var c = contarPorClassificacao(lista);
 
@@ -1881,7 +2141,7 @@ function irPaginaIniciais(n) {
 }
 
 function popularSelectTurmaIniciais() {
-  popularSelectTurmaGenerico('selectTurmaIniciais', APP.dados.iniciais, APP_INICIAIS.turmaFiltro);
+  popularSelectTurmaGenerico('selectTurmaIniciais', APP.dados.iniciais, APP_INICIAIS.turmaFiltro, APP.dados.turmaCorrente);
 }
 
 function mudarTurmaIniciais(valor) {
@@ -2068,6 +2328,7 @@ var APP_ACOMPANHAMENTOS = {
   dfDe: '',
   dfAte: '',
   turmaFiltro: '',
+  turmaPadraoAplicado: false, // ver aplicarTurmaPadraoUmaVez (02/08/2026)
   ordenacao: { coluna: 'id', direcao: 'asc' },
   paginaAtual: 1,
   itensPorPagina: 20,
@@ -2088,6 +2349,8 @@ function carregarAbaAcompanhamentos() {
       }
       APP.dados.acompanhamentos = resultado.acompanhamentos || [];
       APP.dados.statusPicklist = resultado.statusPicklist || [];
+      // 02/08/2026: filtro de Turma ja abre na turma corrente (uma vez so).
+      aplicarTurmaPadraoUmaVez(APP_ACOMPANHAMENTOS);
       popularSelectTurmaAcompanhamentos();
       renderizarCardsAcompanhamentos();
       renderizarTabelaAcompanhamentos();
@@ -2129,7 +2392,7 @@ function getRegistrosFiltradosAcompanhamentos() {
   }
 
   if (APP_ACOMPANHAMENTOS.turmaFiltro) {
-    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP_ACOMPANHAMENTOS.turmaFiltro); });
+    lista = lista.filter(function(r) { return registroPassaFiltroTurma(r.turma, APP_ACOMPANHAMENTOS.turmaFiltro); });
   }
 
   lista = lista.slice().sort(function(a, b) {
@@ -2142,7 +2405,7 @@ function getRegistrosFiltradosAcompanhamentos() {
 function renderizarCardsAcompanhamentos() {
   var lista = APP.dados.acompanhamentos || [];
   if (APP_ACOMPANHAMENTOS.turmaFiltro) {
-    lista = lista.filter(function(r) { return turmaCasaComFiltroCliente(r.turma, APP_ACOMPANHAMENTOS.turmaFiltro); });
+    lista = lista.filter(function(r) { return registroPassaFiltroTurma(r.turma, APP_ACOMPANHAMENTOS.turmaFiltro); });
   }
   var c = contarPorClassificacao(lista);
 
@@ -2301,7 +2564,7 @@ function irPaginaAcompanhamentos(n) {
 }
 
 function popularSelectTurmaAcompanhamentos() {
-  popularSelectTurmaGenerico('selectTurmaAcompanhamentos', APP.dados.acompanhamentos, APP_ACOMPANHAMENTOS.turmaFiltro);
+  popularSelectTurmaGenerico('selectTurmaAcompanhamentos', APP.dados.acompanhamentos, APP_ACOMPANHAMENTOS.turmaFiltro, APP.dados.turmaCorrente);
 }
 
 function mudarTurmaAcompanhamentos(valor) {
@@ -3016,7 +3279,7 @@ function renderizarFilaAudiencias() {
       '<td class="td-numero" onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.id || '') + '</td>' +
       '<td class="td-assistido" onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.estagiario || '') + '</td>' +
       '<td onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.data || '') + '</td>' +
-      '<td onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.hora || '') + '</td>' +
+      '<td onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.especie || '') + '</td>' +
       '<td onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.tipo || '') + '</td>' +
       '<td onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.vara || '') + '</td>' +
       '<td class="td-processo" onclick="abrirModalDetalheAUPendente(' + reg._linha + ')">' + (reg.processo || '') + '</td>' +
@@ -3180,7 +3443,7 @@ function abrirModalDetalheAU(reg, somenteLeitura) {
   document.getElementById('dauBadge').innerHTML = badgeStatusAudiencia(reg.status);
   document.getElementById('dauEstagiario').textContent = reg.estagiario || '—';
   document.getElementById('dauData').textContent = reg.data || '—';
-  document.getElementById('dauHora').textContent = reg.hora || '—';
+  document.getElementById('dauEspecie').textContent = reg.especie || '—';
   document.getElementById('dauVara').textContent = reg.vara || '—';
   document.getElementById('dauProcesso').textContent = reg.processo || '—';
   document.getElementById('dauPartes').textContent = reg.partes || '—';
@@ -3665,6 +3928,40 @@ function turmaCasaComFiltroCliente(turma, filtro) {
   return t.indexOf(f + '-') === 0;
 }
 
+// Variante usada pelos FILTROS DE LISTAGEM das abas Diligencias, Iniciais e
+// Acompanhamentos (tabela e cards). Difere de turmaCasaComFiltroCliente em um
+// unico ponto: um registro SEM TURMA gravada passa por qualquer filtro.
+//
+// Motivo (decisao de Thales, 02/08/2026): um registro sem turma nao e "de
+// outra turma" — e um registro ainda nao atribuido. Como o filtro de Turma
+// passou a vir preenchido por padrao com a turma corrente, o comportamento
+// literal esconderia a fila de distribuicao logo na abertura do painel e
+// zeraria o card SEM ESTAGIARIO, que e justamente o alarme visual da aba.
+//
+// turmaCasaComFiltroCliente continua intocada porque o Panorama depende do
+// casamento estrito (um aluno sem turma nao pode aparecer na lista de alunos
+// de uma turma).
+function registroPassaFiltroTurma(turmaRegistro, filtro) {
+  if (!String(turmaRegistro || '').trim()) return true;
+  return turmaCasaComFiltroCliente(turmaRegistro, filtro);
+}
+
+// Aplica a turma corrente (APP.dados.turmaCorrente, vindo de obterTurmaCorrente
+// em Turma.js) como valor inicial do filtro de Turma de uma aba, UMA UNICA VEZ
+// por sessao. `estado` e o objeto de estado da aba (APP, APP_INICIAIS ou
+// APP_ACOMPANHAMENTOS).
+//
+// Se turmaCorrente ainda nao estiver disponivel (payload inicial nao chegou),
+// a flag NAO e marcada — assim a proxima carga da aba tenta de novo, em vez de
+// consumir a unica chance com string vazia.
+function aplicarTurmaPadraoUmaVez(estado) {
+  if (estado.turmaPadraoAplicado) return;
+  var corrente = (APP.dados && APP.dados.turmaCorrente) ? String(APP.dados.turmaCorrente) : '';
+  if (!corrente) return;
+  estado.turmaPadraoAplicado = true;
+  estado.turmaFiltro = corrente;
+}
+
 // Popula um select de Turma HIERARQUICO (Todas as turmas / Antecipado /
 // Regular para cada semestre presente em reg.turma de `lista`), a exemplo
 // de popularSelectTurmaPanorama logo abaixo — usado pelas abas Diligencias/
@@ -3681,13 +3978,26 @@ function turmaCasaComFiltroCliente(turma, filtro) {
 // Ao contrario de popularSelectTurmaPanorama, aqui a opcao em branco
 // ("— Todas as turmas —", sem filtro algum, todos os semestres) continua
 // disponivel e e o valor padrao — nao ha selecao obrigatoria.
-function popularSelectTurmaGenerico(selectId, lista, valorAtual) {
+//
+// 02/08/2026: `turmaGarantida` (a turma corrente) e o proprio `valorAtual`
+// tem o seu semestre injetado na lista de semestres mesmo que nenhum registro
+// carregado pertenca a ele. Sem isso, uma turma recem-aberta — ainda sem
+// nenhuma diligencia/inicial/acompanhamento — nao geraria opcao alguma e o
+// select cairia silenciosamente para "— Todas as turmas —", contrariando o
+// padrao. Decisao de Thales: forcar a opcao e mostrar a tabela vazia (filtro
+// honesto) em vez de trocar o filtro por baixo do usuario.
+function popularSelectTurmaGenerico(selectId, lista, valorAtual, turmaGarantida) {
   var select = document.getElementById(selectId);
   if (!select) return;
 
   var semestresPresentes = {};
   (lista || []).forEach(function(r) {
     var sem = String(r.turma || '').split('-')[0];
+    if (sem) semestresPresentes[sem] = true;
+  });
+
+  [turmaGarantida, valorAtual].forEach(function(codigo) {
+    var sem = String(codigo || '').split('-')[0];
     if (sem) semestresPresentes[sem] = true;
   });
 
@@ -4278,6 +4588,53 @@ function acaoPreencherSemestre() {
     .acaoPreencherSemestre();
 }
 
+// Modelo de turmas v2 (01/08/2026): rede de seguranca do preenchimento
+// automatico da MATRICULA_ESTAGIO (estagiarios!N). O caminho normal e o
+// gatilho onEdit, que gera o MAT-XXXX assim que o NOME e digitado; este card
+// cobre linhas coladas em lote ou criadas antes deste modelo existir.
+// Quando nao ha nada pendente, informa isso explicitamente em vez de fingir
+// que algo foi feito.
+function acaoGerarMatriculasEstagio() {
+  var card = document.getElementById('cardGerarMatriculasEstagio');
+  if (!card || card.classList.contains('carregando')) return;
+
+  card.classList.add('carregando');
+  var labelEl = card.querySelector('.util-card-label');
+  var labelOriginal = labelEl.textContent;
+  labelEl.textContent = 'Aguarde...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+
+      if (!res || res.sucesso === false) {
+        mostrarToast((res && res.erro) || 'Erro ao gerar matrículas de estágio.', 'erro');
+        return;
+      }
+
+      if (res.gerados === 0) {
+        mostrarToast('Nenhuma pendência: as ' + res.total + ' matrículas de estágio já estão preenchidas.', '');
+        return;
+      }
+
+      mostrarToast(res.gerados + ' matrícula(s) de estágio gerada(s).', 'sucesso');
+      // Recarrega o mapa nome -> matriculas para que os selects de Turma da
+      // Distribuicao e do modal enxerguem as linhas recem-identificadas.
+      google.script.run
+        .withSuccessHandler(function(dados) {
+          if (dados && dados.mapa) APP.dados.matriculas = dados.mapa;
+        })
+        .getMapaMatriculas();
+    })
+    .withFailureHandler(function(err) {
+      card.classList.remove('carregando');
+      labelEl.textContent = labelOriginal;
+      mostrarToast('Erro ao gerar matrículas de estágio: ' + err.message, 'erro');
+    })
+    .acaoGerarMatriculasEstagio();
+}
+
 function acaoPreencherDfFinal() {
   var card = document.getElementById('cardPreencherDfFinal');
   if (!card || card.classList.contains('carregando')) return;
@@ -4570,6 +4927,110 @@ function salvarGerenciarEstagiarios() {
       mostrarToast('Erro: ' + err.message, 'erro');
     })
     .acaoFinalizarEstagiarios(ids);
+}
+
+// === ENVIAR RELATORIO DE ACOMPANHAMENTO (botao "Enviar Relatório de Acompanhamento", aba Utilitarios > Relatório) ===
+var APP_RELATORIO_ACOMPANHAMENTO = {
+  lista: []
+};
+
+function abrirModalRelatorioAcompanhamento() {
+  document.getElementById('modalRelatorioAcompanhamentoOverlay').classList.add('visivel');
+
+  var listaEl = document.getElementById('raListaAlunos');
+  listaEl.innerHTML = '<div class="ge-vazio" id="raCarregando">Carregando...</div>';
+
+  var btnEnviar = document.getElementById('btnEnviarRelatorioAcompanhamento');
+  btnEnviar.disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btnEnviar.disabled = false;
+      if (!res || !res.sucesso) {
+        listaEl.innerHTML = '<div class="ge-vazio">' + ((res && res.erro) || 'Erro ao carregar alunos.') + '</div>';
+        return;
+      }
+      APP_RELATORIO_ACOMPANHAMENTO.lista = res.elegiveis || [];
+      renderizarListaRelatorioAcompanhamento();
+    })
+    .withFailureHandler(function(err) {
+      btnEnviar.disabled = false;
+      listaEl.innerHTML = '<div class="ge-vazio">Erro: ' + err.message + '</div>';
+    })
+    .acaoListarElegiveisAcompanhamentoSemanal();
+}
+
+function renderizarListaRelatorioAcompanhamento() {
+  var listaEl = document.getElementById('raListaAlunos');
+  var lista = APP_RELATORIO_ACOMPANHAMENTO.lista;
+
+  if (!lista.length) {
+    listaEl.innerHTML = '<div class="ge-vazio">Nenhum aluno elegível nesta data.</div>';
+    return;
+  }
+
+  var html = '';
+  lista.forEach(function(e) {
+    var idEscapado = String(e.idMatricula).replace(/"/g, '&quot;');
+    html += '<label class="ge-item">' +
+      '<input type="checkbox" class="ra-checkbox" value="' + idEscapado + '">' +
+      '<span class="ge-item-nome">' + (e.nome || '') + '</span>' +
+      '</label>';
+  });
+  listaEl.innerHTML = html;
+}
+
+function fecharModalRelatorioAcompanhamento() {
+  document.getElementById('modalRelatorioAcompanhamentoOverlay').classList.remove('visivel');
+}
+
+document.getElementById('modalRelatorioAcompanhamentoOverlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalRelatorioAcompanhamento();
+});
+
+function enviarRelatorioAcompanhamentoSelecionados() {
+  var checkboxes = document.querySelectorAll('#raListaAlunos .ra-checkbox:checked');
+  var ids = Array.prototype.map.call(checkboxes, function(cb) { return cb.value; });
+
+  if (ids.length === 0) {
+    mostrarToast('Marque ao menos um aluno para enviar.', 'alerta');
+    return;
+  }
+
+  var btnEnviar = document.getElementById('btnEnviarRelatorioAcompanhamento');
+  btnEnviar.disabled = true;
+  btnEnviar.innerHTML = 'Enviando...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btnEnviar.disabled = false;
+      btnEnviar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.enviar + '</span> Enviar';
+
+      if (!res || !res.sucesso) {
+        mostrarToast((res && res.erro) || 'Erro ao enviar o relatório de acompanhamento.', 'erro');
+        return;
+      }
+
+      var totalEnviados = (res.enviados || []).length;
+      var totalErros = (res.erros || []).length;
+
+      if (totalErros === 0) {
+        mostrarToast('Acompanhamento enviado a ' + totalEnviados + ' aluno(s).', 'sucesso');
+      } else if (totalEnviados === 0) {
+        mostrarToast('Falha ao enviar para ' + totalErros + ' aluno(s). Veja o console.', 'erro');
+        console.error('Erros no envio seletivo do acompanhamento semanal:', res.erros);
+      } else {
+        mostrarToast(totalEnviados + ' enviado(s), ' + totalErros + ' com erro. Veja o console.', '');
+        console.error('Erros no envio seletivo do acompanhamento semanal:', res.erros);
+      }
+      fecharModalRelatorioAcompanhamento();
+    })
+    .withFailureHandler(function(err) {
+      btnEnviar.disabled = false;
+      btnEnviar.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + ICONES.enviar + '</span> Enviar';
+      mostrarToast('Erro ao enviar o relatório de acompanhamento: ' + err.message, 'erro');
+    })
+    .acaoEnviarAcompanhamentoSemanalSelecionados(ids);
 }
 
 // --- Modal generico de resultado (reaproveitavel por qualquer acao de Utilitarios) ---

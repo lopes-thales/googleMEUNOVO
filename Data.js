@@ -146,7 +146,12 @@ function rowParaObjeto(row, indice, feriadosTimestamps) {
     atraso: atrasoVal,
     prazoAtraso: formatarData(dfParaAtraso), // DF CLASS (com fallback para DF) usada no calculo de atraso — consumida pelas cobrancas, ver Mensagens.js
     gatilho: gatilhoVal, // null | 'gatilho1' | 'gatilho2' | 'gatilho3'
-    semestre: normalizarSemestreLido(row[CONFIG.COL.SEMESTRE]) // fonte unica do semestre do registro — nao e mais recalculado ao vivo a partir de DF
+    semestre: normalizarSemestreLido(row[CONFIG.COL.SEMESTRE]), // derivado da TURMA na gravacao (RN-T08)
+    // Modelo de turmas v2 (01/08/2026): a turma vem GRAVADA na linha, nao e
+    // mais resolvida em tempo de leitura. O frontend filtra direto em
+    // reg.turma; idMatricula e a chave forte usada pelo modal de edicao.
+    idMatricula: String(row[CONFIG.COL.ID_MATRICULA] || '').trim(),
+    turma: String(row[CONFIG.COL.TURMA] || '').trim()
     // ADV e SINC nunca sao enviados ao frontend
   };
 }
@@ -211,10 +216,15 @@ function getTodasDiligencias() {
 }
 
 // --- Escrita ---
-// Campos editaveis pelo painel: estagiario, status, obs, comentario, especie,
-// vara. alteradoEm, semestre e subespecie sao sempre recalculados
-// automaticamente no servidor (subespecie nunca e recebida do frontend, so
-// calculada).
+// Campos editaveis pelo painel: estagiario, turma, status, obs, comentario,
+// especie, vara. alteradoEm, semestre, subespecie e idMatricula sao sempre
+// calculados no servidor (nunca recebidos prontos do frontend).
+//
+// ALTERADO EM 01/08/2026 (modelo de turmas v2): o modal passa a receber
+// payload.turma. Trocar a turma aqui e permitido (RN-T06) e submetido a mesma
+// validacao da Distribuicao (RN-T05: a DF Real nao pode ser anterior ao inicio
+// da turma escolhida, e nao pode estar vazia). SEMESTRE deixou de ser
+// calculado a partir do DF e passou a ser derivado da TURMA (RN-T08).
 function salvarEdicaoDiligencia(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName(CONFIG.SHEET_DILIGENCIAS);
@@ -228,12 +238,36 @@ function salvarEdicaoDiligencia(payload) {
   var statusAnterior = aba.getRange(linha, CONFIG.COL.STATUS + 1).getValue();
   var novoStatus = String(payload.status || '').trim();
   var novoAtraso = calcularAtraso(resolverDfParaAtraso(dfClassAtual, dfAtual), novoStatus);
-  var novoSemestre = calcularSemestre(dfAtual);
   var novaEspecie = payload.especie || '';
   var novaSubespecie = calcularSubespecie(novaEspecie); // sempre calculada, nunca vem do payload
   var agora = new Date();
 
-  aba.getRange(linha, CONFIG.COL.ESTAGIARIO + 1).setValue(payload.estagiario || '');
+  var novoEstagiario = String(payload.estagiario || '').trim();
+  var novaTurma = String(payload.turma || '').trim();
+  var idMatriculaAtual = String(aba.getRange(linha, CONFIG.COL.ID_MATRICULA + 1).getValue() || '').trim();
+  var turmaAtual = String(aba.getRange(linha, CONFIG.COL.TURMA + 1).getValue() || '').trim();
+  var novoSemestre = normalizarSemestreLido(aba.getRange(linha, CONFIG.COL.SEMESTRE + 1).getValue());
+  var novoIdMatricula = idMatriculaAtual;
+
+  // Um registro sem estagiario nao tem matricula: limpa as duas colunas.
+  if (!novoEstagiario) {
+    novoIdMatricula = '';
+    novaTurma = '';
+    novoSemestre = '';
+  } else if (novoEstagiario && novaTurma && (novaTurma !== turmaAtual || !idMatriculaAtual)) {
+    // Atribuicao nova ou troca de turma: valida antes de gravar qualquer coisa
+    // (RN-T05/RN-T06). Nada e escrito na linha se a validacao falhar.
+    var dfRealAtual = aba.getRange(linha, CONFIG.COL.DF_REAL + 1).getValue();
+    var atribuicao = resolverAtribuicao(novoEstagiario, novaTurma, dfRealAtual);
+    if (!atribuicao.ok) return { sucesso: false, erro: atribuicao.erro };
+    novoIdMatricula = atribuicao.idMatricula;
+    novaTurma = atribuicao.turma;
+    novoSemestre = atribuicao.semestre;
+  } else if (novaTurma) {
+    novoSemestre = extrairSemestreDaTurma(novaTurma);
+  }
+
+  aba.getRange(linha, CONFIG.COL.ESTAGIARIO + 1).setValue(novoEstagiario);
   aba.getRange(linha, CONFIG.COL.STATUS + 1).setValue(novoStatus);
   aba.getRange(linha, CONFIG.COL.OBS + 1).setValue(payload.obs || '');
   aba.getRange(linha, CONFIG.COL.COMENTARIO + 1).setValue(payload.comentario || '');
@@ -241,7 +275,9 @@ function salvarEdicaoDiligencia(payload) {
   aba.getRange(linha, CONFIG.COL.SUBESPECIE + 1).setValue(novaSubespecie);
   aba.getRange(linha, CONFIG.COL.VARA + 1).setValue(payload.vara || '');
   aba.getRange(linha, CONFIG.COL.ALTERADO_EM + 1).setValue(agora);
-  aba.getRange(linha, CONFIG.COL.SEMESTRE + 1).setValue(novoSemestre);
+  aba.getRange(linha, CONFIG.COL.ID_MATRICULA + 1).setNumberFormat('@').setValue(novoIdMatricula);
+  aba.getRange(linha, CONFIG.COL.TURMA + 1).setNumberFormat('@').setValue(novaTurma);
+  aba.getRange(linha, CONFIG.COL.SEMESTRE + 1).setNumberFormat('@').setValue(novoSemestre);
 
   var secretaria = null;
   if (normalizarChave(novoStatus) === 'protocolado' && normalizarChave(statusAnterior) !== 'protocolado') {
@@ -264,6 +300,8 @@ function salvarEdicaoDiligencia(payload) {
     subespecie: novaSubespecie,
     alteradoEm: formatarDataHora(agora),
     semestre: novoSemestre,
+    turma: novaTurma,
+    idMatricula: novoIdMatricula,
     secretaria: secretaria,
     geral: geral
   };
@@ -413,7 +451,21 @@ function criarPedidoAluno(payload) {
   var feriados = lerFeriados();
   var df = adicionarDiasUteis(hoje, prazoDias, feriados);
   var subespecie = calcularSubespecie(especie);
-  var semestre = calcularSemestre(df);
+
+  // Modelo de turmas v2 (01/08/2026): a matricula e resolvida pela janela em
+  // que o registro nasce — primeiro pela DF calculada, e se ela cair fora de
+  // qualquer janela (prazo que atravessa o fim da turma), pela data de hoje.
+  // Nao ha validacao de RN-T05 aqui porque o registro nasce sem DF Real; a
+  // realocacao entre turmas e uma decisao da Distribuicao/modal de edicao.
+  var matricula = resolverMatriculaAtiva(estagiario, df) || resolverMatriculaAtiva(estagiario, hoje);
+  if (!matricula) {
+    return {
+      sucesso: false,
+      erro: 'Nao consegui identificar a turma de "' + estagiario +
+            '". Verifique se ele tem uma matricula ativa na aba estagiarios com a coluna TURMA preenchida.'
+    };
+  }
+  var semestre = extrairSemestreDaTurma(matricula.turma);
   var id = proximoNumeroPedidoAluno();
 
   // Ordem exata das colunas A:V. ADV (H) = CONFIG.NOME_USUARIO neste fluxo
@@ -445,13 +497,15 @@ function criarPedidoAluno(payload) {
   novaLinha[CONFIG.COL.DI_CLASS] = '';
   novaLinha[CONFIG.COL.DF_CLASS] = '';
   novaLinha[CONFIG.COL.COMENTARIO] = '';
+  novaLinha[CONFIG.COL.ID_MATRICULA] = matricula.idMatricula;
+  novaLinha[CONFIG.COL.TURMA] = matricula.turma;
 
   var proximaLinhaPlanilha = aba.getLastRow() + 1;
   aba.getRange(proximaLinhaPlanilha, 1, 1, CONFIG.TOTAL_COLUNAS_DILIGENCIAS).setValues([novaLinha]);
 
   var geral = sincronizarLinhaParaGeral(proximaLinhaPlanilha);
 
-  return { sucesso: true, id: id, linha: proximaLinhaPlanilha, df: formatarData(df) };
+  return { sucesso: true, id: id, linha: proximaLinhaPlanilha, df: formatarData(df), turma: matricula.turma };
 }
 
 // --- Transferir Atividade (dropdown Gerenciar) ---
@@ -531,7 +585,20 @@ function transferirDiligencia(payload) {
   var novaDf = payload.novaDf ? new Date(payload.novaDf + 'T00:00:00') : dfOriginal;
   if (isNaN(novaDf.getTime())) return { sucesso: false, erro: 'DF inválida.' };
 
-  var novoSemestre = calcularSemestre(novaDf);
+  // Modelo de turmas v2: a linha nova pertence a matricula do NOVO estagiario
+  // na janela da nova DF. Sem isso a transferencia herdaria (via slice) a
+  // matricula do estagiario ANTIGO, jogando a producao na turma errada.
+  var matriculaNova = resolverMatriculaAtiva(novoEstagiario, novaDf) ||
+                      resolverMatriculaAtiva(novoEstagiario, new Date());
+  if (!matriculaNova) {
+    return {
+      sucesso: false,
+      erro: 'Nao consegui identificar a turma de "' + novoEstagiario +
+            '". Verifique se ele tem uma matricula ativa na aba estagiarios com a coluna TURMA preenchida.'
+    };
+  }
+
+  var novoSemestre = extrairSemestreDaTurma(matriculaNova.turma);
   var agora = new Date();
 
   // 1) Nova linha para o novo estagiario.
@@ -551,6 +618,8 @@ function transferirDiligencia(payload) {
   // Classroom, no passo 3 abaixo.
   novaLinha[CONFIG.COL.DI_CLASS] = '';
   novaLinha[CONFIG.COL.DF_CLASS] = '';
+  novaLinha[CONFIG.COL.ID_MATRICULA] = matriculaNova.idMatricula;
+  novaLinha[CONFIG.COL.TURMA] = matriculaNova.turma;
 
   var proximaLinhaPlanilha = aba.getLastRow() + 1;
   aba.getRange(proximaLinhaPlanilha, 1, 1, CONFIG.TOTAL_COLUNAS_DILIGENCIAS).setValues([novaLinha]);
@@ -631,18 +700,27 @@ function transferirDiligencia(payload) {
 
 function getDadosIniciais() {
   var diligencias = getTodasDiligencias();
-  // Anota reg.turma (registro -> aluno -> turma) para alimentar o filtro de
-  // Turma da aba Diligencias — mesma tecnica ja usada em Panorama.js
-  // (ver Turma.js: anotarTurmaEmRegistros/criarResolvedorTurma).
-  // Decisao de Thales: a data de referencia para resolver a turma de uma
-  // diligencia e o ALTERADO EM (coluna M), com fallback para o DF (coluna G)
-  // quando M estiver vazio. A coluna SEMESTRE (R) continua calculada a partir
-  // do DF.
-  anotarTurmaEmRegistros(diligencias, criarResolvedorTurma(), function(r) { return r.estagiario; }, function(r) { return r.alteradoEm || r.df; });
+  // Modelo de turmas v2 (01/08/2026): reg.turma vem GRAVADO na coluna AA da
+  // aba diligencias, materializada na atribuicao (Distribuicao/modal de
+  // edicao). A resolucao em tempo de leitura foi eliminada — nao havia como
+  // manter estavel uma classificacao que dependia do ALTERADO EM, um campo
+  // reescrito a cada salvamento.
 
   return {
     diligencias: diligencias,
     estagiarios: getEstagiarios(),
-    picklists: getPicklists()
+    picklists: getPicklists(),
+    // Modelo de turmas v2: mapa nome -> matriculas nao finalizadas, usado pelo
+    // select de Turma da Distribuicao e pelo campo Turma do modal de edicao.
+    // Vem junto da carga inicial para evitar uma chamada por linha; quando a
+    // lista de estagiarios muda, o frontend recarrega via getMapaMatriculas().
+    matriculas: mapaMatriculasNaoFinalizadas(),
+    // 02/08/2026: TURMA ativa hoje (obterTurmaCorrente, Turma.js). Usada pelo
+    // frontend como valor PADRAO dos filtros de Turma das abas Diligencias,
+    // Iniciais e Acompanhamentos na primeira carga de cada aba (decisao de
+    // Thales: turma especifica, ex. "2026.02-R", nao o semestre inteiro).
+    // Panorama nao consome este campo — ja recebe o seu proprio turmaCorrente
+    // por getDadosPanorama (Panorama.js).
+    turmaCorrente: obterTurmaCorrente()
   };
 }

@@ -78,21 +78,26 @@ function getDadosAbaDistribuicao() {
 
 // --- Gravacao ---
 // payload = {
-//   registros: [ { _linha, id, estagiario }, ... ],  // somente linhas com estagiario escolhido
+//   registros: [ { _linha, id, estagiario, turma }, ... ],  // somente linhas com estagiario E turma escolhidos
 //   enviarClassroom: boolean
 // }
+//
+// ALTERADO EM 01/08/2026 (modelo de turmas v2): a turma deixou de ser inferida
+// em tempo de leitura e passou a ser ESCOLHIDA aqui, explicitamente, junto com
+// o estagiario. E este o momento em que a decisao "esta diligencia de junho vai
+// contar para o antecipado de julho" e registrada (RN-T04) — antes ela era um
+// efeito colateral da data usada na inferencia. A gravacao passa a incluir
+// ID_MATRICULA (coluna Z, chave forte) e TURMA (coluna AA, espelho legivel), e
+// e BLOQUEADA quando a DF REAL do registro e anterior ao inicio da turma
+// escolhida ou esta vazia (RN-T05, ver validarTurmaParaRegistro em Turma.js).
 //
 // Passo 1 (sempre): grava ESTAGIARIO, muda STATUS para "Encaminhado" e
 // atualiza ALTERADO_EM para cada linha valida — mesma decisao de Thales que
 // ja existe no modal de edicao de Diligencia (escolher estagiario com status
 // vazio -> "Encaminhado"; aqui e sempre aplicado, pois a fila da aba
-// Distribuição so contem registros fora dos status finais). Tambem calcula e
-// grava SEMESTRE a partir do DF (coluna G) quando a celula ainda esta vazia —
-// esta e, na pratica, a unica chance que muitos registros desta fila tem de
-// receber um SEMESTRE, ja que podem nunca passar pelo modal de edicao (que e
-// o outro unico lugar que grava essa coluna). Sem isso o registro fica
-// distribuido corretamente mas nunca aparece no Panorama, que filtra
-// diligencias por igualdade exata de SEMESTRE.
+// Distribuição so contem registros fora dos status finais). Tambem grava
+// ID_MATRICULA, TURMA e SEMESTRE — este ultimo agora DERIVADO da turma
+// escolhida (RN-T08), nao mais calculado a partir do DF.
 //
 // Passo 2 (somente se enviarClassroom = true): cria a atividade no Classroom
 // para cada linha salva com sucesso no passo 1, seguindo exatamente a mesma
@@ -125,35 +130,45 @@ function salvarDistribuicao(payload) {
   var salvos = [];
   var erros = [];
 
+  // Lista de matriculas lida UMA vez para todo o lote — resolverAtribuicao
+  // aceita a lista pronta justamente para nao reler a aba estagiarios por
+  // registro (era um dos custos do modelo antigo).
+  var matriculas = getTodosEstagiariosComTurma();
+
   validos.forEach(function(it) {
     var linha = parseInt(it._linha, 10);
     try {
       var estagiario = String(it.estagiario).trim();
+      var turmaEscolhida = String(it.turma || '').trim();
+
+      // RN-T05: a validacao usa a DF REAL da PLANILHA, nunca um valor vindo
+      // do cliente. Bloqueia quando a DF Real e anterior ao inicio da turma
+      // escolhida e tambem quando ela esta vazia.
+      var dfRealAtual = aba.getRange(linha, CONFIG.COL.DF_REAL + 1).getValue();
+      var atribuicao = resolverAtribuicao(estagiario, turmaEscolhida, dfRealAtual, matriculas);
+      if (!atribuicao.ok) {
+        erros.push({ _linha: linha, id: it.id || '', erro: atribuicao.erro });
+        return;
+      }
 
       aba.getRange(linha, CONFIG.COL.ESTAGIARIO + 1).setValue(estagiario);
       aba.getRange(linha, CONFIG.COL.STATUS + 1).setValue('Encaminhado');
       aba.getRange(linha, CONFIG.COL.ALTERADO_EM + 1).setValue(agora);
 
-      // A fila de Distribuição contém registros que, até este ponto, podem
-      // nunca ter passado pelo modal de edição (unico outro lugar que grava
-      // SEMESTRE em diligencias) — sem isso a linha fica com SEMESTRE vazio
-      // para sempre e nunca aparece no Panorama, mesmo com ESTAGIARIO
-      // preenchido. So calcula se a celula ainda estiver vazia, para nao
-      // sobrescrever um SEMESTRE ja gravado manualmente por Thales.
+      // Materializacao da matricula (modelo v2). Escrita SEMPRE, inclusive
+      // sobrescrevendo valores anteriores: a distribuicao e o momento em que a
+      // decisao e tomada, e trocar a turma aqui deve refletir na planilha.
+      aba.getRange(linha, CONFIG.COL.ID_MATRICULA + 1).setNumberFormat('@').setValue(atribuicao.idMatricula);
+      aba.getRange(linha, CONFIG.COL.TURMA + 1).setNumberFormat('@').setValue(atribuicao.turma);
+
+      // SEMESTRE derivado da TURMA (RN-T08), nao mais calculado a partir do DF.
       var semestreCelula = aba.getRange(linha, CONFIG.COL.SEMESTRE + 1);
-      var semestreAtual = semestreCelula.getValue();
-      if (!semestreAtual || String(semestreAtual).trim() === '') {
-        var dfAtual = aba.getRange(linha, CONFIG.COL.DF + 1).getValue();
-        var semestreCalculado = calcularSemestre(dfAtual);
-        if (semestreCalculado) {
-          semestreCelula.setNumberFormat('@'); // forca texto simples, evita reinterpretacao como Data
-          semestreCelula.setValue(semestreCalculado);
-        }
-      }
+      semestreCelula.setNumberFormat('@'); // forca texto simples, evita reinterpretacao como Data
+      semestreCelula.setValue(atribuicao.semestre);
 
       sincronizarLinhaParaGeral(linha);
 
-      salvos.push({ _linha: linha, id: it.id || '', estagiario: estagiario });
+      salvos.push({ _linha: linha, id: it.id || '', estagiario: estagiario, turma: atribuicao.turma });
     } catch (e) {
       erros.push({ _linha: linha, id: it.id || '', erro: e.message });
     }

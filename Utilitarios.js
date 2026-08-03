@@ -102,7 +102,9 @@ function preencherSemestrePlanilha() {
   var resultados = [
     { nome: CONFIG.SHEET_DILIGENCIAS,  colData: 7,  colSemestre: 18 },
     { nome: CONFIG.SHEET_INICIAIS,     colData: 2,  colSemestre: 12 },
-    { nome: CONFIG.SHEET_ATENDIMENTOS, colData: 1,  colSemestre: 10 },
+    // REMOVIDO EM 02/08/2026: a aba `atendimentos` saiu desta lista. Ela e
+    // READ-ONLY para o painel — SEMESTRE (K) e TURMA (L) sao devolvidos por
+    // formula na propria planilha. Escrever ali sobrescreveria a formula.
     { nome: CONFIG.SHEET_ESTAGIARIOS,  colData: 4,  colSemestre: 6  }
   ];
 
