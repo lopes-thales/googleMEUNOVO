@@ -114,10 +114,13 @@ function getAtividadesElegiveisAtendimentoOnline(diligenciasDoAluno, iniciaisDoA
 
   var lista = [];
 
-  // estagiario/email/semestre replicados em cada item para o Painel Aluno
-  // conseguir filtrar por "aluno em foco" (caso Thales, com varios alunos no
-  // mesmo payload) do mesmo jeito que ja faz com diligencias/iniciais/
-  // acompanhamentos (ver paFiltrarPorAluno, AlunoScripts.html).
+  // estagiario/email/semestre/turma replicados em cada item para o Painel
+  // Aluno conseguir filtrar por "aluno em foco" e por turma (caso Thales, com
+  // varios alunos no mesmo payload) do mesmo jeito que ja faz com
+  // diligencias/iniciais/acompanhamentos (ver paFiltrarPorAluno e
+  // turmaCasaComFiltroCliente, AlunoScripts.html). Sem `turma`, o filtro de
+  // turma no cliente reprova o item incondicionalmente (turma vazia nunca
+  // casa com nenhum filtro) — bug corrigido em 04/08/2026.
   (diligenciasDoAluno || []).forEach(function(d) {
     if (chaveOcupada('Diligência', d.id)) return;
     lista.push({
@@ -126,7 +129,8 @@ function getAtividadesElegiveisAtendimentoOnline(diligenciasDoAluno, iniciaisDoA
       rotulo: montarRotulo(d.assistido, d.processo, d.id),
       estagiario: d.estagiario || '',
       email: '',
-      semestre: d.semestre || ''
+      semestre: d.semestre || '',
+      turma: d.turma || ''
     });
   });
 
@@ -138,7 +142,8 @@ function getAtividadesElegiveisAtendimentoOnline(diligenciasDoAluno, iniciaisDoA
       rotulo: montarRotulo(ini.assistido, ini.processo, ini.id),
       estagiario: ini.estagiario || '',
       email: ini.email || '',
-      semestre: ini.semestre || ''
+      semestre: ini.semestre || '',
+      turma: ini.turma || ''
     });
   });
 
