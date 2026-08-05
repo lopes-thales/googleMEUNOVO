@@ -1654,7 +1654,16 @@ function carregarAbaDistribuicao() {
 }
 
 function getRegistrosFiltradosDistribuicao() {
-  return APP.dados.distribuicao || [];
+  var lista = (APP.dados.distribuicao || []).slice();
+  lista.sort(function(a, b) {
+    var tempoA = converterDataBRParaTimestamp(a.df);
+    var tempoB = converterDataBRParaTimestamp(b.df);
+    if (tempoA === null && tempoB === null) return 0;
+    if (tempoA === null) return 1;
+    if (tempoB === null) return -1;
+    return tempoA - tempoB;
+  });
+  return lista;
 }
 
 function renderizarTabelaDistribuicao() {
@@ -1666,7 +1675,6 @@ function renderizarTabelaDistribuicao() {
   document.getElementById('tabelaCabecalhoDistribuicao').innerHTML =
     '<tr>' +
       '<th>ID</th>' +
-      '<th>PROCESSO</th>' +
       '<th>ASSISTIDO(A)</th>' +
       '<th>DILIGÊNCIA</th>' +
       '<th>ESPÉCIE</th>' +
@@ -1682,7 +1690,7 @@ function renderizarTabelaDistribuicao() {
 
   if (lista.length === 0) {
     corpo.innerHTML =
-      '<tr><td colspan="11">' +
+      '<tr><td colspan="10">' +
         '<div class="estado-vazio">' +
           '<span class="material-symbols-outlined">' + ICONES.semPendencias + '</span>' +
           '<div class="estado-vazio-titulo">Nenhum registro pendente</div>' +
@@ -1698,7 +1706,6 @@ function renderizarTabelaDistribuicao() {
     var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
     html += '<tr class="' + classeAtraso + '" data-linha="' + reg._linha + '">' +
       '<td class="td-numero">' + (reg.id || '') + '</td>' +
-      '<td class="td-processo">' + (reg.processo || '') + '</td>' +
       '<td class="td-assistido">' + (reg.assistido || '') + '</td>' +
       '<td>' + (reg.diligencia || '<span class="celula-vazio">—</span>') + '</td>' +
       '<td>' + (reg.especie || '<span class="celula-vazio">—</span>') + '</td>' +
