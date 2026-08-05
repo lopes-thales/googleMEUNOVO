@@ -252,7 +252,8 @@ function _producaoLinhaPeca(reg, indice) {
   ];
 }
 
-// ACOMPANHAMENTOS — a aba so guarda o PROCESSO. ASSISTIDO e AÇÃO ficam em
+// ACOMPANHAMENTOS — ASSISTIDO vem da coluna ASSISTIDO da aba (preenchida no
+// modal "Pedido de Acompanhamento", ver Acompanhamentos.js). AÇÃO fica em
 // branco para preenchimento a mao (decisao de Thales), assim como o VISTO.
 function _producaoSecaoAcompanhamentos(acompanhamentos, pesos) {
   var ordenados = acompanhamentos.slice().sort(function(a, b) {
@@ -266,7 +267,7 @@ function _producaoSecaoAcompanhamentos(acompanhamentos, pesos) {
     { rotulo: 'AÇÃO', largura: '20%' },
     { rotulo: 'VISTO DO SUPERVISOR', largura: '15%' }
   ], ordenados.map(function(reg, i) {
-    return [_producaoNumero(i), reg.processo || '', '', '', ''];
+    return [_producaoNumero(i), reg.processo || '', reg.assistido || '', '', ''];
   }));
 }
 

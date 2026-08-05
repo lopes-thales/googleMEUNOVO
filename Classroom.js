@@ -816,7 +816,7 @@ function verificarEntregasClassroom() {
 // entao aqui nao e preciso cruzar com a aba estagiarios como em Diligencias.
 
 function montarTituloAtividadeAcompanhamento(reg) {
-  return 'Acompanhamento - ' + reg.id + ' - ' + reg.processo;
+  return 'Acompanhamento - ' + reg.id + ' - ' + reg.assistido + ' - ' + reg.processo;
 }
 
 // Texto fixo definido por Thales. So os campos entre {} sao substituidos —
@@ -970,6 +970,7 @@ function coletarLinhasElegiveisAcompanhamentoParaEnvio() {
       _linha: linha,
       id: id,
       processo: row[CONFIG.ACOMPANHAMENTOS_COL.PROCESSO],
+      assistido: String(row[CONFIG.ACOMPANHAMENTOS_COL.ASSISTIDO] || '').trim(),
       estagiario: nome,
       email: email,
       dataEntregaRaw: row[CONFIG.ACOMPANHAMENTOS_COL.DATA_ENTREGA]

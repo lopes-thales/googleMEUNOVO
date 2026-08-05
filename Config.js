@@ -412,11 +412,14 @@ var CONFIG = {
   // escreve em `atendimentos`.
   TOTAL_COLUNAS_ATENDIMENTOS: 12, // A ate L
 
-  // --- Aba acompanhamentos (colunas A:K, base 0) ---
+  // --- Aba acompanhamentos (colunas A:Q, base 0) ---
   // NOME e EMAIL sao gravados diretamente na linha (mesma fonte de
   // estagiarios!B e estagiarios!C, respectivamente) — ao contrario da aba
   // iniciais, aqui nao ha cruzamento por e-mail em tempo de leitura.
-  // Nao ha coluna ASSISTIDO nem OBS nem ALTERADO EM nesta aba.
+  // Nao ha coluna OBS nem ALTERADO EM nesta aba.
+  // ASSISTIDO (coluna Q) foi criada por Thales em 05/08/2026: e digitada
+  // diretamente no modal "Pedido de Acompanhamento" (nao ha cruzamento em
+  // tempo de leitura, ao contrario de iniciais/protocolos).
   SHEET_ACOMPANHAMENTOS: 'acompanhamentos',
   ACOMPANHAMENTOS_COL: {
     ID: 0,                     // A
@@ -434,9 +437,10 @@ var CONFIG = {
     DF_CLASS: 12,              // M  (data de entrega/dueDate da atividade no Classroom — preenchida com o valor retornado pela API, nao com DATA_ENTREGA)
     DRIVE: 13,                 // N  ('S' quando o PDF do acompanhamento ja foi organizado na pasta do estagiario — ver Drive.js)
     ID_MATRICULA: 14,          // O  (ID da matricula de estagio — estagiarios!N)
-    TURMA: 15                  // P  (codigo da turma, espelho legivel)
+    TURMA: 15,                 // P  (codigo da turma, espelho legivel)
+    ASSISTIDO: 16              // Q  (nome do(a) assistido(a) — coluna "ASSISTIDO(A)" criada por Thales em 05/08/2026)
   },
-  TOTAL_COLUNAS_ACOMPANHAMENTOS: 16, // A ate P
+  TOTAL_COLUNAS_ACOMPANHAMENTOS: 17, // A ate Q
 
   PREFIXO_ACOMPANHAMENTO: 'AC-',
 

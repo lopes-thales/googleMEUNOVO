@@ -264,6 +264,7 @@ function abrirModalNovoAcompanhamento() {
   fecharMenuGerenciar();
 
   document.getElementById('naProcesso').value = '';
+  document.getElementById('naAssistido').value = '';
   document.getElementById('naPrazo').value = '';
 
   popularSelectSimples(document.getElementById('naEstagiario'), APP.dados.estagiarios, '', '— Selecione —');
@@ -282,11 +283,12 @@ document.getElementById('modalNovoAcompanhamentoOverlay').addEventListener('clic
 function salvarNovoAcompanhamento() {
   var payload = {
     processo: document.getElementById('naProcesso').value.trim(),
+    assistido: document.getElementById('naAssistido').value.trim(),
     prazo: document.getElementById('naPrazo').value,
     estagiario: document.getElementById('naEstagiario').value
   };
 
-  if (!payload.processo || !payload.prazo || !payload.estagiario) {
+  if (!payload.processo || !payload.assistido || !payload.prazo || !payload.estagiario) {
     mostrarToast('Preencha todos os campos antes de salvar.', 'erro');
     return;
   }

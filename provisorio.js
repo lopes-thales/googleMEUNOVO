@@ -289,7 +289,7 @@ function preencherDatasClassroomAntigasTudo() {
 // Motivo: diligencias podem gerar a necessidade de um Acompanhamento
 // vinculado para o mesmo aluno — pedido de Thales em 24/07/2026.
 //
-// Layout esperado da aba "provisorio_acomp" (colunas A:E, sem cabecalho
+// Layout esperado da aba "provisorio_acomp" (colunas A:F, sem cabecalho
 // pulado — a leitura comeca na linha 2):
 //   A = ID do estagiario (chave da aba estagiarios!A, nunca o nome)
 //   B = ID da atividade (diligencia) de origem (so para referencia no texto
@@ -298,7 +298,9 @@ function preencherDatasClassroomAntigasTudo() {
 //   D = Prazo, em dias uteis (considerando bd!C2:C) a partir de hoje, usado
 //       para calcular a DATA_ENTREGA do acompanhamento — mesmo campo pedido
 //       no modal "Novo Acompanhamento" (ver criarAcompanhamento, Acompanhamentos.js)
-//   E = OK — marcado TRUE por este script apos sucesso; linhas com E=TRUE
+//   E = Assistido(a) — nome gravado em acompanhamentos!Q (coluna ASSISTIDO,
+//       criada por Thales em 05/08/2026), mesmo campo pedido no modal
+//   F = OK — marcado TRUE por este script apos sucesso; linhas com F=TRUE
 //       sao ignoradas em reexecucoes (a funcao e segura de rodar mais de
 //       uma vez sem duplicar atividades)
 //
@@ -318,9 +320,10 @@ var PROVISORIO_ACOMP_COL = {
   ID_DILIGENCIA: 1, // B
   PROCESSO: 2,      // C
   PRAZO: 3,         // D
-  OK: 4             // E
+  ASSISTIDO: 4,     // E
+  OK: 5             // F
 };
-var TOTAL_COLUNAS_PROVISORIO_ACOMP = 5; // A ate E
+var TOTAL_COLUNAS_PROVISORIO_ACOMP = 6; // A ate F
 
 // Localiza nome e e-mail de um estagiario pelo ID (estagiarios!A), nunca
 // pelo nome — evita ambiguidade em caso de homonimos (mesmo cuidado de
@@ -421,6 +424,7 @@ function processarProvisorioAcompanhamentos() {
     var idEstagiario = String(row[PROVISORIO_ACOMP_COL.ID_ESTAGIARIO] || '').trim();
     var processo = String(row[PROVISORIO_ACOMP_COL.PROCESSO] || '').trim();
     var idDiligencia = String(row[PROVISORIO_ACOMP_COL.ID_DILIGENCIA] || '').trim();
+    var assistido = String(row[PROVISORIO_ACOMP_COL.ASSISTIDO] || '').trim();
     var prazoDias = parseInt(row[PROVISORIO_ACOMP_COL.PRAZO], 10);
 
     if (!idEstagiario && !processo && !idDiligencia) continue; // linha em branco
@@ -429,7 +433,8 @@ function processarProvisorioAcompanhamentos() {
       if (!idEstagiario) throw new Error('ID do estagiario (coluna A) em branco.');
       if (!processo) throw new Error('Processo (coluna B) em branco.');
       if (!idDiligencia) throw new Error('ID da diligencia (coluna C) em branco.');
-      if (isNaN(prazoDias) || prazoDias <= 0) throw new Error('Prazo (coluna E) invalido — informe dias uteis > 0.');
+      if (isNaN(prazoDias) || prazoDias <= 0) throw new Error('Prazo (coluna D) invalido — informe dias uteis > 0.');
+      if (!assistido) throw new Error('Assistido(a) (coluna E) em branco.');
 
       var estagiario = _buscarEstagiarioPorId_(idEstagiario);
       if (!estagiario || !estagiario.nome) {
@@ -453,6 +458,7 @@ function processarProvisorioAcompanhamentos() {
         var resultadoCriacao = criarAcompanhamento({
           processo: processo,
           estagiario: estagiario.nome,
+          assistido: assistido,
           prazo: prazoDias
         });
         if (!resultadoCriacao.sucesso) {
@@ -471,6 +477,7 @@ function processarProvisorioAcompanhamentos() {
       var resultadoClass = criarCourseWorkParaAcompanhamento({
         id: idAcompanhamento,
         processo: processo,
+        assistido: assistido,
         estagiario: estagiario.nome,
         email: estagiario.email,
         dataEntregaRaw: dataEntregaRaw,
@@ -517,4 +524,113 @@ function processarProvisorioAcompanhamentos() {
   Logger.log(textoRelatorio);
 
   return { processados: processados, ignorados: ignorados, erros: erros, relatorioTexto: textoRelatorio };
+}
+
+// === PREENCHIMENTO DO ASSISTIDO EM ACOMPANHAMENTOS A PARTIR DE DILIGENCIAS ===
+// Script temporario — rodar uma unica vez pelo editor do Apps Script
+// (Executar > preencherAssistidoAcompanhamento) para preencher
+// retroativamente a coluna ASSISTIDO (Q) da aba acompanhamentos, criada por
+// Thales em 05/08/2026 (ver Config.js). Registros criados ANTES dessa coluna
+// existir ficaram com Q vazio; este script cruza pelo numero do PROCESSO
+// para localizar o assistido correspondente na aba diligencias.
+//
+// Regra: para cada linha de acompanhamentos com PROCESSO (coluna C)
+// preenchido e ASSISTIDO (coluna Q) ainda vazio, procura em diligencias uma
+// linha cujo PROCESSO (coluna B) seja igual (apos trim) e copia o valor de
+// ASSISTIDO (coluna C de diligencias) para acompanhamentos!Q. Linhas de
+// acompanhamentos que ja tem Q preenchido sao puladas (seguro rodar mais de
+// uma vez). Quando o mesmo processo aparece em mais de uma linha de
+// diligencias com assistidos diferentes, usa a PRIMEIRA ocorrencia
+// encontrada (decisao de Thales, 05/08/2026). Quando o processo nao e
+// encontrado em diligencias, a linha fica de fora e e listada em
+// semCorrespondencia, sem gravar nada.
+function preencherAssistidoAcompanhamento() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var abaDiligencias = ss.getSheetByName(CONFIG.SHEET_DILIGENCIAS);
+  if (!abaDiligencias) {
+    Logger.log('Aba diligencias nao encontrada.');
+    return { erro: 'Aba diligencias nao encontrada.' };
+  }
+  var abaAcomp = ss.getSheetByName(CONFIG.SHEET_ACOMPANHAMENTOS);
+  if (!abaAcomp) {
+    Logger.log('Aba acompanhamentos nao encontrada.');
+    return { erro: 'Aba acompanhamentos nao encontrada.' };
+  }
+
+  // --- Mapa PROCESSO -> ASSISTIDO(A), lido uma unica vez da aba diligencias.
+  // Em caso de processo duplicado, mantem a PRIMEIRA ocorrencia encontrada. ---
+  var ultimaLinhaDil = abaDiligencias.getLastRow();
+  var mapaAssistidoPorProcesso = {};
+
+  if (ultimaLinhaDil >= 2) {
+    var dadosDil = abaDiligencias.getRange(2, 1, ultimaLinhaDil - 1, CONFIG.TOTAL_COLUNAS_DILIGENCIAS).getValues();
+    for (var d = 0; d < dadosDil.length; d++) {
+      var processoDil = String(dadosDil[d][CONFIG.COL.PROCESSO] || '').trim();
+      var assistidoDil = String(dadosDil[d][CONFIG.COL.ASSISTIDO] || '').trim();
+      if (!processoDil || !assistidoDil) continue;
+      if (Object.prototype.hasOwnProperty.call(mapaAssistidoPorProcesso, processoDil)) continue;
+      mapaAssistidoPorProcesso[processoDil] = assistidoDil;
+    }
+  }
+
+  // --- Varre acompanhamentos e preenche Q onde estiver vazio ---
+  var ultimaLinhaAcomp = abaAcomp.getLastRow();
+  var preenchidos = [];
+  var jaPreenchidos = [];
+  var semProcesso = [];
+  var semCorrespondencia = [];
+
+  if (ultimaLinhaAcomp >= 2) {
+    var dadosAcomp = abaAcomp.getRange(2, 1, ultimaLinhaAcomp - 1, CONFIG.TOTAL_COLUNAS_ACOMPANHAMENTOS).getValues();
+
+    for (var i = 0; i < dadosAcomp.length; i++) {
+      var linha = i + 2;
+      var row = dadosAcomp[i];
+      var id = row[CONFIG.ACOMPANHAMENTOS_COL.ID];
+
+      if (String(row[CONFIG.ACOMPANHAMENTOS_COL.ASSISTIDO] || '').trim()) {
+        jaPreenchidos.push({ linha: linha, id: id });
+        continue;
+      }
+
+      var processo = String(row[CONFIG.ACOMPANHAMENTOS_COL.PROCESSO] || '').trim();
+      if (!processo) {
+        semProcesso.push({ linha: linha, id: id });
+        continue;
+      }
+
+      if (!Object.prototype.hasOwnProperty.call(mapaAssistidoPorProcesso, processo)) {
+        semCorrespondencia.push({ linha: linha, id: id, processo: processo });
+        continue;
+      }
+
+      var assistido = mapaAssistidoPorProcesso[processo];
+      abaAcomp.getRange(linha, CONFIG.ACOMPANHAMENTOS_COL.ASSISTIDO + 1).setValue(assistido);
+      preenchidos.push({ linha: linha, id: id, processo: processo, assistido: assistido });
+    }
+  }
+
+  var linhasLog = [];
+  linhasLog.push('=== PREENCHIMENTO DE ASSISTIDO EM ACOMPANHAMENTOS (a partir de diligencias) ===');
+  linhasLog.push('Preenchidos agora: ' + preenchidos.length);
+  linhasLog.push('Ja tinham ASSISTIDO (ignorados): ' + jaPreenchidos.length);
+  linhasLog.push('Sem processo preenchido (deixados em branco): ' + semProcesso.length);
+  linhasLog.push('Sem correspondencia em diligencias (deixados em branco): ' + semCorrespondencia.length);
+  if (semCorrespondencia.length > 0) {
+    linhasLog.push('Detalhe:');
+    semCorrespondencia.forEach(function(item) {
+      linhasLog.push('  Linha ' + item.linha + ' (ID ' + item.id + ', processo ' + item.processo + ')');
+    });
+  }
+  var textoRelatorio = linhasLog.join('\n');
+  Logger.log(textoRelatorio);
+
+  return {
+    preenchidos: preenchidos,
+    jaPreenchidos: jaPreenchidos,
+    semProcesso: semProcesso,
+    semCorrespondencia: semCorrespondencia,
+    relatorioTexto: textoRelatorio
+  };
 }

@@ -3,10 +3,11 @@
 // novos registros (modal "Novo Acompanhamento"). Nenhum outro arquivo deve
 // ler/escrever esta aba diretamente.
 //
-// A aba nao tem coluna ASSISTIDO, OBS nem ALTERADO EM (ao contrario de
+// A aba nao tem coluna OBS nem ALTERADO EM (ao contrario de
 // diligencias/iniciais) — por isso o modal de detalhe/edicao e mais enxuto
-// e a criacao de um registro novo tambem nao pede Assistido(a) nem Especie
-// (ver thales.html / Scripts.html).
+// e a criacao de um registro novo tambem nao pede Especie
+// (ver thales.html / Scripts.html). A coluna ASSISTIDO foi adicionada por
+// Thales em 05/08/2026 e e digitada no modal "Pedido de Acompanhamento".
 //
 // Os campos do objeto retornado ao frontend reaproveitam os nomes "estagiario",
 // "di" e "df" (em vez de "nome", "data" e "dataEntrega") de proposito: assim
@@ -28,6 +29,7 @@ function rowParaObjetoAcompanhamento(row, indice, feriadosTimestamps) {
     _linha: indice + 2,
     id: row[CONFIG.ACOMPANHAMENTOS_COL.ID],
     estagiario: row[CONFIG.ACOMPANHAMENTOS_COL.NOME], // reaproveita "estagiario" (ver nota acima)
+    assistido: String(row[CONFIG.ACOMPANHAMENTOS_COL.ASSISTIDO] || '').trim(),
     processo: row[CONFIG.ACOMPANHAMENTOS_COL.PROCESSO],
     di: formatarData(row[CONFIG.ACOMPANHAMENTOS_COL.DATA]), // reaproveita "di" (data de criacao)
     status: status,
@@ -131,16 +133,18 @@ function proximoNumeroAcompanhamento() {
 // Cria uma nova linha na aba acompanhamentos a partir do modal "Novo
 // Acompanhamento" (chamado pela opcao "Pedido de Acompanhamento" em
 // Gerenciar). Campos coletados: processo, prazoDias (dias uteis),
-// estagiario. Nao ha campo Assistido(a) nem Especie nesta aba.
+// estagiario, assistido. Nao ha campo Especie nesta aba.
 // DATA = hoje, DATA_ENTREGA = DATA + prazoDias (dias uteis, considerando
 // bd!C2:C), STATUS = "Encaminhado", EMAIL = localizado em estagiarios!C
 // a partir do nome selecionado.
 function criarAcompanhamento(payload) {
   var processo = String(payload.processo || '').trim();
   var estagiario = String(payload.estagiario || '').trim();
+  var assistido = String(payload.assistido || '').trim();
   var prazoDias = parseInt(payload.prazo, 10);
 
   if (!processo) return { sucesso: false, erro: 'Informe o processo.' };
+  if (!assistido) return { sucesso: false, erro: 'Informe o assistido(a).' };
   if (!estagiario) return { sucesso: false, erro: 'Selecione o estagiario(a).' };
   if (isNaN(prazoDias) || prazoDias <= 0) return { sucesso: false, erro: 'Informe um prazo valido (em dias uteis).' };
 
@@ -176,7 +180,7 @@ function criarAcompanhamento(payload) {
   var semestre = extrairSemestreDaTurma(matricula.turma);
   var id = proximoNumeroAcompanhamento();
 
-  // Ordem exata das colunas A:K.
+  // Ordem exata das colunas A:Q.
   var novaLinha = [];
   novaLinha[CONFIG.ACOMPANHAMENTOS_COL.ID] = id;
   novaLinha[CONFIG.ACOMPANHAMENTOS_COL.NOME] = estagiario;
@@ -194,6 +198,7 @@ function criarAcompanhamento(payload) {
   novaLinha[CONFIG.ACOMPANHAMENTOS_COL.DRIVE] = '';
   novaLinha[CONFIG.ACOMPANHAMENTOS_COL.ID_MATRICULA] = matricula.idMatricula;
   novaLinha[CONFIG.ACOMPANHAMENTOS_COL.TURMA] = matricula.turma;
+  novaLinha[CONFIG.ACOMPANHAMENTOS_COL.ASSISTIDO] = assistido;
 
   var proximaLinhaPlanilha = aba.getLastRow() + 1;
   // Forca a celula SEMESTRE como Texto simples antes de gravar — evita que o
