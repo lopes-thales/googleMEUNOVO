@@ -829,15 +829,16 @@ function paRenderizarTabelas(alunoAtual) {
 
   // Acompanhamentos
   document.getElementById('paCabecalhoAcompanhamentos').innerHTML =
-    '<tr><th>ID</th><th>PROCESSO</th><th>DI</th><th>DF</th><th>STATUS</th></tr>';
+    '<tr><th>ID</th><th>ASSISTIDO(A)</th><th>PROCESSO</th><th>DI</th><th>DF</th><th>STATUS</th></tr>';
   var corpoAc = document.getElementById('paCorpoAcompanhamentos');
   if (!PA._acompanhamentosAtuais.length) {
-    corpoAc.innerHTML = paCelulaVazia(5, 'Nenhum acompanhamento encontrado');
+    corpoAc.innerHTML = paCelulaVazia(6, 'Nenhum acompanhamento encontrado');
   } else {
     var htmlAc = '';
     PA._acompanhamentosAtuais.forEach(function(reg, idx) {
       htmlAc += '<tr class="' + (ehAtraso(reg) ? 'linha-atraso' : '') + '" onclick="paAbrirModalAcompanhamento(' + idx + ')">' +
         '<td class="td-numero">' + (reg.id || '') + '</td>' +
+        '<td class="td-assistido">' + (reg.assistido || '<span class="celula-vazio">—</span>') + '</td>' +
         '<td class="td-processo">' + (reg.processo || '') + '</td>' +
         '<td>' + (reg.di || '') + '</td>' +
         '<td>' + (reg.df || '') + '</td>' +
@@ -1004,6 +1005,7 @@ function paAbrirModalAcompanhamento(idx) {
   document.getElementById('acViewBadges').innerHTML = badgeStatus(reg);
 
   document.getElementById('acViewProcesso').textContent = reg.processo || '—';
+  document.getElementById('acViewAssistido').textContent = reg.assistido || '—';
   document.getElementById('acViewDi').textContent = reg.di || '—';
   document.getElementById('acViewDf').textContent = reg.df || '—';
 

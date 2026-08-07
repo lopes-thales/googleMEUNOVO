@@ -634,3 +634,104 @@ function preencherAssistidoAcompanhamento() {
     relatorioTexto: textoRelatorio
   };
 }
+
+// === CRIACAO EM MASSA DE PAPEL TIMBRADO NAS PASTAS DOS ALUNOS ===
+// Script temporario — rodar uma unica vez pelo editor do Apps Script
+// (Executar > criarTimbrado). Copia o Google Docs de ID
+// 1Cr-w_xOlLjTQIjlJXHJXwMszOd1sxnFXYTAzcICXI0s (modelo de papel timbrado)
+// para dentro da pasta de cada estagiario (ID gravado em estagiarios!G, ver
+// Drive.js), com o nome "Papel_Timbrado".
+//
+// Regras:
+//   - So processa estagiarios com FINALIZADO (coluna E) vazio.
+//   - So processa estagiarios com pasta cadastrada (coluna G preenchida).
+//   - Se a pasta ja tiver um arquivo chamado "Papel_Timbrado", pula (nao
+//     duplica) — seguro rodar mais de uma vez.
+var ID_DOC_PAPEL_TIMBRADO = '1Cr-w_xOlLjTQIjlJXHJXwMszOd1sxnFXYTAzcICXI0s';
+var NOME_ARQUIVO_PAPEL_TIMBRADO = 'Papel_Timbrado';
+
+function criarTimbrado() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName(CONFIG.SHEET_ESTAGIARIOS);
+  if (!aba) {
+    Logger.log('Aba estagiarios nao encontrada.');
+    return { erro: 'Aba estagiarios nao encontrada.' };
+  }
+
+  var docModelo;
+  try {
+    docModelo = DriveApp.getFileById(ID_DOC_PAPEL_TIMBRADO);
+  } catch (e) {
+    Logger.log('Nao foi possivel abrir o documento modelo (ID ' + ID_DOC_PAPEL_TIMBRADO + '): ' + e.message);
+    return { erro: 'Nao foi possivel abrir o documento modelo (ID ' + ID_DOC_PAPEL_TIMBRADO + ').' };
+  }
+
+  var ultimaLinha = aba.getLastRow();
+  if (ultimaLinha < 2) {
+    Logger.log('Nenhum registro na aba estagiarios.');
+    return { criados: [], jaExistiam: [], semPasta: [], erros: [] };
+  }
+
+  var numLinhas = ultimaLinha - 1;
+  var colunas = Math.max(CONFIG.TOTAL_COLUNAS_ESTAGIARIOS, aba.getLastColumn());
+  var dados = aba.getRange(2, 1, numLinhas, colunas).getValues();
+
+  var criados = [];
+  var jaExistiam = [];
+  var semPasta = [];
+  var erros = [];
+
+  for (var i = 0; i < dados.length; i++) {
+    var linha = i + 2;
+    var row = dados[i];
+    var nome = String(row[CONFIG.ESTAGIARIOS_COL.NOME] || '').trim();
+    if (!nome) continue;
+
+    var finalizado = !!String(row[CONFIG.ESTAGIARIOS_COL.FINALIZADO] || '').trim();
+    if (finalizado) continue;
+
+    var driveId = String(row[CONFIG.ESTAGIARIOS_COL.DRIVE] || '').trim();
+    if (!driveId) {
+      semPasta.push({ linha: linha, nome: nome });
+      continue;
+    }
+
+    try {
+      var pastaAluno = DriveApp.getFolderById(driveId);
+
+      var existentes = pastaAluno.getFilesByName(NOME_ARQUIVO_PAPEL_TIMBRADO);
+      if (existentes.hasNext()) {
+        jaExistiam.push({ linha: linha, nome: nome });
+        continue;
+      }
+
+      docModelo.makeCopy(NOME_ARQUIVO_PAPEL_TIMBRADO, pastaAluno);
+      criados.push({ linha: linha, nome: nome });
+    } catch (e) {
+      erros.push({ linha: linha, nome: nome, erro: e.message });
+    }
+  }
+
+  var linhasLog = [];
+  linhasLog.push('=== CRIACAO DE PAPEL TIMBRADO NAS PASTAS DOS ALUNOS ===');
+  linhasLog.push('Criados agora: ' + criados.length);
+  linhasLog.push('Ja existiam (ignorados): ' + jaExistiam.length);
+  linhasLog.push('Sem pasta cadastrada (deixados de fora): ' + semPasta.length);
+  linhasLog.push('Erros: ' + erros.length);
+  if (erros.length > 0) {
+    linhasLog.push('Detalhe dos erros:');
+    erros.forEach(function(item) {
+      linhasLog.push('  Linha ' + item.linha + ' (' + item.nome + '): ' + item.erro);
+    });
+  }
+  var textoRelatorio = linhasLog.join('\n');
+  Logger.log(textoRelatorio);
+
+  return {
+    criados: criados,
+    jaExistiam: jaExistiam,
+    semPasta: semPasta,
+    erros: erros,
+    relatorioTexto: textoRelatorio
+  };
+}

@@ -2577,6 +2577,7 @@ function renderizarTabelaAcompanhamentos() {
   document.getElementById('tabelaCabecalhoAcompanhamentos').innerHTML =
     '<tr>' +
       thOrdenavelAcompanhamentos('ID', 'id') +
+      thOrdenavelAcompanhamentos('ASSISTIDO(A)', 'assistido') +
       thOrdenavelAcompanhamentos('ESTAGIÁRIO(A)', 'estagiario') +
       thOrdenavelAcompanhamentos('PROCESSO', 'processo') +
       thOrdenavelAcompanhamentos('DATA', 'di') +
@@ -2586,7 +2587,7 @@ function renderizarTabelaAcompanhamentos() {
 
   if (pagina.length === 0) {
     document.getElementById('tabelaCorpoAcompanhamentos').innerHTML =
-      '<tr><td colspan="6">' +
+      '<tr><td colspan="7">' +
         '<div class="estado-vazio">' +
           '<span class="material-symbols-outlined">' + ICONES.semResultado + '</span>' +
           '<div class="estado-vazio-titulo">Nenhum registro encontrado</div>' +
@@ -2599,6 +2600,7 @@ function renderizarTabelaAcompanhamentos() {
       var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
       html += '<tr class="' + classeAtraso + '" onclick="abrirModalAcompanhamento(this)" data-idx="' + (inicio + idx) + '">' +
         '<td class="td-numero">' + (reg.id || '') + '</td>' +
+        '<td class="td-assistido">' + (reg.assistido || '<span class="celula-vazio">—</span>') + '</td>' +
         '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
         '<td class="td-processo">' + (reg.processo || '<span class="celula-vazio">—</span>') + '</td>' +
         '<td>' + (reg.di || '') + '</td>' +
@@ -2722,6 +2724,7 @@ function preencherModalAcompanhamento(reg) {
 
   document.getElementById('acId').textContent = reg.id || '—';
   document.getElementById('acEstagiario').textContent = reg.estagiario || '—';
+  document.getElementById('acAssistido').textContent = reg.assistido || '—';
   document.getElementById('acProcesso').textContent = reg.processo || '—';
   document.getElementById('acData').textContent = reg.di || '—';
   document.getElementById('acDataEntrega').textContent = reg.df || '—';
@@ -4476,12 +4479,12 @@ function renderizarTabelaAcompanhamentosPanorama() {
 
   document.getElementById('panoramaCabecalhoAcompanhamentos').innerHTML =
     '<tr>' +
-      '<th>ID</th><th>ESTAGIÁRIO(A)</th><th>PROCESSO</th><th>DATA</th><th>ENTREGA</th><th>STATUS</th>' +
+      '<th>ID</th><th>ASSISTIDO(A)</th><th>ESTAGIÁRIO(A)</th><th>PROCESSO</th><th>DATA</th><th>ENTREGA</th><th>STATUS</th>' +
     '</tr>';
 
   var corpo = document.getElementById('panoramaCorpoAcompanhamentos');
   if (lista.length === 0) {
-    corpo.innerHTML = celulaVaziaTabela(6, 'Nenhum acompanhamento encontrado');
+    corpo.innerHTML = celulaVaziaTabela(7, 'Nenhum acompanhamento encontrado');
     return;
   }
 
@@ -4490,6 +4493,7 @@ function renderizarTabelaAcompanhamentosPanorama() {
     var classeAtraso = ehAtraso(reg) ? ' linha-atraso' : '';
     html += '<tr class="' + classeAtraso + '" onclick="abrirModalPanoramaAcompanhamento(' + idx + ')">' +
       '<td class="td-numero">' + (reg.id || '') + '</td>' +
+      '<td class="td-assistido">' + (reg.assistido || '<span class="celula-vazio">—</span>') + '</td>' +
       '<td>' + renderizarCelulaEstagiario(reg) + '</td>' +
       '<td class="td-processo">' + (reg.processo || '<span class="celula-vazio">—</span>') + '</td>' +
       '<td>' + (reg.di || '') + '</td>' +

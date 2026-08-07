@@ -6,6 +6,14 @@
 // (CONFIG.BD_CELL.ID_PASTA_ACOMPANHAMENTOS). Nenhum outro script deve mexer
 // em Drive/pastas — se precisar, a funcao deve ser adicionada aqui.
 //
+// Compartilhamento das pastas de estagiario: alem do compartilhamento padrao
+// herdado da pasta-mae (bd!L2, hoje "Leitor" para todos da Instituicao),
+// toda pasta de estagiario (criada ou apenas localizada por
+// _obterOuCriarPastaEstagiario) recebe o proprio aluno (estagiarios!C) como
+// Editor — ver _garantirAlunoEditor. As duas permissoes convivem sem
+// conflito. Pastas criadas ANTES desta mudanca nao sao retroagidas
+// automaticamente; use MigracaoAcessoEditorAlunos.js para migra-las.
+//
 // Regra de negocio (acionada pelo botao "Organizar Pastas", aba Utilitarios
 // — ver organizarPastas() mais abaixo, que executa as duas partes a seguir):
 //
@@ -113,13 +121,40 @@ function _obterPastaAcompanhamentos() {
 
 // Localiza (por nome exato) ou cria uma subpasta de "pastaPai" com o nome
 // do estagiario. Retorna o ID da subpasta.
-function _obterOuCriarPastaEstagiario(pastaPai, nomeEstagiario) {
+//
+// Alem do compartilhamento padrao herdado de "pastaPai" (Leitor para todos
+// da Instituicao), garante que o proprio aluno (emailEstagiario) tenha papel
+// de Editor nessa pasta — ver _garantirAlunoEditor. Os dois compartilhamentos
+// convivem sem conflito: a permissao individual do aluno nao rebaixa nem
+// substitui o acesso geral de Leitor dos demais.
+function _obterOuCriarPastaEstagiario(pastaPai, nomeEstagiario, emailEstagiario, avisos) {
+  var pasta;
   var existentes = pastaPai.getFoldersByName(nomeEstagiario);
   if (existentes.hasNext()) {
-    return existentes.next().getId();
+    pasta = existentes.next();
+  } else {
+    pasta = pastaPai.createFolder(nomeEstagiario);
   }
-  var nova = pastaPai.createFolder(nomeEstagiario);
-  return nova.getId();
+  _garantirAlunoEditor(pasta, emailEstagiario, nomeEstagiario, avisos);
+  return pasta.getId();
+}
+
+// Garante que "email" tenha papel de Editor na pasta do estagiario, sem
+// afetar o compartilhamento geral (Leitor para a Instituicao) herdado da
+// pasta-mae. Chamada idempotente: se o aluno ja for editor, addEditor nao faz
+// nada. Sem e-mail cadastrado ou erro do Drive (ex.: conta inexistente) vira
+// aviso, mas nunca interrompe a criacao/organizacao da pasta.
+function _garantirAlunoEditor(pasta, email, nomeEstagiario, avisos) {
+  email = String(email || '').trim();
+  if (!email) {
+    if (avisos) avisos.push(nomeEstagiario + ': sem e-mail cadastrado (estagiarios!C) — pasta nao compartilhada como Editor com o aluno.');
+    return;
+  }
+  try {
+    pasta.addEditor(email);
+  } catch (e) {
+    if (avisos) avisos.push(nomeEstagiario + ': erro ao compartilhar a pasta como Editor com ' + email + ' — ' + e.message);
+  }
 }
 
 // Localiza (por nome exato) ou cria uma subpasta de "pastaPai" com o nome
@@ -136,6 +171,8 @@ function _obterOuCriarPastaSemestre(pastaPai, semestre) {
 
 // Le a aba estagiarios (A:G) e retorna um array de registros com o numero
 // da linha na planilha (1-indexado), para permitir gravar de volta em G.
+// Inclui o e-mail (coluna C) de cada estagiario, usado para compartilhar a
+// pasta como Editor com o proprio aluno (ver _garantirAlunoEditor).
 function _lerEstagiariosParaDrive(ss) {
   var aba = ss.getSheetByName(CONFIG.SHEET_ESTAGIARIOS);
   if (!aba) throw new Error('Aba estagiarios nao encontrada.');
@@ -155,6 +192,7 @@ function _lerEstagiariosParaDrive(ss) {
     registros.push({
       linhaPlanilha: 2 + i,
       nome: nome,
+      email: String(row[CONFIG.ESTAGIARIOS_COL.EMAIL] || '').trim(),
       finalizado: !!String(row[CONFIG.ESTAGIARIOS_COL.FINALIZADO] || '').trim(),
       driveId: String(row[CONFIG.ESTAGIARIOS_COL.DRIVE] || '').trim()
     });
@@ -233,12 +271,12 @@ function copiarPdfParaNovoEstagiario(idDiligencia, nomeEstagiarioAntigo, nomeEst
   if (!arquivoEncontrado) return false;
 
   var pastaProcessos = _obterPastaProcessos();
-  var idNovaPasta = _obterOuCriarPastaEstagiario(pastaProcessos, nomeEstagiarioNovo);
+  var regNovo = mapaPorNome[nomeEstagiarioNovo];
+  var idNovaPasta = _obterOuCriarPastaEstagiario(pastaProcessos, nomeEstagiarioNovo, regNovo && regNovo.email);
   var pastaNova = DriveApp.getFolderById(idNovaPasta);
 
   arquivoEncontrado.makeCopy(arquivoEncontrado.getName(), pastaNova);
 
-  var regNovo = mapaPorNome[nomeEstagiarioNovo];
   if (regNovo && !regNovo.driveId) {
     regNovo.driveId = idNovaPasta;
     regNovo._alterado = true;
@@ -403,6 +441,8 @@ function organizarPastasDiligencias() {
     mapaEstagiariosPorNome[registrosEstagiarios[i].nome] = registrosEstagiarios[i];
   }
 
+  var avisos = [];
+
   // Passo 1: garante pasta para todo estagiario NAO finalizado que ainda
   // nao tem ID de pasta gravado em G.
   var pastasCriadas = 0;
@@ -412,7 +452,7 @@ function organizarPastasDiligencias() {
     if (reg.driveId) continue;
 
     var idAntesDaCriacao = reg.driveId;
-    reg.driveId = _obterOuCriarPastaEstagiario(pastaProcessos, reg.nome);
+    reg.driveId = _obterOuCriarPastaEstagiario(pastaProcessos, reg.nome, reg.email, avisos);
     reg._alterado = true;
     if (reg.driveId !== idAntesDaCriacao) pastasCriadas++;
   }
@@ -426,7 +466,6 @@ function organizarPastasDiligencias() {
   var movidos = 0;
   var naoEncontrados = 0;
   var ignorados = 0;
-  var avisos = [];
 
   if (ultimaLinha >= 2) {
     var numLinhas = ultimaLinha - 1;
@@ -474,7 +513,7 @@ function organizarPastasDiligencias() {
         avisos.push(idDiligencia + ': estagiario "' + nomeEstagiario + '" nao encontrado na aba estagiarios — pasta criada mesmo assim, mas cadastre-o na aba.');
       }
       if (!regEstagiario.driveId) {
-        regEstagiario.driveId = _obterOuCriarPastaEstagiario(pastaProcessos, nomeEstagiario);
+        regEstagiario.driveId = _obterOuCriarPastaEstagiario(pastaProcessos, nomeEstagiario, regEstagiario.email, avisos);
         regEstagiario._alterado = true;
         if (regEstagiario.linhaPlanilha) pastasCriadas++;
       }
@@ -550,6 +589,8 @@ function organizarPastasAcompanhamentos() {
     mapaEstagiariosPorNome[registrosEstagiarios[i].nome] = registrosEstagiarios[i];
   }
 
+  var avisos = [];
+
   // Passo 1: garante pasta (dentro de bd!L2) para todo estagiario NAO
   // finalizado que ainda nao tem ID de pasta gravado em G. Repete o mesmo
   // passo de organizarPastasDiligencias para o caso desta funcao ser chamada
@@ -561,7 +602,7 @@ function organizarPastasAcompanhamentos() {
     if (reg.driveId) continue;
 
     var idAntesDaCriacao = reg.driveId;
-    reg.driveId = _obterOuCriarPastaEstagiario(pastaProcessos, reg.nome);
+    reg.driveId = _obterOuCriarPastaEstagiario(pastaProcessos, reg.nome, reg.email, avisos);
     reg._alterado = true;
     if (reg.driveId !== idAntesDaCriacao) pastasCriadas++;
   }
@@ -576,7 +617,6 @@ function organizarPastasAcompanhamentos() {
   var movidos = 0;
   var naoEncontrados = 0;
   var ignorados = 0;
-  var avisos = [];
 
   if (ultimaLinha >= 2) {
     var numLinhas = ultimaLinha - 1;
@@ -625,7 +665,7 @@ function organizarPastasAcompanhamentos() {
         avisos.push(idAcompanhamento + ': estagiario "' + nomeEstagiario + '" nao encontrado na aba estagiarios — pasta criada mesmo assim, mas cadastre-o na aba.');
       }
       if (!regEstagiario.driveId) {
-        regEstagiario.driveId = _obterOuCriarPastaEstagiario(pastaProcessos, nomeEstagiario);
+        regEstagiario.driveId = _obterOuCriarPastaEstagiario(pastaProcessos, nomeEstagiario, regEstagiario.email, avisos);
         regEstagiario._alterado = true;
         if (regEstagiario.linhaPlanilha) pastasCriadas++;
       }
